@@ -1,0 +1,5 @@
+/target
+**/*.rs.bk
+
+# Personal learning notes — kept local, not committed
+/GUIDE.md

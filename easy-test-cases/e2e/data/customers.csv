@@ -1,0 +1,4 @@
+customer_id,display_name,locale,email,marketing_opt_in
+C900,山田 太郎,ja-JP,taro@example.jp,true
+C901,Élodie d'Arcy,fr-FR,elodie@example.fr,false
+C902,ليان أحمد,ar-SA,layan@example.sa,true

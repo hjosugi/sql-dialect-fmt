@@ -1,0 +1,49 @@
+-- Case 023: CREATE SEMANTIC VIEW with tables, relationships, facts, dimensions, metrics, and verified queries.
+CREATE OR REPLACE SEMANTIC VIEW SEMANTIC.SV_CUSTOMER_REVENUE
+TABLES (
+    orders AS MART.FACT_ORDER PRIMARY KEY (order_id) WITH SYNONYMS ('orders', 'purchases') COMMENT = 'Order fact table',
+    customers AS MART.DIM_CUSTOMER PRIMARY KEY (customer_id) WITH SYNONYMS ('customers', 'users'),
+    dates AS MART.DIM_DATE PRIMARY KEY (date_key) COMMENT = 'Calendar dimension'
+)
+RELATIONSHIPS (
+    order_customer AS orders (customer_id) REFERENCES customers,
+    order_date AS orders (order_date_key) REFERENCES dates
+)
+FACTS (
+    PUBLIC orders.net_amount AS net_amount COMMENT = 'Net order amount after discounts',
+    PRIVATE orders.cost_amount AS cost_amount COMMENT = 'Internal cost amount',
+    PUBLIC orders.is_first_order LABELS = (FILTER) AS IFF(order_sequence = 1, TRUE, FALSE)
+)
+DIMENSIONS (
+    PUBLIC orders.order_date AS order_date WITH SYNONYMS ('purchase date', '注文日'),
+    PUBLIC customers.region AS region WITH SYNONYMS ('area', '地域'),
+    PUBLIC customers.segment AS segment LABELS = (FILTER),
+    PUBLIC dates.fiscal_month AS fiscal_month WITH SYNONYMS ('fiscal period')
+)
+METRICS (
+    PUBLIC orders.revenue AS SUM(orders.net_amount),
+    PRIVATE orders.margin AS SUM(orders.net_amount - orders.cost_amount),
+    PUBLIC orders.average_order_value AS DIV0(SUM(orders.net_amount), COUNT(DISTINCT orders.order_id)),
+    PUBLIC orders.running_revenue AS SUM(orders.net_amount) OVER (
+        PARTITION BY customers.region
+        ORDER BY dates.date_actual
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    )
+)
+COMMENT = 'Semantic view for customer revenue analytics'
+AI_SQL_GENERATION 'Use fiscal_month for monthly questions. Use revenue for external users. Do not expose private margin unless role allows it.'
+AI_QUESTION_CATEGORIZATION 'Classify questions about sales, customers, regions, and order trends.'
+AI_VERIFIED_QUERIES (
+    TOP_REGION_REVENUE AS (
+        QUESTION 'Which regions had the highest revenue this month?'
+        VERIFIED_AT 1767225600
+        ONBOARDING_QUESTION TRUE
+        VERIFIED_BY '( analyst = revenue-analytics@example.com )'
+        SQL 'SELECT customers.region, SUM(orders.net_amount) AS revenue FROM MART.FACT_ORDER AS orders JOIN MART.DIM_CUSTOMER AS customers USING (customer_id) WHERE DATE_TRUNC(''month'', orders.order_date) = DATE_TRUNC(''month'', CURRENT_DATE()) GROUP BY customers.region ORDER BY revenue DESC'
+    )
+)
+WITH TAG (
+    GOVERNANCE.DOMAIN = 'revenue',
+    GOVERNANCE.OWNER = 'analytics-platform'
+)
+COPY GRANTS;

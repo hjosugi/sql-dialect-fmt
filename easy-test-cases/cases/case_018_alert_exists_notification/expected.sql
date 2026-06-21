@@ -1,0 +1,38 @@
+-- Case 018: CREATE ALERT with EXISTS condition and notification procedure call.
+CREATE OR REPLACE ALERT OPS.ALERT_PIPELINE_SLA_BREACH
+    WAREHOUSE = FORMATTER_TEST_WH
+    SCHEDULE = 'USING CRON */10 * * * * UTC'
+    COMMENT = 'Alert when active pipeline runs exceed SLA'
+IF (EXISTS (
+    SELECT 1
+    FROM OPS.PIPELINE_RUN_LOG AS r
+    WHERE
+        r.status = 'STARTED'
+        AND DATEDIFF('minute', r.started_at, CURRENT_TIMESTAMP()) > COALESCE(r.sla_minutes, 60)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM OPS.PIPELINE_ALERT_SUPPRESSION AS s
+            WHERE
+                s.pipeline_name = r.pipeline_name
+                AND CURRENT_TIMESTAMP() BETWEEN s.suppressed_from AND s.suppressed_to
+        )
+))
+THEN
+    CALL OPS.SP_SEND_PIPELINE_ALERT(
+        'SLA_BREACH',
+        (
+            SELECT ARRAY_AGG(
+                OBJECT_CONSTRUCT_KEEP_NULL(
+                    'run_id', run_id,
+                    'pipeline', pipeline_name,
+                    'tenant', tenant_id,
+                    'started_at', started_at,
+                    'age_minutes', DATEDIFF('minute', started_at, CURRENT_TIMESTAMP())
+                )
+            )
+            FROM OPS.PIPELINE_RUN_LOG
+            WHERE
+                status = 'STARTED'
+                AND DATEDIFF('minute', started_at, CURRENT_TIMESTAMP()) > COALESCE(sla_minutes, 60)
+        )
+    );

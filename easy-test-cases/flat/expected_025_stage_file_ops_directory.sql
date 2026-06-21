@@ -1,0 +1,34 @@
+-- Case 025: Stage directory operations, LIST/REMOVE, and RESULT_SCAN inspection.
+CREATE OR REPLACE STAGE RAW.QUALITY_REVIEW_STAGE
+    DIRECTORY = (
+        ENABLE = TRUE
+        AUTO_REFRESH = FALSE
+    )
+    ENCRYPTION = (
+        TYPE = 'SNOWFLAKE_SSE'
+    )
+    COMMENT = 'Internal stage for formatter quality review files';
+
+LIST @RAW.QUALITY_REVIEW_STAGE/incoming/ PATTERN = '.*\\.(json|jsonl|csv|parquet)(\\.gz)?';
+
+CREATE OR REPLACE TEMPORARY TABLE QA.STAGE_LISTING_SNAPSHOT AS
+SELECT
+    "name" AS staged_file_name,
+    "size" AS size_bytes,
+    "md5" AS md5_hex,
+    "last_modified" AS last_modified_at,
+    CURRENT_TIMESTAMP() AS captured_at
+FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+WHERE
+    "size" > 0
+    AND REGEXP_LIKE("name", '.*/(incoming|retry)/.*');
+
+REMOVE @RAW.QUALITY_REVIEW_STAGE/retry/ PATTERN = '.*\\.tmp$';
+
+SELECT
+    staged_file_name,
+    size_bytes,
+    md5_hex,
+    ROW_NUMBER() OVER (ORDER BY size_bytes DESC, staged_file_name) AS size_rank
+FROM QA.STAGE_LISTING_SNAPSHOT
+QUALIFY size_rank <= 100;

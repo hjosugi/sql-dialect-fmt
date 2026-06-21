@@ -1,0 +1,32 @@
+{
+  "suite": "snowflake-formatter-torture-suite",
+  "version": "1.0.0",
+  "generated_on": "2026-06-21",
+  "files_in_package": 42,
+  "formatter_cases": 7,
+  "sql_files": 27,
+  "sql_lines": 6023,
+  "sql_bytes": 223505,
+  "final_expected_lines": 1341,
+  "final_unformatted_lines": 687,
+  "languages": [
+    "Snowflake SQL",
+    "Snowflake Scripting",
+    "JavaScript",
+    "Python"
+  ],
+  "validation": {
+    "utf8_lf_and_delimiters": "passed",
+    "manifest_paths": "passed",
+    "python_ast_parse": "passed: 7 embedded bodies",
+    "javascript_node_syntax": "passed: 7 embedded bodies",
+    "e2e_component_composition": "passed",
+    "sql_only_body_preservation": "passed",
+    "zip_integrity": "passed"
+  },
+  "snowflake_execution": {
+    "performed": false,
+    "reason": "No Snowflake account was available in the artifact environment.",
+    "provided_instead": "Deterministic assertion procedure and expected-results document"
+  }
+}

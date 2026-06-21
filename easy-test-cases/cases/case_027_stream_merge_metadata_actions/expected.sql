@@ -1,0 +1,73 @@
+-- Case 027: Stream consumption MERGE using METADATA$ACTION and METADATA$ISUPDATE.
+MERGE INTO CORE.ORDER_CURRENT AS target
+USING (
+    WITH changes AS (
+        SELECT
+            event_id,
+            tenant_id,
+            order_id,
+            payload,
+            METADATA$ACTION AS stream_action,
+            METADATA$ISUPDATE AS stream_is_update,
+            METADATA$ROW_ID AS stream_row_id,
+            loaded_at,
+            ROW_NUMBER() OVER (
+                PARTITION BY tenant_id, order_id
+                ORDER BY loaded_at DESC, stream_row_id DESC
+            ) AS change_rank
+        FROM RAW.ORDER_EVENT_STREAM
+        WHERE order_id IS NOT NULL
+        QUALIFY change_rank = 1
+    )
+    SELECT
+        tenant_id,
+        order_id,
+        payload:order:status::STRING AS order_status,
+        TRY_TO_DECIMAL(payload:order:total:amount::STRING, 18, 4) AS order_amount,
+        payload:order:total:currency::STRING AS currency_code,
+        payload:customer:id::STRING AS customer_id,
+        stream_action,
+        stream_is_update,
+        stream_row_id,
+        loaded_at,
+        SHA2_HEX(TO_JSON(payload), 256) AS payload_hash
+    FROM changes
+) AS source
+    ON target.tenant_id = source.tenant_id
+    AND target.order_id = source.order_id
+WHEN MATCHED AND source.stream_action = 'DELETE' THEN
+    DELETE
+WHEN MATCHED AND source.payload_hash IS DISTINCT FROM target.payload_hash THEN
+    UPDATE SET
+        target.order_status = source.order_status,
+        target.order_amount = source.order_amount,
+        target.currency_code = source.currency_code,
+        target.customer_id = source.customer_id,
+        target.payload_hash = source.payload_hash,
+        target.last_stream_row_id = source.stream_row_id,
+        target.updated_at = CURRENT_TIMESTAMP()
+WHEN NOT MATCHED AND source.stream_action = 'INSERT' THEN
+    INSERT (
+        tenant_id,
+        order_id,
+        order_status,
+        order_amount,
+        currency_code,
+        customer_id,
+        payload_hash,
+        last_stream_row_id,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        source.tenant_id,
+        source.order_id,
+        source.order_status,
+        source.order_amount,
+        source.currency_code,
+        source.customer_id,
+        source.payload_hash,
+        source.stream_row_id,
+        CURRENT_TIMESTAMP(),
+        CURRENT_TIMESTAMP()
+    );
