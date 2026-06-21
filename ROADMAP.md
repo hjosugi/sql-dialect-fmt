@@ -90,13 +90,13 @@
 - ⏳ 🔎 `STREAM`, `TASK`, `DYNAMIC TABLE`（新しめ。構文要確認）
 - ⏳ マスキング/行アクセスポリシー, タグ, `GRANT`/`REVOKE`
 
-## Phase 8 — 手続き・関数・埋め込み言語 ⏳ ＜第2の差別化点＞
-- ⏳ `CREATE PROCEDURE`/`FUNCTION`/`UDTF`（`LANGUAGE` 別: SQL/JS/Python/Java/Scala, `RETURNS`, `HANDLER`, `IMPORTS`, `PACKAGES`）
+## Phase 8 — 手続き・関数・埋め込み言語 ＜第2の差別化点＞
+- ✅ `CREATE [OR REPLACE] {FUNCTION|PROCEDURE}`（`LANGUAGE`/`RETURNS`(型 or `TABLE(...)`)/`HANDLER`/`PACKAGES`/`RUNTIME_VERSION`/`STRICT` 等のオプション, `AS $$…$$` or `AS '…'`）をパース＋構造整形（`CREATE_FUNCTION` ほか）
 - ⏳ Snowflake Scripting（`DECLARE`/`BEGIN`/`EXCEPTION`/`END`, `LET`, `:=`, `FOR`/`WHILE`/`REPEAT`/`LOOP`, `IF`/`CASE`, カーソル, `RESULTSET`, `RETURN`）
-- ⏳ delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
-  - ⏳ **JavaScript**: Biome の `biome_js_formatter` を組み込み
-  - ⏳ Python: 整形方針を決定（外部 ruff か、当面は無加工パススルー）
+- ✅ delimiter-aware body token の言語判定 → **`EmbeddedFormatter` trait（seam）** へ委譲 → 再インデント。コア `format()` は純粋
+  - ✅ **エンジン = 実行時に外部ツール検出**（CLI `Profile::Full` の `CliEmbeddedFormatter`）: JS=`npx @biomejs/biome`、Python=ruff/black。未インストール時は verbatim。`biome_js_formatter` crate は crates.io 版が古く(0.5.7)使えないため不採用
   - ⏳ ネストした SQL（`LANGUAGE SQL`）: 自分自身で再帰整形
+- ✅ highlight: `LANGUAGE <x>` を検出し `$$` 本体を JS injection 領域として出力（`Injection{language,range}`）。tree-sitter `injections.scm` 連携は Phase 9
 
 ## Phase 9 — ハイライト + LSP ⏳
 - ✅ Lexical highlight 基盤（keyword/type/string/comment/operator/punctuation/range、内蔵 easy fixture 全 SQL でロスレス検証） … [crates/snow-fmt-highlight/](crates/snow-fmt-highlight/)

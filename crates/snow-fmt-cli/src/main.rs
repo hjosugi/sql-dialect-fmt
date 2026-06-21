@@ -131,6 +131,55 @@ fn usage() -> String {
         .to_string()
 }
 
+struct CliEmbeddedFormatter;
+
+impl snow_fmt_formatter::EmbeddedFormatter for CliEmbeddedFormatter {
+    fn format(&self, language: &str, body: &str) -> Option<String> {
+        match language {
+            "javascript" => run_formatter(
+                "npx",
+                &[
+                    "-y",
+                    "@biomejs/biome",
+                    "format",
+                    "--stdin-file-path=dummy.js",
+                ],
+                body,
+            ),
+            // Try the fastest available Python formatter, falling back through alternatives.
+            "python" => run_formatter("ruff", &["format", "-"], body)
+                .or_else(|| run_formatter("python3", &["-m", "ruff", "format", "-"], body))
+                .or_else(|| run_formatter("black", &["-"], body))
+                .or_else(|| run_formatter("python3", &["-m", "black", "-"], body)),
+            _ => None,
+        }
+    }
+}
+
+fn run_formatter(cmd: &str, args: &[&str], input: &str) -> Option<String> {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(input.as_bytes());
+    }
+
+    let output = child.wait_with_output().ok()?;
+    if output.status.success() {
+        String::from_utf8(output.stdout).ok()
+    } else {
+        None
+    }
+}
+
 fn format_for_now(
     source: &[u8],
     profile: Profile,
@@ -143,11 +192,17 @@ fn format_for_now(
     }
 
     let decoded = snow_fmt_encoding::DecodedText::decode(source);
-    Ok(decoded.map_text(format_text_for_now).encode())
-}
-
-fn format_text_for_now(source: &str) -> String {
-    source.to_owned()
+    let formatted = decoded.map_text(|text| {
+        let opts = snow_fmt_formatter::FormatOptions::default();
+        match profile {
+            Profile::SqlOnly => snow_fmt_formatter::format_with_embedded(text, &opts, None),
+            Profile::Full => {
+                let formatter = CliEmbeddedFormatter;
+                snow_fmt_formatter::format_with_embedded(text, &opts, Some(&formatter))
+            }
+        }
+    });
+    Ok(formatted.encode())
 }
 
 fn find_fixture_root(explicit: Option<&Path>) -> Option<PathBuf> {
@@ -359,7 +414,7 @@ mod tests {
     fn fixture_mode_is_explicit() {
         let source = b"select 1\n";
         let formatted = format_for_now(source, Profile::Full, None).expect("formatting succeeds");
-        assert_eq!(formatted, source);
+        assert_eq!(formatted, b"SELECT 1;\n");
     }
 
     #[test]

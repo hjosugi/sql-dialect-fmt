@@ -49,6 +49,12 @@ const CURATED: &[&str] = &[
     "select a from t ->> select b from $1",
     "select * from dept where d = 'x' ->> select * from emp where deptno in (select deptno from $1) ->> select e, s from $1 order by 2 desc",
     "values (1), (2) ->> select column1 from $1",
+    // CREATE FUNCTION / PROCEDURE
+    "create or replace function add_js(a float, b float) returns float language javascript as $$ return A + B; $$",
+    "create function f(x int) returns int as $$ x * 2 $$",
+    "create or replace procedure p(n int) returns string language javascript strict as $$ return String(N); $$",
+    "create secure function g() returns string language sql as 'select 1'",
+    "create function py(x int) returns int language python runtime_version = '3.11' handler = 'main' as 'pass'",
 ];
 
 /// Meaningful tokens, upper-cased and with statement terminators dropped — the canonical form a

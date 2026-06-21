@@ -124,7 +124,7 @@ impl Ctx<'_> {
             PARAM_LIST => self.param_list(node),
             PARAM => self.spaced_pieces(node),
             RETURNS_CLAUSE | LANGUAGE_CLAUSE => self.spaced_pieces(node),
-            FUNC_OPTION => self.verbatim(node),
+            FUNC_OPTION => self.func_option(node),
             FUNC_BODY => self.func_body(node),
             SET_OP => self.set_op(node),
             SUBQUERY => self.subquery(node),
@@ -276,7 +276,10 @@ impl Ctx<'_> {
             }
         }
 
-        let mut parts = vec![concat(vec![join(text(" "), header_kws), concat(header_tail)])];
+        let mut parts = vec![concat(vec![
+            join(text(" "), header_kws),
+            concat(header_tail),
+        ])];
         for opt in &options {
             parts.push(hard_line());
             parts.push(self.lower(opt));
@@ -294,6 +297,41 @@ impl Ctx<'_> {
         self.paren_list(self.child_nodes(node))
     }
 
+    /// A generic option clause (`STRICT`, `RUNTIME_VERSION = '3.11'`, `PACKAGES = ('a', 'b')`, …),
+    /// rebuilt from its tokens with cased keywords and canonical punctuation spacing.
+    fn func_option(&self, node: &SyntaxNode) -> Doc {
+        let mut out = String::new();
+        let mut prev_word = false;
+        for tok in self.tokens(node) {
+            match tok.kind() {
+                EQ => {
+                    out.push_str(" = ");
+                    prev_word = false;
+                }
+                L_PAREN => {
+                    out.push('(');
+                    prev_word = false;
+                }
+                R_PAREN => {
+                    out.push(')');
+                    prev_word = false;
+                }
+                COMMA => {
+                    out.push_str(", ");
+                    prev_word = false;
+                }
+                _ => {
+                    if prev_word {
+                        out.push(' ');
+                    }
+                    out.push_str(&self.token_text(&tok));
+                    prev_word = true;
+                }
+            }
+        }
+        text(out)
+    }
+
     /// The `$$ … $$` (or quoted) body. A JavaScript `$$` body is handed to the embedded formatter
     /// when one is supplied; otherwise the body is emitted verbatim.
     fn func_body(&self, node: &SyntaxNode) -> Doc {
@@ -303,9 +341,16 @@ impl Ctx<'_> {
         let raw = tok.text();
         if tok.kind() == DOLLAR_STRING {
             if let (Some(formatter), Some(language)) = (self.embedded, self.body_language(node)) {
-                if matches!(language.as_str(), "javascript" | "js") {
+                let lang_str = language.as_str();
+                if matches!(lang_str, "javascript" | "js") {
                     if let Some(inner) = strip_dollar_quotes(raw) {
                         if let Some(formatted) = formatter.format("javascript", inner) {
+                            return self.embedded_block(&formatted);
+                        }
+                    }
+                } else if matches!(lang_str, "python" | "py") {
+                    if let Some(inner) = strip_dollar_quotes(raw) {
+                        if let Some(formatted) = formatter.format("python", inner) {
                             return self.embedded_block(&formatted);
                         }
                     }

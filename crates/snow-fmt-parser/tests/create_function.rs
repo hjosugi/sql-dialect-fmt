@@ -61,6 +61,10 @@ fn round_trips_with_broken_or_partial_input() {
         "CREATE OR REPLACE FUNCTION f(",
         "CREATE FUNCTION f() RETURNS",
     ] {
-        assert_eq!(parse(s).syntax().to_string(), s, "round-trip failed for {s:?}");
+        assert_eq!(
+            parse(s).syntax().to_string(),
+            s,
+            "round-trip failed for {s:?}"
+        );
     }
 }

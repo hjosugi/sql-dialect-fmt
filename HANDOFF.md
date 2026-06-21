@@ -60,8 +60,17 @@
      先頭〜末尾で判定し、CST が trivia を次トークンの leading に置く問題を回避）。Doc IR に `LineSuffix`/`BreakParent`
      を追加（trailing は `line_suffix`+`break_parent` で行末へ）。`format_with` は**自己検証**（出力が valid SQL・
      全コメント保存・再フォーマットで不変）に失敗したら原文へフォールバック。コメント無しは高速パス。
+   - ✅ **埋め込み言語（CREATE FUNCTION/PROCEDURE）実装済み**。parser: `CREATE [OR REPLACE] [mods]
+     {FUNCTION|PROCEDURE} name(params) <RETURNS/LANGUAGE/options> AS <$$body$$|'body'>` →
+     `CREATE_FUNCTION`/`PARAM_LIST`/`RETURNS_CLAUSE`/`LANGUAGE_CLAUSE`/`FUNC_OPTION`/`FUNC_BODY`
+     （[grammar.rs](crates/snow-fmt-parser/src/grammar.rs)、[tests/create_function.rs](crates/snow-fmt-parser/tests/create_function.rs)）。
+     formatter: ヘッダ＋各オプション行＋`AS body`。**`EmbeddedFormatter` trait（seam）**＋`format_with_embedded`
+     で `$$` JS 本体を委譲（[embedded.rs](crates/snow-fmt-formatter/src/embedded.rs)）。コア `format()` は純粋（外部実行なし）。
+     **CLI(`Profile::Full`) が `CliEmbeddedFormatter` で外部ツールにシェルアウト**（JS=`npx @biomejs/biome`、
+     Python=ruff/black。未インストール時は verbatim）= 「biome 入っていれば使う」を実現。
+     highlight: `LANGUAGE <x>` を検出して `$$` 本体を **JS injection 領域**（`Injection{language,range}`）として出力。
    - ⏳ **残（次の増分、優先順）**:
-     a. **埋め込み `$$…$$` JS** を `biome_js_formatter` で整形し再インデント（root 揃え）。
+     a. tree-sitter `injections.scm` で `$$` JS を tree-sitter-javascript に着色（highlight 側の injection 情報を利用）。
      b. 型名・関数名のケーシング方針、未対応構文（PIVOT/UNPIVOT/FLATTEN 等）の専用ルール化（現状は verbatim フォールバック）。
      c. 複数行ブロックコメントの内部再インデント、dangling コメントの配置改善、`insta` スナップショット、`format-dev` 類の類似度コーパス・ゲート。
    - 注: SQL は SELECT リスト等に**末尾カンマを許さない**ため、JS/Python の magic trailing comma は採用せず

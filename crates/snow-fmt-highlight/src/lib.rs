@@ -10,7 +10,19 @@ use snow_fmt_syntax::{keyword_kind, SyntaxKind};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Highlighted<'a> {
     pub tokens: Vec<HighlightToken<'a>>,
+    /// Embedded-language regions (e.g. a JavaScript UDF body inside `$$ … $$`). An editor or a
+    /// tree-sitter `injections.scm` highlights each region with the named language's grammar.
+    pub injections: Vec<Injection>,
     pub errors: Vec<LexError>,
+}
+
+/// A span of the source written in another language, to be highlighted by that language.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Injection {
+    /// The language, lower-cased (e.g. `"javascript"`), taken from the `LANGUAGE` clause.
+    pub language: String,
+    /// Byte range of the embedded body — the text *between* the `$$` delimiters.
+    pub range: std::ops::Range<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,23 +71,62 @@ impl HighlightKind {
 
 pub fn highlight(input: &str) -> Highlighted<'_> {
     let lexed = tokenize(input);
-    let tokens = lexed
-        .tokens
-        .into_iter()
-        .scan(0usize, |offset, token| {
-            let start = *offset;
-            *offset += token.text.len();
-            Some(HighlightToken {
-                kind: classify(token.kind, token.text),
-                text: token.text,
-                range: start..*offset,
-            })
-        })
-        .collect();
+    let mut tokens = Vec::with_capacity(lexed.tokens.len());
+    let mut injections = Vec::new();
+
+    // Track the most recent `LANGUAGE <name>` so a following `$$ … $$` body can be tagged as an
+    // injection. Reset at a statement boundary (`;`) so one statement's LANGUAGE never leaks.
+    let mut offset = 0usize;
+    let mut current_language: Option<String> = None;
+    let mut expect_language_name = false;
+
+    for token in lexed.tokens {
+        let start = offset;
+        offset += token.text.len();
+
+        if !token.kind.is_trivia() {
+            if expect_language_name {
+                current_language = Some(token.text.to_ascii_lowercase());
+                expect_language_name = false;
+            } else if token.kind == SyntaxKind::SEMICOLON {
+                current_language = None;
+            } else if token.kind == SyntaxKind::IDENT && token.text.eq_ignore_ascii_case("language")
+            {
+                expect_language_name = true;
+            }
+
+            if token.kind == SyntaxKind::DOLLAR_STRING {
+                if let (Some(language), Some(range)) =
+                    (&current_language, dollar_body_range(token.text, start))
+                {
+                    injections.push(Injection {
+                        language: language.clone(),
+                        range,
+                    });
+                }
+            }
+        }
+
+        tokens.push(HighlightToken {
+            kind: classify(token.kind, token.text),
+            text: token.text,
+            range: start..offset,
+        });
+    }
 
     Highlighted {
         tokens,
+        injections,
         errors: lexed.errors,
+    }
+}
+
+/// Byte range of a `$$ … $$` body's interior, given the token text and its start offset.
+fn dollar_body_range(text: &str, start: usize) -> Option<std::ops::Range<usize>> {
+    if text.len() >= 4 && text.starts_with("$$") && text.ends_with("$$") {
+        Some((start + 2)..(start + text.len() - 2))
+    } else {
+        None
     }
 }
 
@@ -218,5 +269,37 @@ mod tests {
         for token in &highlighted.tokens {
             assert_eq!(&sql[token.range.clone()], token.text);
         }
+    }
+
+    #[test]
+    fn javascript_udf_body_is_a_javascript_injection() {
+        let sql = "CREATE FUNCTION f() RETURNS INT LANGUAGE JAVASCRIPT AS $$ return 1; $$";
+        let h = highlight(sql);
+        assert_eq!(
+            h.injections.len(),
+            1,
+            "expected one injection: {:?}",
+            h.injections
+        );
+        let inj = &h.injections[0];
+        assert_eq!(inj.language, "javascript");
+        // The injected range is the body between the `$$` delimiters.
+        assert_eq!(&sql[inj.range.clone()], " return 1; ");
+    }
+
+    #[test]
+    fn dollar_body_without_language_is_not_injected() {
+        // No LANGUAGE clause → the `$$` body is just a dollar-quoted string, not an injection.
+        let h = highlight("SELECT $$ raw text $$");
+        assert!(h.injections.is_empty());
+    }
+
+    #[test]
+    fn language_does_not_leak_across_statements() {
+        // The JS language from the first statement must not tag the second statement's body.
+        let sql = "CREATE FUNCTION a() RETURNS INT LANGUAGE JAVASCRIPT AS $$ 1 $$; SELECT $$ x $$";
+        let h = highlight(sql);
+        assert_eq!(h.injections.len(), 1);
+        assert_eq!(h.injections[0].language, "javascript");
     }
 }

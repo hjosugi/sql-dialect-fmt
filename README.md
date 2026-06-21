@@ -38,7 +38,8 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 | Parser / CST（Pratt 式＋SELECT、ロスレス、エラー回復で無停止） | ✅ Phase 1–2 |
 | Formatter（Doc IR、`snow-fmt-formatter`、コメント付与あり） | ✅ Phase 3（壊れた SQL は無変換） |
 | フロー/パイプ `->>`（statement チェーン、`$n` 参照） | ✅ parse + 整形 |
-| 埋め込み JS 整形（Biome） | ⏳ Phase 8 |
+| `CREATE FUNCTION/PROCEDURE`（埋め込み言語本体） | ✅ parse + 構造整形 + JS injection |
+| 埋め込み JS/Python 整形 | ✅ CLI `--profile full` が外部ツール検出（biome/ruff/black） |
 | ハイライト / Hover / LSP / Tree-sitter | ✅ lexical highlight + hover + Tree-sitter grammar / ⏳ LSP |
 
 ## クレート構成

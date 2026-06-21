@@ -29,10 +29,12 @@
 mod builder;
 mod comments;
 mod doc;
+pub mod embedded;
 mod options;
 mod printer;
 mod sql;
 
+pub use embedded::EmbeddedFormatter;
 pub use options::{FormatOptions, KeywordCase};
 
 use snow_fmt_syntax::SyntaxNode;
@@ -50,12 +52,23 @@ pub fn format(source: &str) -> String {
 /// comment, produce invalid SQL, or not be stable; otherwise returns the reformatted SQL, which
 /// always ends in a single trailing newline.
 pub fn format_with(source: &str, opts: &FormatOptions) -> String {
+    format_with_embedded(source, opts, None)
+}
+
+/// Format Snowflake SQL with explicit [`FormatOptions`] and an optional [`EmbeddedFormatter`].
+///
+/// Same fallback guarantees as [`format_with`].
+pub fn format_with_embedded(
+    source: &str,
+    opts: &FormatOptions,
+    embedded: Option<&dyn EmbeddedFormatter>,
+) -> String {
     let parse = snow_fmt_parser::parse(source);
     if !parse.errors().is_empty() {
         return source.to_string(); // never reformat broken SQL
     }
     let root = parse.syntax();
-    let formatted = run_pipeline(&root, source, opts);
+    let formatted = run_pipeline(&root, source, opts, embedded);
 
     // Comment-free input takes the fast path: the lowering is total and the corpus proves it
     // idempotent and token-preserving, so no per-run verification is needed.
@@ -73,15 +86,23 @@ pub fn format_with(source: &str, opts: &FormatOptions) -> String {
     if comment_texts(&root) != comment_texts(&reparsed_root) {
         return source.to_string();
     }
-    if run_pipeline(&reparsed_root, &formatted, opts) != formatted {
+    if run_pipeline(&reparsed_root, &formatted, opts, embedded) != formatted {
         return source.to_string();
     }
     formatted
 }
 
 /// Lower + print + normalize, with no self-verification (the pure formatting pipeline).
-fn run_pipeline(root: &SyntaxNode, src: &str, opts: &FormatOptions) -> String {
-    normalize_trailing_newline(printer::print(sql::format_source(root, src, opts), opts))
+fn run_pipeline(
+    root: &SyntaxNode,
+    src: &str,
+    opts: &FormatOptions,
+    embedded: Option<&dyn EmbeddedFormatter>,
+) -> String {
+    normalize_trailing_newline(printer::print(
+        sql::format_source(root, src, opts, embedded),
+        opts,
+    ))
 }
 
 fn has_comments(root: &SyntaxNode) -> bool {

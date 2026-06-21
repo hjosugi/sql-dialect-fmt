@@ -4,7 +4,9 @@
 //! keyword casing). The property tests in `corpus.rs` cover idempotency and token preservation
 //! across a wider input set.
 
-use snow_fmt_formatter::{format, format_with, FormatOptions, KeywordCase};
+use snow_fmt_formatter::{
+    format, format_with, format_with_embedded, EmbeddedFormatter, FormatOptions, KeywordCase,
+};
 
 /// Assert that `input` formats to exactly `expected`.
 #[track_caller]
@@ -148,6 +150,95 @@ fn flow_chain_three_steps() {
     );
 }
 
+// ---- CREATE FUNCTION / PROCEDURE (embedded-language bodies) ----
+
+#[test]
+fn create_function_lays_out_header_and_options() {
+    assert_format(
+        "create or replace function add_js(a float, b float) returns float language javascript as $$ return A + B; $$",
+        "CREATE OR REPLACE FUNCTION add_js(a float, b float)\n\
+         RETURNS float\n\
+         LANGUAGE JAVASCRIPT\n\
+         AS $$ return A + B; $$;\n",
+    );
+}
+
+#[test]
+fn create_procedure_with_generic_option() {
+    assert_format(
+        "create or replace procedure p(n int) returns string language javascript strict as $$ return String(N); $$",
+        "CREATE OR REPLACE PROCEDURE p(n int)\n\
+         RETURNS string\n\
+         LANGUAGE JAVASCRIPT\n\
+         STRICT\n\
+         AS $$ return String(N); $$;\n",
+    );
+}
+
+#[test]
+fn create_function_option_assignments_are_normalized() {
+    assert_format(
+        "create function py(x int) returns int language python runtime_version = '3.11' handler = 'main' as 'pass'",
+        "CREATE FUNCTION py(x int)\n\
+         RETURNS int\n\
+         LANGUAGE PYTHON\n\
+         RUNTIME_VERSION = '3.11'\n\
+         HANDLER = 'main'\n\
+         AS 'pass';\n",
+    );
+}
+
+#[test]
+fn embedded_body_is_verbatim_without_a_formatter() {
+    // With no EmbeddedFormatter, the `$$` body is preserved exactly.
+    assert_format(
+        "create function f(x int) returns int as $$ x * 2 $$",
+        "CREATE FUNCTION f(x int)\nRETURNS int\nAS $$ x * 2 $$;\n",
+    );
+}
+
+/// A stand-in JS formatter for tests: trims each line, drops blanks (so we don't need a real
+/// Biome dependency to exercise the seam).
+struct TrimJs;
+impl EmbeddedFormatter for TrimJs {
+    fn format(&self, language: &str, body: &str) -> Option<String> {
+        if language != "javascript" {
+            return None;
+        }
+        let lines: Vec<&str> = body
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
+        Some(lines.join("\n"))
+    }
+}
+
+#[test]
+fn embedded_javascript_body_is_formatted_and_reindented() {
+    let input = "create function add_js(a float, b float) returns float language javascript as $$\n  const x=1;\n\n   return A+B;\n$$";
+    assert_eq!(
+        format_with_embedded(input, &FormatOptions::default(), Some(&TrimJs)),
+        "CREATE FUNCTION add_js(a float, b float)\n\
+         RETURNS float\n\
+         LANGUAGE JAVASCRIPT\n\
+         AS $$\n  \
+           const x=1;\n  \
+           return A+B;\n\
+         $$;\n",
+    );
+}
+
+#[test]
+fn embedded_formatter_left_alone_for_non_javascript() {
+    // A SQL/Python body is not handed to the JavaScript formatter.
+    let input = "create function g() returns string language sql as $$ select 1 $$";
+    assert_eq!(
+        format_with_embedded(input, &FormatOptions::default(), Some(&TrimJs)),
+        "CREATE FUNCTION g()\nRETURNS string\nLANGUAGE SQL\nAS $$ select 1 $$;\n",
+    );
+}
+
 // ---- options ----
 
 #[test]
@@ -278,4 +369,26 @@ fn empty_and_whitespace_inputs() {
     assert_eq!(format(""), "");
     // Whitespace-only input has no statements; it collapses to empty.
     assert_eq!(format("   \n  "), "");
+}
+
+#[test]
+fn format_embedded_javascript_udf_mock() {
+    struct MockJsFormatter;
+    impl snow_fmt_formatter::EmbeddedFormatter for MockJsFormatter {
+        fn format(&self, language: &str, body: &str) -> Option<String> {
+            if language == "javascript" {
+                Some(body.trim().to_uppercase())
+            } else {
+                None
+            }
+        }
+    }
+
+    let sql = "CREATE FUNCTION add_js(a FLOAT, b FLOAT) RETURNS FLOAT LANGUAGE JAVASCRIPT AS $$\nreturn a + b;\n$$;";
+    let opts = FormatOptions::default();
+    let formatted = snow_fmt_formatter::format_with_embedded(sql, &opts, Some(&MockJsFormatter));
+    assert_eq!(
+        formatted,
+        "CREATE FUNCTION add_js(a FLOAT, b FLOAT)\nRETURNS FLOAT\nLANGUAGE JAVASCRIPT\nAS $$\n  RETURN A + B;\n$$;\n"
+    );
 }
