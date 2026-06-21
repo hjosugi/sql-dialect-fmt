@@ -249,6 +249,12 @@ pub enum SyntaxKind {
     WINDOW_SPEC,
     PARTITION_BY_CLAUSE,
     WINDOW_FRAME,
+    // Phase 2b: CASE / CAST(...) / semi-structured path / VALUES
+    CASE_EXPR,
+    CASE_WHEN,
+    JSON_ACCESS,
+    VALUES_CLAUSE,
+    VALUES_ROW,
 
     #[doc(hidden)]
     __LAST,

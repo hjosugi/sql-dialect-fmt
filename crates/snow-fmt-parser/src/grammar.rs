@@ -38,13 +38,15 @@ pub(crate) fn source_file(p: &mut Parser) {
 }
 
 fn at_stmt_start(p: &Parser) -> bool {
-    p.at(SELECT_KW) || p.at(WITH_KW) || at_expr_start(p)
+    p.at(SELECT_KW) || p.at(WITH_KW) || p.at(VALUES_KW) || at_expr_start(p)
 }
 
 fn statement(p: &mut Parser) {
     if p.at(WITH_KW) {
         with_query(p);
-    } else if p.at(SELECT_KW) || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
+    } else if p.at(SELECT_KW)
+        || p.at(VALUES_KW)
+        || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
     {
         query_expr(p);
     } else {
@@ -107,8 +109,10 @@ fn query_primary(p: &mut Parser) -> Option<CompletedMarker> {
         Some(subquery(p))
     } else if p.at(SELECT_KW) {
         Some(select_core(p))
+    } else if p.at(VALUES_KW) {
+        Some(values_clause(p))
     } else {
-        p.error("expected a query (SELECT or a parenthesized subquery)");
+        p.error("expected a query (SELECT, VALUES, or a parenthesized subquery)");
         None
     }
 }
@@ -241,6 +245,9 @@ fn table_alias(p: &mut Parser) {
     let explicit_alias = p.eat(AS_KW);
     if explicit_alias || p.at_name() {
         name(p);
+        if p.at(L_PAREN) {
+            column_list(p); // derived-table column aliases: (c1, c2, ...)
+        }
     }
 }
 
@@ -420,6 +427,9 @@ fn at_expr_start(p: &Parser) -> bool {
         || p.at(PLUS)
         || p.at(NOT_KW)
         || p.at(EXISTS_KW)
+        || p.at(CASE_KW)
+        || p.at(CAST_KW)
+        || p.at(TRY_CAST_KW)
         || p.at_name()
 }
 
@@ -450,6 +460,13 @@ fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
             p.bump(COLON2);
             type_name(p);
             lhs = m.complete(p, CAST_EXPR);
+            continue;
+        }
+        // Semi-structured / VARIANT path access: `col:path.to.field`, `col:a[0]:b`.
+        if p.at(COLON) {
+            let m = lhs.precede(p);
+            json_path(p);
+            lhs = m.complete(p, JSON_ACCESS);
             continue;
         }
         // Window functions: `f(...) OVER (...)` or `f(...) OVER window_name`.
@@ -573,6 +590,10 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         expr(p);
         p.expect(R_PAREN);
         m.complete(p, PAREN_EXPR)
+    } else if p.at(CASE_KW) {
+        case_expr(p)
+    } else if p.at(CAST_KW) || p.at(TRY_CAST_KW) {
+        cast_fn_expr(p)
     } else if p.at_name() {
         name_ref(p)
     } else {
@@ -720,6 +741,93 @@ fn frame_bound(p: &mut Parser) {
             p.error("expected PRECEDING or FOLLOWING");
         }
     }
+}
+
+fn case_expr(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(CASE_KW);
+    if !p.at(WHEN_KW) {
+        expr(p); // simple CASE: the operand before the first WHEN
+    }
+    while p.at(WHEN_KW) {
+        let arm = p.start();
+        p.bump(WHEN_KW);
+        expr(p);
+        p.expect(THEN_KW);
+        expr(p);
+        arm.complete(p, CASE_WHEN);
+    }
+    if p.eat(ELSE_KW) {
+        expr(p);
+    }
+    p.expect(END_KW);
+    m.complete(p, CASE_EXPR)
+}
+
+fn cast_fn_expr(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump_any(); // CAST or TRY_CAST
+    p.expect(L_PAREN);
+    expr(p);
+    p.expect(AS_KW);
+    type_name(p);
+    p.expect(R_PAREN);
+    m.complete(p, CAST_EXPR)
+}
+
+/// Semi-structured path tail after a leading `:` (already on the `:` token).
+fn json_path(p: &mut Parser) {
+    p.bump(COLON);
+    json_path_segment(p);
+    loop {
+        if p.at(DOT) {
+            p.bump(DOT);
+            json_path_segment(p);
+        } else if p.at(COLON) {
+            p.bump(COLON);
+            json_path_segment(p);
+        } else if p.at(L_BRACKET) {
+            p.bump(L_BRACKET);
+            expr(p);
+            p.expect(R_BRACKET);
+        } else {
+            break;
+        }
+    }
+}
+
+fn json_path_segment(p: &mut Parser) {
+    if p.at_name() || p.at(STRING) {
+        p.bump_any();
+    } else {
+        p.error("expected a path segment after ':'");
+    }
+}
+
+fn values_clause(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(VALUES_KW);
+    values_row(p);
+    while p.eat(COMMA) {
+        values_row(p);
+    }
+    m.complete(p, VALUES_CLAUSE)
+}
+
+fn values_row(p: &mut Parser) {
+    let m = p.start();
+    p.expect(L_PAREN);
+    if !p.at(R_PAREN) {
+        expr(p);
+        while p.eat(COMMA) {
+            if p.at(R_PAREN) {
+                break;
+            }
+            expr(p);
+        }
+    }
+    p.expect(R_PAREN);
+    m.complete(p, VALUES_ROW);
 }
 
 fn infix_bp(p: &Parser) -> Option<(u8, u8)> {

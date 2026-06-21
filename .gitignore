@@ -1,5 +1,4 @@
 /target
-.vscode/
 .tree-sitter-cache/
 **/*.rs.bk
 
