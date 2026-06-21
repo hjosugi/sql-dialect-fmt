@@ -1,28 +1,35 @@
 //! The single-pass tokenizer.
 
 use crate::token::{LexError, Lexed, Token};
+use crate::{BodyDelimiter, LexOptions};
 use snow_fmt_syntax::SyntaxKind;
 
 /// Tokenize Snowflake SQL into a lossless token stream.
 ///
 /// The concatenation of `tokens[i].text` always equals `input`.
 pub fn tokenize(input: &str) -> Lexed<'_> {
-    Lexer::new(input).run()
+    tokenize_with_options(input, LexOptions::default())
 }
 
-struct Lexer<'a> {
+pub fn tokenize_with_options<'a>(input: &'a str, options: LexOptions<'_>) -> Lexed<'a> {
+    Lexer::new(input, options).run()
+}
+
+struct Lexer<'a, 'cfg> {
     input: &'a str,
     bytes: &'a [u8],
+    options: LexOptions<'cfg>,
     pos: usize,
     tokens: Vec<Token<'a>>,
     errors: Vec<LexError>,
 }
 
-impl<'a> Lexer<'a> {
-    fn new(input: &'a str) -> Self {
+impl<'a, 'cfg> Lexer<'a, 'cfg> {
+    fn new(input: &'a str, options: LexOptions<'cfg>) -> Self {
         Lexer {
             input,
             bytes: input.as_bytes(),
+            options,
             pos: 0,
             tokens: Vec::new(),
             errors: Vec::new(),
@@ -70,6 +77,11 @@ impl<'a> Lexer<'a> {
     }
 
     #[inline]
+    fn starts_with(&self, text: &str) -> bool {
+        self.bytes[self.pos..].starts_with(text.as_bytes())
+    }
+
+    #[inline]
     fn push(&mut self, kind: SyntaxKind, start: usize) {
         // `self.input` is a `&'a str`; reborrowing through it yields a `&'a str` that does not
         // borrow `self`, so this composes fine with the `&mut self` push.
@@ -88,6 +100,11 @@ impl<'a> Lexer<'a> {
     fn run(mut self) -> Lexed<'a> {
         while !self.at_end() {
             let start = self.pos;
+            if let Some(delimiter) = self.body_delimiter_at() {
+                self.delimited_body(start, delimiter);
+                self.push(SyntaxKind::DOLLAR_STRING, start);
+                continue;
+            }
             match self.peek() {
                 b' ' | b'\t' => {
                     self.eat_while(|c| c == b' ' || c == b'\t');
@@ -126,12 +143,7 @@ impl<'a> Lexer<'a> {
                     self.quoted_ident_body(start);
                     self.push(SyntaxKind::QUOTED_IDENT, start);
                 }
-                // $$ ... $$ dollar-quoted body (carries embedded JS/Python/Java/Scala/SQL).
-                b'$' if self.peek_at(1) == b'$' => {
-                    self.dollar_string_body(start);
-                    self.push(SyntaxKind::DOLLAR_STRING, start);
-                }
-                // $1 / $name variables (but not $$, handled above).
+                // $1 / $name variables (but not body delimiters, handled above).
                 b'$' if is_ident_start(self.peek_at(1)) || self.peek_at(1).is_ascii_digit() => {
                     self.pos += 1; // $
                     self.eat_while(is_ident_continue);
@@ -227,16 +239,29 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Consume a `$$ ... $$` dollar-quoted body.
-    fn dollar_string_body(&mut self, start: usize) {
-        self.pos += 2; // opening $$
+    fn body_delimiter_at(&self) -> Option<BodyDelimiter> {
+        self.options
+            .body_delimiters
+            .iter()
+            .copied()
+            .filter(|delimiter| {
+                !delimiter.opener.is_empty()
+                    && !delimiter.closer.is_empty()
+                    && self.starts_with(delimiter.opener)
+            })
+            .max_by_key(|delimiter| delimiter.opener.len())
+    }
+
+    /// Consume a delimited embedded body. The current Snowflake default is `$$...$$`.
+    fn delimited_body(&mut self, start: usize, delimiter: BodyDelimiter) {
+        self.pos += delimiter.opener.len();
         loop {
             if self.at_end() {
-                self.error("unterminated dollar-quoted string", start);
+                self.error(format!("unterminated {}", delimiter.name), start);
                 break;
             }
-            if self.peek() == b'$' && self.peek_at(1) == b'$' {
-                self.pos += 2; // closing $$
+            if self.starts_with(delimiter.closer) {
+                self.pos += delimiter.closer.len();
                 break;
             }
             self.pos += 1;
@@ -303,6 +328,8 @@ impl<'a> Lexer<'a> {
             b')' => SyntaxKind::R_PAREN,
             b'[' => SyntaxKind::L_BRACKET,
             b']' => SyntaxKind::R_BRACKET,
+            b'{' => SyntaxKind::L_BRACE,
+            b'}' => SyntaxKind::R_BRACE,
             b',' => SyntaxKind::COMMA,
             b';' => SyntaxKind::SEMICOLON,
             b'+' => SyntaxKind::PLUS,
@@ -364,7 +391,10 @@ impl<'a> Lexer<'a> {
                 }
             }
             b'-' => {
-                if self.peek() == b'>' {
+                if self.peek() == b'>' && self.peek_at(1) == b'>' {
+                    self.pos += 2;
+                    SyntaxKind::FLOW_PIPE
+                } else if self.peek() == b'>' {
                     self.pos += 1;
                     SyntaxKind::ARROW
                 } else {

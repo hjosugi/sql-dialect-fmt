@@ -1,5 +1,11 @@
 /target
+.vscode/
+.tree-sitter-cache/
 **/*.rs.bk
 
 # Personal learning notes — kept local, not committed
 /GUIDE.md
+
+# Local Snowflake spec store (regenerate with spec/snowflake_spec.py); not committed
+/spec/snowflake_spec.db
+/spec/snapshots/

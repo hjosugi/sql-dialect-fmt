@@ -1,0 +1,24 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "snowflake",
+      "camelcase": "Snowflake",
+      "title": "Snowflake SQL",
+      "scope": "source.snowflake-sql",
+      "file-types": [
+        "sql",
+        "sfsql"
+      ],
+      "injection-regex": "^(snowflake|snowflake-sql|sfsql)$",
+      "class-name": "TreeSitterSnowflake",
+      "highlights": "queries/highlights.scm",
+      "locals": "queries/locals.scm",
+      "injections": "queries/injections.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT OR Apache-2.0"
+  }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "snow-fmt-tree-sitter"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust bindings for the bundled tree-sitter-snowflake grammar."
+
+[dependencies]
+tree-sitter = "0.26.9"
+tree-sitter-language = "0.1.7"
+
+[dev-dependencies]
+snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures" }
+
+[build-dependencies]
+cc = "1.2"

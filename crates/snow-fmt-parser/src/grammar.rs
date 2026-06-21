@@ -44,8 +44,7 @@ fn at_stmt_start(p: &Parser) -> bool {
 fn statement(p: &mut Parser) {
     if p.at(WITH_KW) {
         with_query(p);
-    } else if p.at(SELECT_KW)
-        || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
+    } else if p.at(SELECT_KW) || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
     {
         query_expr(p);
     } else {
@@ -196,9 +195,8 @@ fn select_item(p: &mut Parser) {
         s.complete(p, STAR_EXPR);
     } else if at_expr_start(p) {
         expr(p);
-        if p.eat(AS_KW) {
-            name(p);
-        } else if p.at_name() {
+        let explicit_alias = p.eat(AS_KW);
+        if explicit_alias || p.at_name() {
             name(p); // implicit alias: SELECT a alias
         }
     } else {
@@ -240,9 +238,8 @@ fn table_ref(p: &mut Parser) {
 }
 
 fn table_alias(p: &mut Parser) {
-    if p.eat(AS_KW) {
-        name(p);
-    } else if p.at_name() {
+    let explicit_alias = p.eat(AS_KW);
+    if explicit_alias || p.at_name() {
         name(p);
     }
 }

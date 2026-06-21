@@ -1,0 +1,9 @@
+[package]
+name = "snow-fmt-test-fixtures"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+description = "Embedded Snowflake SQL golden fixtures used by snow-fmt tests."
+
+[dependencies]

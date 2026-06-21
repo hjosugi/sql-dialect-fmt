@@ -1,6 +1,6 @@
 //! The `T!` shorthand macro: punctuation/operator token → [`crate::SyntaxKind`].
 //!
-//! `T![|>]` reads better than `SyntaxKind::PIPE_GT` in parser code (this is rust-analyzer's
+//! `T![->>]` reads better than `SyntaxKind::FLOW_PIPE` in parser code (this is rust-analyzer's
 //! `T!` convention). Keyword kinds are referenced directly (e.g. `SyntaxKind::SELECT_KW`) for
 //! now; they can be folded into `T!` via codegen once the grammar stabilizes.
 //!
@@ -15,6 +15,8 @@ macro_rules! T {
     [')'] => { $crate::SyntaxKind::R_PAREN };
     ['['] => { $crate::SyntaxKind::L_BRACKET };
     [']'] => { $crate::SyntaxKind::R_BRACKET };
+    ['{'] => { $crate::SyntaxKind::L_BRACE };
+    ['}'] => { $crate::SyntaxKind::R_BRACE };
     [.] => { $crate::SyntaxKind::DOT };
     [:] => { $crate::SyntaxKind::COLON };
     [::] => { $crate::SyntaxKind::COLON2 };
@@ -33,6 +35,7 @@ macro_rules! T {
     [||] => { $crate::SyntaxKind::CONCAT };
     [|] => { $crate::SyntaxKind::PIPE };
     [|>] => { $crate::SyntaxKind::PIPE_GT };
+    [->>] => { $crate::SyntaxKind::FLOW_PIPE };
     [->] => { $crate::SyntaxKind::ARROW };
     [=>] => { $crate::SyntaxKind::FAT_ARROW };
     [&] => { $crate::SyntaxKind::AMP };
@@ -55,6 +58,8 @@ mod tests {
         assert_eq!(T![')'], SyntaxKind::R_PAREN);
         assert_eq!(T!['['], SyntaxKind::L_BRACKET);
         assert_eq!(T![']'], SyntaxKind::R_BRACKET);
+        assert_eq!(T!['{'], SyntaxKind::L_BRACE);
+        assert_eq!(T!['}'], SyntaxKind::R_BRACE);
         assert_eq!(T![.], SyntaxKind::DOT);
         assert_eq!(T![::], SyntaxKind::COLON2);
         assert_eq!(T![:=], SyntaxKind::ASSIGN);
@@ -62,6 +67,7 @@ mod tests {
         assert_eq!(T![<=], SyntaxKind::LTE);
         assert_eq!(T![>=], SyntaxKind::GTE);
         assert_eq!(T![|>], SyntaxKind::PIPE_GT);
+        assert_eq!(T![->>], SyntaxKind::FLOW_PIPE);
         assert_eq!(T![||], SyntaxKind::CONCAT);
         assert_eq!(T![|], SyntaxKind::PIPE);
         assert_eq!(T![=>], SyntaxKind::FAT_ARROW);

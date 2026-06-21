@@ -5,11 +5,7 @@
 //! without diagnostics, that the node structure is sensible, and that errors recover.
 
 use snow_fmt_parser::{parse, AstNode, SelectStmt, SourceFile, SyntaxKind};
-
-fn roundtrip(s: &str) {
-    let p = parse(s);
-    assert_eq!(p.syntax().to_string(), s, "round-trip failed for {s:?}");
-}
+use snow_fmt_test_support::parser::{assert_parse_clean, assert_parse_roundtrip};
 
 #[test]
 fn lossless_roundtrip_valid_and_broken() {
@@ -29,7 +25,7 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {
-        roundtrip(s);
+        assert_parse_roundtrip(s);
     }
 }
 
@@ -42,12 +38,7 @@ fn clean_sql_has_no_errors() {
         "SELECT a::int, (a + b) * c FROM t",
         "SELECT DISTINCT a FROM t",
     ] {
-        let p = parse(s);
-        assert!(
-            p.errors().is_empty(),
-            "unexpected errors for {s:?}: {:?}",
-            p.errors()
-        );
+        assert_parse_clean(s);
     }
 }
 
@@ -82,8 +73,7 @@ fn ast_accessors_work() {
 
 #[test]
 fn error_recovery_is_lossless_and_reported() {
-    let p = parse("SELECT FROM");
-    assert_eq!(p.syntax().to_string(), "SELECT FROM");
+    let p = assert_parse_roundtrip("SELECT FROM");
     assert!(!p.errors().is_empty());
 }
 
@@ -121,7 +111,6 @@ fn never_panics_on_adversarial_input() {
         "1 +",
         ")",
     ] {
-        let p = parse(s);
-        assert_eq!(p.syntax().to_string(), s, "round-trip failed for {s:?}");
+        assert_parse_roundtrip(s);
     }
 }

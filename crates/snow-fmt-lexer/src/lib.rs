@@ -17,10 +17,12 @@
 //! * `token` — the [`Token`] / [`LexError`] / [`Lexed`] types.
 //! * `lexer` — the single-pass tokenizer ([`tokenize`]).
 
+mod delimiter;
 mod lexer;
 mod token;
 
-pub use lexer::tokenize;
+pub use delimiter::{BodyDelimiter, LexOptions, DEFAULT_BODY_DELIMITERS, DOLLAR_QUOTED_BODY};
+pub use lexer::{tokenize, tokenize_with_options};
 pub use token::{LexError, Lexed, Token};
 
 // Re-exported so downstream crates and integration tests can name the kind through the lexer.

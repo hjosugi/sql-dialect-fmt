@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest Snowflake syntax, formatter behavior, editor features, or tooling.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow should become easier?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the desired behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: SQL examples
+      render: sql
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Snowflake docs or prior-art links.

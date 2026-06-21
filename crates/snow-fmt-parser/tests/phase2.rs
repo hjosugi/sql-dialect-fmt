@@ -1,22 +1,8 @@
 //! Phase 2 conformance: the common query surface (clauses, JOINs, subqueries, set ops, CTEs,
 //! compound predicates, window functions) must parse with no diagnostics and round-trip exactly.
 
-use snow_fmt_parser::{parse, SyntaxKind};
-
-/// Assert: no parse errors AND byte-exact round-trip.
-fn clean(s: &str) {
-    let p = parse(s);
-    assert!(
-        p.errors().is_empty(),
-        "unexpected errors for {s:?}: {:?}",
-        p.errors()
-    );
-    assert_eq!(p.syntax().to_string(), s, "round-trip failed for {s:?}");
-}
-
-fn has(s: &str, kind: SyntaxKind) -> bool {
-    parse(s).syntax().descendants().any(|n| n.kind() == kind)
-}
+use snow_fmt_parser::SyntaxKind;
+use snow_fmt_test_support::parser::{assert_has_node_kind, assert_parse_clean as clean};
 
 #[test]
 fn all_single_select_clauses() {
@@ -37,7 +23,7 @@ fn joins() {
     clean("SELECT a FROM t NATURAL JOIN u");
     clean("SELECT a FROM a JOIN b ON a.x = b.x JOIN c ON b.y = c.y");
     clean("SELECT a FROM a, b, c");
-    assert!(has("SELECT a FROM t JOIN u ON t.id = u.id", SyntaxKind::JOIN));
+    assert_has_node_kind("SELECT a FROM t JOIN u ON t.id = u.id", SyntaxKind::JOIN);
 }
 
 #[test]
@@ -46,11 +32,14 @@ fn subqueries_and_exists() {
     clean("SELECT x FROM (SELECT a AS x FROM t) AS sub");
     clean("SELECT (SELECT max(x) FROM t) AS m FROM u");
     clean("SELECT 1 FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.id = t.id)");
-    assert!(has("SELECT x FROM (SELECT a AS x FROM t) sub", SyntaxKind::SUBQUERY));
-    assert!(has(
+    assert_has_node_kind(
+        "SELECT x FROM (SELECT a AS x FROM t) sub",
+        SyntaxKind::SUBQUERY,
+    );
+    assert_has_node_kind(
         "SELECT 1 FROM t WHERE EXISTS (SELECT 1 FROM u)",
-        SyntaxKind::EXISTS_EXPR
-    ));
+        SyntaxKind::EXISTS_EXPR,
+    );
 }
 
 #[test]
@@ -60,7 +49,7 @@ fn set_operations() {
     clean("SELECT a FROM t EXCEPT SELECT a FROM u");
     clean("SELECT a FROM t INTERSECT SELECT a FROM u");
     clean("(SELECT 1) UNION (SELECT 2)");
-    assert!(has("SELECT 1 UNION ALL SELECT 2", SyntaxKind::SET_OP));
+    assert_has_node_kind("SELECT 1 UNION ALL SELECT 2", SyntaxKind::SET_OP);
 }
 
 #[test]
@@ -68,14 +57,11 @@ fn ctes() {
     clean("WITH c AS (SELECT 1 AS x) SELECT x FROM c");
     clean("WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT x, y FROM a, b");
     clean("WITH RECURSIVE c (n) AS (SELECT 1) SELECT n FROM c");
-    assert!(has(
+    assert_has_node_kind(
         "WITH c AS (SELECT 1 AS x) SELECT x FROM c",
-        SyntaxKind::WITH_CLAUSE
-    ));
-    assert!(has(
-        "WITH c AS (SELECT 1 AS x) SELECT x FROM c",
-        SyntaxKind::CTE
-    ));
+        SyntaxKind::WITH_CLAUSE,
+    );
+    assert_has_node_kind("WITH c AS (SELECT 1 AS x) SELECT x FROM c", SyntaxKind::CTE);
 }
 
 #[test]
@@ -87,24 +73,26 @@ fn compound_predicates() {
     clean("SELECT a FROM t WHERE a BETWEEN 1 AND 10");
     clean("SELECT a FROM t WHERE a NOT BETWEEN 1 AND 10");
     clean("SELECT a FROM t WHERE name LIKE 'A%' AND name NOT LIKE 'B%'");
-    assert!(has("SELECT a FROM t WHERE a IS NOT NULL", SyntaxKind::IS_EXPR));
-    assert!(has("SELECT a FROM t WHERE a IN (1, 2)", SyntaxKind::IN_EXPR));
-    assert!(has(
+    assert_has_node_kind("SELECT a FROM t WHERE a IS NOT NULL", SyntaxKind::IS_EXPR);
+    assert_has_node_kind("SELECT a FROM t WHERE a IN (1, 2)", SyntaxKind::IN_EXPR);
+    assert_has_node_kind(
         "SELECT a FROM t WHERE a BETWEEN 1 AND 10",
-        SyntaxKind::BETWEEN_EXPR
-    ));
+        SyntaxKind::BETWEEN_EXPR,
+    );
 }
 
 #[test]
 fn window_functions() {
     clean("SELECT row_number() OVER (PARTITION BY a ORDER BY b) AS rn FROM t");
-    clean("SELECT sum(x) OVER (ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t");
+    clean(
+        "SELECT sum(x) OVER (ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
+    );
     clean("SELECT avg(x) OVER (PARTITION BY a) FROM t");
     clean("SELECT a FROM t QUALIFY row_number() OVER (PARTITION BY a ORDER BY b) = 1");
-    assert!(has(
+    assert_has_node_kind(
         "SELECT row_number() OVER (ORDER BY a) FROM t",
-        SyntaxKind::WINDOW_EXPR
-    ));
+        SyntaxKind::WINDOW_EXPR,
+    );
 }
 
 #[test]

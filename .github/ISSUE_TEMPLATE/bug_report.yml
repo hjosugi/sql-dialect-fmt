@@ -1,0 +1,35 @@
+name: Bug report
+description: Report incorrect parsing, highlighting, hover, or formatting behavior.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: sql
+    attributes:
+      label: SQL input
+      description: Please include the smallest Snowflake SQL example that reproduces the issue.
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "commit SHA, crate version, or branch"
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links to Snowflake docs, editor details, or related tools are helpful.

@@ -136,6 +136,24 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "procedure" => PROCEDURE_KW,
         "function" => FUNCTION_KW,
         "returns" => RETURNS_KW,
+        "task" => TASK_KW,
+        "warehouse" => WAREHOUSE_KW,
+        "schedule" => SCHEDULE_KW,
+        "after" => AFTER_KW,
+        "copy" => COPY_KW,
+        "grants" => GRANTS_KW,
+        "handler" => HANDLER_KW,
+        "packages" => PACKAGES_KW,
+        "imports" => IMPORTS_KW,
+        "runtime_version" => RUNTIME_VERSION_KW,
+        "execute" => EXECUTE_KW,
+        "owner" => OWNER_KW,
+        "caller" => CALLER_KW,
+        "strict" => STRICT_KW,
+        "called" => CALLED_KW,
+        "input" => INPUT_KW,
+        "output" => OUTPUT_KW,
+        "out" => OUT_KW,
         _ => return None,
     })
 }
@@ -256,6 +274,24 @@ mod tests {
         ("procedure", SyntaxKind::PROCEDURE_KW),
         ("function", SyntaxKind::FUNCTION_KW),
         ("returns", SyntaxKind::RETURNS_KW),
+        ("task", SyntaxKind::TASK_KW),
+        ("warehouse", SyntaxKind::WAREHOUSE_KW),
+        ("schedule", SyntaxKind::SCHEDULE_KW),
+        ("after", SyntaxKind::AFTER_KW),
+        ("copy", SyntaxKind::COPY_KW),
+        ("grants", SyntaxKind::GRANTS_KW),
+        ("handler", SyntaxKind::HANDLER_KW),
+        ("packages", SyntaxKind::PACKAGES_KW),
+        ("imports", SyntaxKind::IMPORTS_KW),
+        ("runtime_version", SyntaxKind::RUNTIME_VERSION_KW),
+        ("execute", SyntaxKind::EXECUTE_KW),
+        ("owner", SyntaxKind::OWNER_KW),
+        ("caller", SyntaxKind::CALLER_KW),
+        ("strict", SyntaxKind::STRICT_KW),
+        ("called", SyntaxKind::CALLED_KW),
+        ("input", SyntaxKind::INPUT_KW),
+        ("output", SyntaxKind::OUTPUT_KW),
+        ("out", SyntaxKind::OUT_KW),
     ];
 
     #[test]
@@ -265,6 +301,11 @@ mod tests {
         assert_eq!(keyword_kind("QUALIFY"), Some(SyntaxKind::QUALIFY_KW));
         assert_eq!(keyword_kind("javascript"), Some(SyntaxKind::JAVASCRIPT_KW));
         assert_eq!(keyword_kind("try_cast"), Some(SyntaxKind::TRY_CAST_KW));
+        assert_eq!(keyword_kind("TASK"), Some(SyntaxKind::TASK_KW));
+        assert_eq!(
+            keyword_kind("runtime_version"),
+            Some(SyntaxKind::RUNTIME_VERSION_KW)
+        );
         assert_eq!(keyword_kind("definitely_not_a_keyword"), None);
     }
 

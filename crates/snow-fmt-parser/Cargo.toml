@@ -3,9 +3,14 @@ name = "snow-fmt-parser"
 version = "0.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+repository.workspace = true
 description = "Error-resilient, event-based recursive-descent parser building a lossless rowan CST for Snowflake SQL."
 
 [dependencies]
 snow-fmt-syntax = { path = "../snow-fmt-syntax", features = ["rowan"] }
 snow-fmt-lexer = { path = "../snow-fmt-lexer" }
 rowan = "0.15"
+
+[dev-dependencies]
+snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures" }
+snow-fmt-test-support = { path = "../snow-fmt-test-support" }

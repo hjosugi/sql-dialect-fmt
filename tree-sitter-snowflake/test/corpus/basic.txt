@@ -1,0 +1,62 @@
+==================
+Core Snowflake tokens
+==================
+
+SELECT payload:items[0]::VARIANT
+FROM @~/stage/path
+WHERE payload:name ILIKE 'nagaimo%'
+->> SELECT * FROM $1;
+
+---
+
+(source_file
+  (keyword)
+  (identifier)
+  (operator)
+  (identifier)
+  (punctuation)
+  (number)
+  (punctuation)
+  (operator)
+  (type)
+  (keyword)
+  (stage_reference)
+  (keyword)
+  (identifier)
+  (operator)
+  (identifier)
+  (keyword)
+  (string)
+  (operator)
+  (keyword)
+  (operator)
+  (keyword)
+  (variable)
+  (punctuation))
+
+==================
+Embedded body
+==================
+
+CREATE PROCEDURE p()
+RETURNS STRING
+LANGUAGE JAVASCRIPT
+AS $$
+return "ok";
+$$;
+
+---
+
+(source_file
+  (keyword)
+  (keyword)
+  (identifier)
+  (punctuation)
+  (punctuation)
+  (keyword)
+  (type)
+  (keyword)
+  (keyword)
+  (keyword)
+  (dollar_string)
+  (punctuation))

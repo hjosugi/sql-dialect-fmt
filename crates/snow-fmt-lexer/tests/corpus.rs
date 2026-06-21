@@ -9,51 +9,18 @@
 //!   * **Error tests** — malformed input must produce diagnostics (with correct
 //!     offsets) instead of panicking.
 
-use snow_fmt_lexer::tokenize;
-use snow_fmt_lexer::SyntaxKind::{self, *};
+use snow_fmt_lexer::SyntaxKind::*;
+use snow_fmt_lexer::{tokenize, tokenize_with_options, BodyDelimiter, LexOptions};
 use snow_fmt_syntax::keyword_kind;
+use snow_fmt_test_support::lexer::{
+    assert_lex_lossless as assert_lossless, assert_lexed_lossless, lex_non_trivia as lex_nt,
+    lex_pairs as lex,
+};
 
 // ---- helpers ----------------------------------------------------------------
 
-/// Lex into `(kind, text)` pairs, including trivia.
-fn lex(input: &str) -> Vec<(SyntaxKind, &str)> {
-    tokenize(input)
-        .tokens
-        .into_iter()
-        .map(|t| (t.kind, t.text))
-        .collect()
-}
-
-/// Lex into `(kind, text)` pairs, excluding whitespace / newlines / comments.
-fn lex_nt(input: &str) -> Vec<(SyntaxKind, &str)> {
-    tokenize(input)
-        .tokens
-        .into_iter()
-        .filter(|t| !t.kind.is_trivia())
-        .map(|t| (t.kind, t.text))
-        .collect()
-}
-
 fn n_errors(input: &str) -> usize {
     tokenize(input).errors.len()
-}
-
-/// Assert the lossless invariant: token texts concatenate back to the exact input,
-/// no token is empty, and the byte lengths sum to the input length.
-fn assert_lossless(input: &str) {
-    let lexed = tokenize(input);
-    let joined: String = lexed.tokens.iter().map(|t| t.text).collect();
-    assert_eq!(joined, input, "lossless invariant broke for {input:?}");
-    let mut sum = 0usize;
-    for t in &lexed.tokens {
-        assert!(!t.text.is_empty(), "empty token {:?} in {input:?}", t.kind);
-        sum += t.text.len();
-    }
-    assert_eq!(
-        sum,
-        input.len(),
-        "token lengths must cover the input for {input:?}"
-    );
 }
 
 // ---- property / fuzz tests --------------------------------------------------
@@ -84,9 +51,9 @@ fn fuzz_fragments_preserve_invariants() {
     const FRAGMENTS: &[&str] = &[
         " ", "\t", "\n", "\r\n", "\r", "select", "FROM", "x", "_a", "a$b", "tbl$$x", "0", "1",
         "12.5", ".5", "100.", "1e10", "1e", "1e+5", "'", "''", "'s'", "\\", "\"", "\"q\"", "$$",
-        "$", "$1", "$a", "::", ":", ":=", "|", "||", "|>", "->", "=>", "=", "<", "<=", "<>", ">",
-        ">=", "!", "!=", "(", ")", "[", "]", ",", ".", ";", "@", "?", "+", "-", "*", "/", "%", "&",
-        "^", "~", "--c", "//c", "/*", "*/", "/*c*/", "café", "中文", "💥", "`", "#",
+        "$", "$1", "$a", "::", ":", ":=", "|", "||", "|>", "->", "->>", "=>", "=", "<", "<=", "<>",
+        ">", ">=", "!", "!=", "(", ")", "[", "]", "{", "}", ",", ".", ";", "@", "?", "+", "-", "*",
+        "/", "%", "&", "^", "~", "--c", "//c", "/*", "*/", "/*c*/", "café", "中文", "💥", "`", "#",
     ];
     let mut rng = Rng::new(0xDEAD_BEEF_CAFE_1234);
     for _ in 0..6000 {
@@ -103,8 +70,8 @@ fn fuzz_fragments_preserve_invariants() {
 fn fuzz_random_chars_preserve_invariants() {
     const POOL: &[char] = &[
         ' ', '\t', '\n', '\r', 'a', 'b', 'Z', '_', '0', '9', '\'', '"', '\\', '$', ':', '|', '<',
-        '>', '=', '!', '-', '/', '*', '.', ',', ';', '(', ')', '[', ']', '@', '?', '+', '%', '&',
-        '^', '~', '`', '#', 'é', '中', '💥', 'Ω',
+        '>', '=', '!', '-', '/', '*', '.', ',', ';', '(', ')', '[', ']', '{', '}', '@', '?', '+',
+        '%', '&', '^', '~', '`', '#', 'é', '中', '💥', 'Ω',
     ];
     let mut rng = Rng::new(0x0123_4567_89AB_CDEF);
     for _ in 0..4000 {
@@ -157,6 +124,8 @@ fn single_char_punctuation() {
         (")", R_PAREN),
         ("[", L_BRACKET),
         ("]", R_BRACKET),
+        ("{", L_BRACE),
+        ("}", R_BRACE),
         (",", COMMA),
         (".", DOT),
         (";", SEMICOLON),
@@ -197,7 +166,9 @@ fn maximal_munch_boundaries() {
     assert_eq!(lex_nt("!="), vec![(NEQ, "!=")]);
     assert_eq!(lex_nt(">="), vec![(GTE, ">=")]);
     assert_eq!(lex_nt("=>"), vec![(FAT_ARROW, "=>")]);
+    assert_eq!(lex_nt("->>"), vec![(FLOW_PIPE, "->>")]);
     assert_eq!(lex_nt("->"), vec![(ARROW, "->")]);
+    assert_eq!(lex_nt("->>>"), vec![(FLOW_PIPE, "->>"), (GT, ">")]);
     // SQL has no `==`; it lexes as two separate `=` tokens.
     assert_eq!(lex_nt("=="), vec![(EQ, "="), (EQ, "=")]);
     // Comment vs operator disambiguation.
@@ -210,7 +181,7 @@ fn maximal_munch_boundaries() {
 #[test]
 fn full_operator_run() {
     assert_eq!(
-        lex_nt("x::int || y => z -> w := v <> u != t <= s >= r"),
+        lex_nt("x::int || y => z ->> q -> w := v <> u != t <= s >= r"),
         vec![
             (IDENT, "x"),
             (COLON2, "::"),
@@ -219,6 +190,8 @@ fn full_operator_run() {
             (IDENT, "y"),
             (FAT_ARROW, "=>"),
             (IDENT, "z"),
+            (FLOW_PIPE, "->>"),
+            (IDENT, "q"),
             (ARROW, "->"),
             (IDENT, "w"),
             (ASSIGN, ":="),
@@ -239,13 +212,26 @@ fn full_operator_run() {
 
 #[test]
 fn pipe_chain() {
-    let sql = "FROM orders\n|> WHERE amount > 100\n|> AGGREGATE sum(amount) AS total GROUP BY region\n|> ORDER BY total DESC";
+    let sql = "SHOW TABLES\n->> SELECT \"name\" FROM $1\n->> SELECT count(*) FROM $1";
+    let lexed = tokenize(sql);
+    assert!(lexed.errors.is_empty());
+    assert_eq!(
+        lexed.tokens.iter().filter(|t| t.kind == FLOW_PIPE).count(),
+        2,
+        "expected two Snowflake flow pipe operators"
+    );
+    assert_lossless(sql);
+}
+
+#[test]
+fn legacy_pipe_gt_stays_lossless() {
+    let sql = "FROM orders\n|> WHERE amount > 100\n|> ORDER BY amount DESC";
     let lexed = tokenize(sql);
     assert!(lexed.errors.is_empty());
     assert_eq!(
         lexed.tokens.iter().filter(|t| t.kind == PIPE_GT).count(),
-        3,
-        "expected three pipe operators"
+        2,
+        "expected two compatibility pipe operators"
     );
     assert_lossless(sql);
 }
@@ -357,6 +343,54 @@ fn dollar_quoted_bodies() {
 }
 
 #[test]
+fn body_delimiters_are_table_driven_for_future_snowflake_changes() {
+    const FUTURE_DELIMITERS: &[BodyDelimiter] = &[
+        BodyDelimiter::symmetric("dollar-quoted body", "$$"),
+        BodyDelimiter::paired("tagged procedure body", "$proc$", "$proc$"),
+    ];
+    let sql = "AS $proc$\nBEGIN\n  RETURN '長芋';\nEND;\n$proc$;";
+    let lexed = tokenize_with_options(
+        sql,
+        LexOptions {
+            body_delimiters: FUTURE_DELIMITERS,
+        },
+    );
+
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    assert_eq!(
+        lexed
+            .tokens
+            .iter()
+            .filter(|token| token.kind == DOLLAR_STRING)
+            .map(|token| token.text)
+            .collect::<Vec<_>>(),
+        vec!["$proc$\nBEGIN\n  RETURN '長芋';\nEND;\n$proc$"]
+    );
+    assert_lexed_lossless(sql, &lexed);
+}
+
+#[test]
+fn longest_body_delimiter_opener_wins() {
+    const OVERLAPPING_DELIMITERS: &[BodyDelimiter] = &[
+        BodyDelimiter::symmetric("dollar-quoted body", "$$"),
+        BodyDelimiter::symmetric("long tagged body", "$$proc$$"),
+    ];
+    let sql = "$$proc$$BEGIN\n  RETURN $$;\nEND;$$proc$$";
+    let lexed = tokenize_with_options(
+        sql,
+        LexOptions {
+            body_delimiters: OVERLAPPING_DELIMITERS,
+        },
+    );
+
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    assert_eq!(lexed.tokens.len(), 1);
+    assert_eq!(lexed.tokens[0].kind, DOLLAR_STRING);
+    assert_eq!(lexed.tokens[0].text, sql);
+    assert_lexed_lossless(sql, &lexed);
+}
+
+#[test]
 fn dollar_quote_only_recognized_at_token_start() {
     // When a token *starts* at `$$`, it is a dollar-quoted body.
     assert_eq!(lex("$$y$$"), vec![(DOLLAR_STRING, "$$y$$")]);
@@ -370,6 +404,11 @@ fn variables_and_lone_dollar() {
     assert_eq!(
         lex_nt("$1 $2 $foo"),
         vec![(VARIABLE, "$1"), (VARIABLE, "$2"), (VARIABLE, "$foo")]
+    );
+    assert_eq!(
+        lex_nt("$proc$"),
+        vec![(VARIABLE, "$proc$")],
+        "tagged delimiters are opt-in until Snowflake supports them"
     );
     assert_eq!(lex("$"), vec![(DOLLAR, "$")]);
     assert_eq!(lex("$ "), vec![(DOLLAR, "$"), (WHITESPACE, " ")]);
@@ -470,6 +509,7 @@ fn valid_inputs_produce_no_errors() {
         "SELECT a, b, c FROM t WHERE a > 1 AND b < 2",
         "WITH cte AS (SELECT * FROM t) SELECT * FROM cte",
         "SELECT col:field::string FROM raw",
+        "SHOW TABLES ->> SELECT \"name\" FROM $1",
         "FROM t |> WHERE x > 0 |> SELECT x",
         "CREATE OR REPLACE PROCEDURE p() RETURNS STRING LANGUAGE SQL AS $$ BEGIN RETURN 'ok'; END; $$",
         "SELECT $1, $2 FROM @my_stage",

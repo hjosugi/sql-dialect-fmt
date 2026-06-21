@@ -1,0 +1,44 @@
+{
+  "name": "tree-sitter-snowflake",
+  "version": "0.0.0",
+  "description": "Tree-sitter grammar for Snowflake SQL used by snow-fmt editor integrations.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hjosugi/snow-fmt.git",
+    "directory": "tree-sitter-snowflake"
+  },
+  "bugs": {
+    "url": "https://github.com/hjosugi/snow-fmt/issues"
+  },
+  "homepage": "https://github.com/hjosugi/snow-fmt/tree/main/tree-sitter-snowflake#readme",
+  "keywords": [
+    "tree-sitter",
+    "snowflake",
+    "sql",
+    "syntax-highlighting"
+  ],
+  "license": "MIT OR Apache-2.0",
+  "files": [
+    "README.md",
+    "grammar.js",
+    "tree-sitter.json",
+    "queries",
+    "src"
+  ],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "0.26.9"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.snowflake-sql",
+      "file-types": [
+        "sql",
+        "sfsql"
+      ]
+    }
+  ]
+}

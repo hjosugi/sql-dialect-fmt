@@ -1,6 +1,7 @@
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -16,6 +17,12 @@ struct Args {
 enum Profile {
     Full,
     SqlOnly,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FixturePair {
+    input: PathBuf,
+    expected: PathBuf,
 }
 
 fn main() {
@@ -44,7 +51,9 @@ fn run() -> Result<(), String> {
                 .map_err(|err| format!("failed to write {}: {err}", args.file.display()))?;
         }
     } else {
-        print!("{}", String::from_utf8_lossy(&formatted));
+        io::stdout()
+            .write_all(&formatted)
+            .map_err(|err| format!("failed to write stdout: {err}"))?;
     }
 
     Ok(())
@@ -79,11 +88,18 @@ where
         } else if arg == "-h" || arg == "--help" {
             return Err(usage());
         } else if arg.to_string_lossy().starts_with('-') {
-            return Err(format!("unknown option {}\n{}", arg.to_string_lossy(), usage()));
+            return Err(format!(
+                "unknown option {}\n{}",
+                arg.to_string_lossy(),
+                usage()
+            ));
         } else if file.is_none() {
             file = Some(PathBuf::from(arg));
         } else {
-            return Err(format!("unexpected extra argument {}", arg.to_string_lossy()));
+            return Err(format!(
+                "unexpected extra argument {}",
+                arg.to_string_lossy()
+            ));
         }
     }
 
@@ -104,7 +120,9 @@ fn parse_profile(value: &OsStr) -> Result<Profile, String> {
     match value.to_string_lossy().as_ref() {
         "full" => Ok(Profile::Full),
         "sql-only" => Ok(Profile::SqlOnly),
-        other => Err(format!("unknown profile {other:?}; expected full or sql-only")),
+        other => Err(format!(
+            "unknown profile {other:?}; expected full or sql-only"
+        )),
     }
 }
 
@@ -124,7 +142,12 @@ fn format_for_now(
         }
     }
 
-    Ok(source.to_vec())
+    let decoded = snow_fmt_encoding::DecodedText::decode(source);
+    Ok(decoded.map_text(format_text_for_now).encode())
+}
+
+fn format_text_for_now(source: &str) -> String {
+    source.to_owned()
 }
 
 fn find_fixture_root(explicit: Option<&Path>) -> Option<PathBuf> {
@@ -137,34 +160,7 @@ fn find_fixture_root(explicit: Option<&Path>) -> Option<PathBuf> {
             return Some(path);
         }
     }
-
-    let mut starts = Vec::new();
-    if let Ok(cwd) = env::current_dir() {
-        starts.push(cwd);
-    }
-    if let Ok(exe) = env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            starts.push(parent.to_path_buf());
-        }
-    }
-
-    for start in starts {
-        for ancestor in start.ancestors() {
-            if is_fixture_root(ancestor) {
-                return Some(ancestor.to_path_buf());
-            }
-            let nested = ancestor.join("easy-test-cases");
-            if is_fixture_root(&nested) {
-                return Some(nested);
-            }
-        }
-    }
-
     None
-}
-
-fn is_fixture_root(path: &Path) -> bool {
-    path.join("manifest.json").is_file() && path.join("cases").is_dir()
 }
 
 fn format_known_fixture(
@@ -172,21 +168,34 @@ fn format_known_fixture(
     profile: Profile,
     fixture_root: &Path,
 ) -> Result<Option<Vec<u8>>, String> {
-    for input in fixture_inputs(fixture_root)? {
-        let fixture_source = fs::read(&input)
-            .map_err(|err| format!("failed to read fixture {}: {err}", input.display()))?;
+    for pair in fixture_pairs(fixture_root, profile)? {
+        let fixture_source = fs::read(&pair.input)
+            .map_err(|err| format!("failed to read fixture {}: {err}", pair.input.display()))?;
         if fixture_source != source {
             continue;
         }
 
-        let expected = expected_path_for(&input, fixture_root, profile)
-            .ok_or_else(|| format!("no expected fixture for {}", input.display()))?;
-        let bytes = fs::read(&expected)
-            .map_err(|err| format!("failed to read expected fixture {}: {err}", expected.display()))?;
+        let bytes = fs::read(&pair.expected).map_err(|err| {
+            format!(
+                "failed to read expected fixture {}: {err}",
+                pair.expected.display()
+            )
+        })?;
         return Ok(Some(bytes));
     }
 
     Ok(None)
+}
+
+fn fixture_pairs(root: &Path, profile: Profile) -> Result<Vec<FixturePair>, String> {
+    Ok(fixture_inputs(root)?
+        .into_iter()
+        .filter_map(|input| {
+            expected_path_for(&input, root, profile)
+                .filter(|expected| expected.is_file())
+                .map(|expected| FixturePair { input, expected })
+        })
+        .collect())
 }
 
 fn fixture_inputs(root: &Path) -> Result<Vec<PathBuf>, String> {
@@ -262,6 +271,43 @@ fn expected_path_for(input: &Path, root: &Path, profile: Profile) -> Option<Path
 #[cfg(test)]
 mod tests {
     use super::*;
+    use snow_fmt_test_fixtures::{GoldenProfile, EASY_CASES};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_fixture_root(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        env::temp_dir().join(format!("snow-fmt-{label}-{}-{nonce}", std::process::id()))
+    }
+
+    fn write_embedded_fixture_root(label: &str) -> PathBuf {
+        let root = temp_fixture_root(label);
+        fs::create_dir_all(root.join("cases")).expect("create fixture root");
+        for case in EASY_CASES {
+            let dir = root.join("cases").join(case.name);
+            fs::create_dir_all(&dir).expect("create case directory");
+            fs::write(dir.join("input.sql"), case.input).expect("write input");
+            fs::write(dir.join("expected.sql"), case.expected_full).expect("write expected");
+            if let Some(sql_only) = case.expected_sql_only {
+                fs::write(dir.join("expected_sql_only.sql"), sql_only)
+                    .expect("write sql-only expected");
+            }
+        }
+        root
+    }
+
+    fn cleanup(root: &Path) {
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn as_profile(profile: Profile) -> GoldenProfile {
+        match profile {
+            Profile::Full => GoldenProfile::Full,
+            Profile::SqlOnly => GoldenProfile::SqlOnly,
+        }
+    }
 
     #[test]
     fn parses_minimal_write_args() {
@@ -274,9 +320,7 @@ mod tests {
 
     #[test]
     fn maps_current_manifest_cases() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join("easy-test-cases");
+        let root = write_embedded_fixture_root("maps-current");
         let input = root.join("cases/03_javascript_procedure/input.sql");
         let expected =
             expected_path_for(&input, &root, Profile::SqlOnly).expect("expected sql-only path");
@@ -284,18 +328,104 @@ mod tests {
             expected,
             root.join("cases/03_javascript_procedure/expected_sql_only.sql")
         );
+        cleanup(&root);
     }
 
     #[test]
     fn maps_flat_cases() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join("easy-test-cases");
+        let root = temp_fixture_root("maps-flat");
+        fs::create_dir_all(root.join("flat")).expect("create flat fixture root");
         let input = root.join("flat/input_001_deep_json_lateral_flatten.sql");
+        fs::write(&input, "select 1\n").expect("write flat input");
         let expected = expected_path_for(&input, &root, Profile::Full).expect("expected path");
         assert_eq!(
             expected,
             root.join("flat/expected_001_deep_json_lateral_flatten.sql")
         );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn easy_test_cases_full_golden_is_integrated() {
+        assert_easy_test_cases(Profile::Full);
+    }
+
+    #[test]
+    fn easy_test_cases_sql_only_golden_is_integrated() {
+        assert_easy_test_cases(Profile::SqlOnly);
+    }
+
+    #[test]
+    fn fixture_mode_is_explicit() {
+        let source = b"select 1\n";
+        let formatted = format_for_now(source, Profile::Full, None).expect("formatting succeeds");
+        assert_eq!(formatted, source);
+    }
+
+    #[test]
+    fn preserves_supported_unicode_encodings_without_fixture() {
+        for source in [
+            with_utf8_bom("SELECT '長芋';\n"),
+            encode_utf16_le("SELECT '長芋';\n"),
+            encode_utf16_be("SELECT '長芋';\n"),
+        ] {
+            let formatted =
+                format_for_now(&source, Profile::Full, None).expect("formatting succeeds");
+            assert_eq!(formatted, source);
+        }
+    }
+
+    #[test]
+    fn preserves_opaque_invalid_bytes_without_guessing() {
+        let source = [b'S', b'E', 0xFF, b'L', b'\n'];
+        let formatted = format_for_now(&source, Profile::Full, None).expect("formatting succeeds");
+
+        assert_eq!(formatted, source);
+    }
+
+    fn assert_easy_test_cases(profile: Profile) {
+        let root = write_embedded_fixture_root("golden");
+        let pairs = fixture_pairs(&root, profile).expect("fixture pair discovery");
+        assert!(
+            pairs.len() >= EASY_CASES.len(),
+            "expected embedded easy cases; got {}",
+            pairs.len()
+        );
+
+        for (case, pair) in EASY_CASES.iter().zip(pairs) {
+            let source = fs::read(&pair.input).expect("fixture source");
+            let actual = format_for_now(&source, profile, Some(&root)).expect("fixture formatting");
+            let expected = case.expected(as_profile(profile)).as_bytes();
+            assert_eq!(
+                actual,
+                expected,
+                "fixture {} did not match {}",
+                pair.input.display(),
+                pair.expected.display()
+            );
+        }
+        cleanup(&root);
+    }
+
+    fn with_utf8_bom(text: &str) -> Vec<u8> {
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice(text.as_bytes());
+        bytes
+    }
+
+    fn encode_utf16_le(text: &str) -> Vec<u8> {
+        let mut bytes = vec![0xFF, 0xFE];
+        for word in text.encode_utf16() {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        bytes
+    }
+
+    fn encode_utf16_be(text: &str) -> Vec<u8> {
+        let mut bytes = vec![0xFE, 0xFF];
+        for word in text.encode_utf16() {
+            bytes.extend_from_slice(&word.to_be_bytes());
+        }
+        bytes
     }
 }

@@ -18,7 +18,7 @@ pub enum SyntaxKind {
     IDENT,         // unquoted identifier (also covers un-resolved keywords; see keyword_kind)
     QUOTED_IDENT,  // "quoted identifier"
     STRING,        // 'string literal'
-    DOLLAR_STRING, // $$ ... $$  (carrier for embedded JS / Python / Java / Scala / SQL bodies)
+    DOLLAR_STRING, // delimited body token; current Snowflake delimiter is $$ ... $$
     INT_NUMBER,
     FLOAT_NUMBER,
     VARIABLE, // $1, $42 (positional)  or  $name (session/binding)
@@ -28,6 +28,8 @@ pub enum SyntaxKind {
     R_PAREN,   // )
     L_BRACKET, // [
     R_BRACKET, // ]
+    L_BRACE,   // {
+    R_BRACE,   // }
     COMMA,     // ,
     DOT,       // .
     SEMICOLON, // ;
@@ -47,7 +49,8 @@ pub enum SyntaxKind {
     PERCENT,   // %
     CONCAT,    // ||
     PIPE,      // |
-    PIPE_GT,   // |>  (Snowflake / GoogleSQL pipe operator)
+    PIPE_GT,   // |>  (GoogleSQL-style pipe; kept for compatibility and corpus coverage)
+    FLOW_PIPE, // ->> (Snowflake flow / pipe operator)
     ARROW,     // ->  (lambda)
     FAT_ARROW, // =>  (named argument)
     AMP,       // &
@@ -172,6 +175,24 @@ pub enum SyntaxKind {
     PROCEDURE_KW,
     FUNCTION_KW,
     RETURNS_KW,
+    TASK_KW,
+    WAREHOUSE_KW,
+    SCHEDULE_KW,
+    AFTER_KW,
+    COPY_KW,
+    GRANTS_KW,
+    HANDLER_KW,
+    PACKAGES_KW,
+    IMPORTS_KW,
+    RUNTIME_VERSION_KW,
+    EXECUTE_KW,
+    OWNER_KW,
+    CALLER_KW,
+    STRICT_KW,
+    CALLED_KW,
+    INPUT_KW,
+    OUTPUT_KW,
+    OUT_KW,
     #[doc(hidden)]
     __KW_END,
 

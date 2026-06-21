@@ -1,2 +1,0 @@
-{"event_id":"FILE-E001","event_time":"2026-06-20T09:00:00+09:00","event_type":"CUSTOMER_VIEWED","customer":{"id":"C900","name":"山田 太郎"},"tags":["雪","cloud","بيانات"]}
-{"event_id":"FILE-E002","event_time":"2026-06-20T10:00:00+02:00","event_type":"CUSTOMER_VIEWED","customer":{"id":"C901","name":"Élodie d'Arcy"},"tags":["café","données"]}
