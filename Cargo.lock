@@ -216,6 +216,18 @@ name = "snow-fmt-encoding"
 version = "0.0.0"
 
 [[package]]
+name = "snow-fmt-formatter"
+version = "0.0.0"
+dependencies = [
+ "rowan",
+ "snow-fmt-lexer",
+ "snow-fmt-parser",
+ "snow-fmt-syntax",
+ "snow-fmt-test-fixtures",
+ "snow-fmt-test-support",
+]
+
+[[package]]
 name = "snow-fmt-highlight"
 version = "0.0.0"
 dependencies = [
@@ -281,18 +293,6 @@ dependencies = [
  "snow-fmt-test-fixtures",
  "tree-sitter",
  "tree-sitter-language",
-]
-
-[[package]]
-name = "snow-formatter"
-version = "0.0.0"
-dependencies = [
- "rowan",
- "snow-fmt-lexer",
- "snow-fmt-parser",
- "snow-fmt-syntax",
- "snow-fmt-test-fixtures",
- "snow-fmt-test-support",
 ]
 
 [[package]]

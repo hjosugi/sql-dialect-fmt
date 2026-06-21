@@ -9,10 +9,10 @@
 //! * **Validity & well-formedness** — formatting a clean, comment-free input yields clean SQL that
 //!   ends in a single newline and has no trailing whitespace.
 
+use snow_fmt_formatter::format;
 use snow_fmt_lexer::tokenize;
 use snow_fmt_parser::parse;
 use snow_fmt_test_fixtures::EASY_CASES;
-use snow_formatter::format;
 
 /// A curated set exercising every construct the lowering handles, as a focused complement to the
 /// shared fixture corpus.

@@ -14,7 +14,7 @@
 
 - **CST**: `rowan` の green/red ツリー。パーサは木を直接作らず **イベント列**（`Start`/`Token`/`Finish`/`Error`）を吐き、別パスで `GreenNodeBuilder` に流し込み、その際にトリビア（空白・コメント）を付与する（文法はクリーン、木はロスレス）。
 - **パーサ**: 手書き再帰下降 ＋ `Marker`/`CompletedMarker`（`complete`/`abandon`/`precede`）。**「パースは失敗しない」**＝ `(SyntaxNode, Vec<SyntaxError>)` を返し、未知トークンは `ERROR` ノード、`TokenSet`(FOLLOW集合)で回復、無限ループは fuel カウンタで防ぐ。式は Pratt parsing。参考: matklad *Resilient LL Parsing* / *Pratt parsing*。
-- **フォーマッタ**: **自前の汎用 Doc エンジン** `snow-formatter` を作る。`biome_formatter` には直接依存せず、その `FormatElement` 設計（Prettier → rome → biome/ruff の系譜）を模倣。SQL 固有の整形規則は別レイヤに分離。折返しは**幅駆動**（SQL は SELECT リスト等に末尾カンマを許さないため magic trailing comma は不採用）。
+- **フォーマッタ**: **自前の汎用 Doc エンジン** `snow-fmt-formatter` を作る。`biome_formatter` には直接依存せず、その `FormatElement` 設計（Prettier → rome → biome/ruff の系譜）を模倣。SQL 固有の整形規則は別レイヤに分離。折返しは**幅駆動**（SQL は SELECT リスト等に末尾カンマを許さないため magic trailing comma は不採用）。
 - **埋め込み JS**: SQL 本体の Doc エンジンとは独立に、delimiter-aware body token（現行 Snowflake は `$$…$$`）の本体のみ `biome_js_formatter` で整形し、`markAsRoot`/`dedentToRoot` 方式で配置列へ再インデント。解析不能時は verbatim フォールバック。
 - **テスト**: `insta` スナップショット ＋ **stability-check（べき等）** ＋ ロスレス往復 ＋ 実コーパスでの**類似度スコア**ゲート ＋ ファズ。フィクスチャは sqlparser-rs の Snowflake テスト（Apache-2.0）を流用。
 - **スタイル**: gofmt / zig fmt に倣い **opinionated・ほぼ設定なし**（`line-length`、必要なら `keyword-case` 程度）。
@@ -53,7 +53,7 @@
 
 ## Phase 3 — フォーマッタ基盤 ⏳
 *目的: Phase 2 までの構文を綺麗に出力する。SQL 規則の前に自前 Doc エンジンを立ち上げる。*
-- ✅ 汎用 Doc エンジン `snow-formatter`（`Text`/`Line(Space/Soft/Hard)`/`Concat`/`Indent`/`Group`、break 伝播＋`fits`、`biome_formatter` 非依存）。`LineSuffix`/`IfBreak`/`BestFitting` はコメント付与時に追加予定
+- ✅ 汎用 Doc エンジン `snow-fmt-formatter`（`Text`/`Line(Space/Soft/Hard)`/`Concat`/`Indent`/`Group`、break 伝播＋`fits`、`biome_formatter` 非依存）。`LineSuffix`/`IfBreak`/`BestFitting` はコメント付与時に追加予定
 - ⏳ ビルダ（`group`/`indent`/`block_indent`/`soft_block_indent`/4種改行/`line_suffix`/`if_group_breaks`/`best_fitting`）＋ `Format`/`FormatRule` トレイト＋ `write!`/`format!` マクロ
 - ⏳ 幅対応プリンタ（行幅で `group` を1行/折返し決定）
 - ⏳ コメント付与（leading/trailing/dangling。末尾は `line_suffix`。ディレクティブ `-- noqa`/`-- snow-fmt:` は幅計算から除外）

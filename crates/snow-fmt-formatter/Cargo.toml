@@ -1,5 +1,5 @@
 [package]
-name = "snow-formatter"
+name = "snow-fmt-formatter"
 version = "0.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"

@@ -7,7 +7,7 @@
 
 ## 0. いまの状態（検証済み・緑）
 - `cargo build --workspace` … OK
-- `cargo test --workspace` … **全テストバイナリ ok（157 passed / 0 failed）**。`snow-formatter`（Phase 3、コメント付与まで）追加済み。
+- `cargo test --workspace` … **全テストバイナリ ok（157 passed / 0 failed）**。`snow-fmt-formatter`（Phase 3、コメント付与まで）追加済み。
 - `cargo clippy --workspace --all-targets` … クリーン（本セッション確認）
 - `cargo test -p snow-fmt-syntax --features rowan` … OK
 - `tree-sitter-snowflake/` … `grammar.js` + `src/parser.c`（生成済み）+ `queries/` あり
@@ -26,7 +26,7 @@
 | `snow-fmt-syntax` | `SyntaxKind`・`keyword_kind`・`T!`・rowan `Language` | ✅ 中核 |
 | `snow-fmt-lexer` | ロスレス手書きレキサ（`->>`=FLOW_PIPE, `|>`, `::`, `$$..$$`, コメント3種, エスケープ） | ✅ 中核 |
 | `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/JOIN/サブクエリ/集合演算/CTE/述語/ウィンドウ。**決して失敗しない**・ロスレス | ✅ Phase 1–2 |
-| `snow-formatter` | CST→Doc IR（Wadler/Prettier 式 `group`/`indent`/`line`/`line_suffix`、自前エンジン）→幅対応プリンタ。SELECT 一式/JOIN/CTE/集合演算/CASE/ウィンドウ/semi-structured を整形。**コメント付与あり**（leading/trailing/dangling）。壊れた SQL は無変換。**idempotent**・トークン/コメント保存をテストで担保 | ✅ Phase 3 v2 |
+| `snow-fmt-formatter` | CST→Doc IR（Wadler/Prettier 式 `group`/`indent`/`line`/`line_suffix`、自前エンジン）→幅対応プリンタ。SELECT 一式/JOIN/CTE/集合演算/CASE/ウィンドウ/semi-structured を整形。**コメント付与あり**（leading/trailing/dangling）。壊れた SQL は無変換。**idempotent**・トークン/コメント保存をテストで担保 | ✅ Phase 3 v2 |
 | `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
 | `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
 | `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル） | 🚧 初期 |
@@ -47,12 +47,12 @@
    - 実装メモ: 文法 [grammar.rs](crates/snow-fmt-parser/src/grammar.rs)、ノードは [kind.rs](crates/snow-fmt-syntax/src/kind.rs)
      の `__LAST` 直前に追加。キーワードを足したら [keyword.rs](crates/snow-fmt-syntax/src/keyword.rs) の match と
      KEYWORDS テストの両方を更新。各追加に網羅テスト。
-2. **Phase 3: フォーマッタ** — ✅ **v1 実装済み**（`snow-formatter`）。自前 Doc IR エンジン
+2. **Phase 3: フォーマッタ** — ✅ **v1 実装済み**（`snow-fmt-formatter`）。自前 Doc IR エンジン
    （`group`/`indent`/`line`/`soft`/`hard`、break 伝播＋`fits`、`biome_formatter` 非依存）＋幅対応プリンタ
-   ＋ CST→Doc の SQL ルール（[sql.rs](crates/snow-formatter/src/sql.rs)）。**idempotency** とトークン保存を
-   コーパス（EASY_CASES + 厳選）で担保（[tests/corpus.rs](crates/snow-formatter/tests/corpus.rs)）。
+   ＋ CST→Doc の SQL ルール（[sql.rs](crates/snow-fmt-formatter/src/sql.rs)）。**idempotency** とトークン保存を
+   コーパス（EASY_CASES + 厳選）で担保（[tests/corpus.rs](crates/snow-fmt-formatter/tests/corpus.rs)）。
    公開 API は `format` / `format_with(FormatOptions{line_width,indent_width,keyword_case})`。
-   - ✅ **コメント付与 実装済み**（[comments.rs](crates/snow-formatter/src/comments.rs)）: Prettier/Ruff 流に
+   - ✅ **コメント付与 実装済み**（[comments.rs](crates/snow-fmt-formatter/src/comments.rs)）: Prettier/Ruff 流に
      各コメントを**ノード**へ leading/trailing/dangling で割当（`locate` は各ノードの *meaningful range*=非trivia
      先頭〜末尾で判定し、CST が trivia を次トークンの leading に置く問題を回避）。Doc IR に `LineSuffix`/`BreakParent`
      を追加（trailing は `line_suffix`+`break_parent` で行末へ）。`format_with` は**自己検証**（出力が valid SQL・

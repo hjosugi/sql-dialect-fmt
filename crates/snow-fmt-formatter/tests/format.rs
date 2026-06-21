@@ -4,7 +4,7 @@
 //! keyword casing). The property tests in `corpus.rs` cover idempotency and token preservation
 //! across a wider input set.
 
-use snow_formatter::{format, format_with, FormatOptions, KeywordCase};
+use snow_fmt_formatter::{format, format_with, FormatOptions, KeywordCase};
 
 /// Assert that `input` formats to exactly `expected`.
 #[track_caller]
