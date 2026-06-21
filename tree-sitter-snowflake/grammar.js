@@ -73,7 +73,6 @@ const KEYWORDS = [
   'unpivot',
   'sample',
   'tablesample',
-  'create',
   'replace',
   'if',
   'table',
@@ -93,7 +92,6 @@ const KEYWORDS = [
   'connect',
   'start',
   'prior',
-  'language',
   'javascript',
   'python',
   'java',
@@ -193,9 +191,28 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   rules: {
-    source_file: $ => repeat($._token),
+    source_file: $ => repeat(choice($.create_statement, $.terminator, $._token)),
 
-    _token: $ => choice(
+    // A `CREATE …` statement, structured just enough to associate a `LANGUAGE` clause with the
+    // following `$$ … $$` body so an embedded-language injection can target it. Everything else
+    // inside stays as flat tokens; only `language_clause` is lifted out. Anchored on dedicated
+    // `kw_create`/`kw_language` tokens (highlighted as keywords) because the catch-all `keyword`
+    // token can't be constrained to a specific word.
+    create_statement: $ => prec.right(seq(
+      $.kw_create,
+      repeat(choice($.language_clause, $._create_token)),
+    )),
+
+    language_clause: $ => seq(
+      $.kw_language,
+      field('name', choice($.keyword, $.type, $.identifier)),
+    ),
+
+    kw_create: _ => token(prec(3, word('create'))),
+    kw_language: _ => token(prec(3, word('language'))),
+
+    // The flat tokens allowed inside a CREATE statement (everything but `;`, which ends it).
+    _create_token: $ => choice(
       $.stage_reference,
       $.keyword,
       $.type,
@@ -208,6 +225,23 @@ module.exports = grammar({
       $.operator,
       $.punctuation,
     ),
+
+    _token: $ => choice(
+      $.stage_reference,
+      $.keyword,
+      $.kw_language,
+      $.type,
+      $.dollar_string,
+      $.string,
+      $.quoted_identifier,
+      $.number,
+      $.variable,
+      $.identifier,
+      $.operator,
+      $.punctuation,
+    ),
+
+    terminator: _ => ';',
 
     comment: _ => token(prec(10, choice(
       seq('--', /[^\r\n]*/),
@@ -291,7 +325,6 @@ module.exports = grammar({
       '}',
       ',',
       '.',
-      ';',
     )),
   },
 });

@@ -6,6 +6,9 @@
 (comment) @comment
 
 (keyword) @keyword
+; Structural anchor keywords lifted out of the catch-all `keyword` token.
+(kw_create) @keyword
+(kw_language) @keyword
 (type) @type
 
 (identifier) @variable
@@ -20,3 +23,4 @@
 
 (operator) @operator
 (punctuation) @punctuation.delimiter
+(terminator) @punctuation.delimiter

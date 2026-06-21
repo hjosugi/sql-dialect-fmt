@@ -96,7 +96,8 @@
 - ✅ delimiter-aware body token の言語判定 → **`EmbeddedFormatter` trait（seam）** へ委譲 → 再インデント。コア `format()` は純粋
   - ✅ **エンジン = 実行時に外部ツール検出**（CLI `Profile::Full` の `CliEmbeddedFormatter`）: JS=`npx @biomejs/biome`、Python=ruff/black。未インストール時は verbatim。`biome_js_formatter` crate は crates.io 版が古く(0.5.7)使えないため不採用
   - ⏳ ネストした SQL（`LANGUAGE SQL`）: 自分自身で再帰整形
-- ✅ highlight: `LANGUAGE <x>` を検出し `$$` 本体を JS injection 領域として出力（`Injection{language,range}`）。tree-sitter `injections.scm` 連携は Phase 9
+- ✅ highlight（semantic 層）: `LANGUAGE <x>` を検出し `$$` 本体を JS injection 領域として出力（`Injection{language,range}`）
+- ✅ tree-sitter 言語別 injection: token grammar を最小構造化（`create_statement`/`language_clause`）し `injections.scm` で LANGUAGE と `$$` 本体を相関（Neovim/Zed/GitHub 向け、`#offset!` で `$$` 除去）
 
 ## Phase 9 — ハイライト + LSP ⏳
 - ✅ Lexical highlight 基盤（keyword/type/string/comment/operator/punctuation/range、内蔵 easy fixture 全 SQL でロスレス検証） … [crates/snow-fmt-highlight/](crates/snow-fmt-highlight/)

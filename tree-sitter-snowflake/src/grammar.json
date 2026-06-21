@@ -6,11 +6,105 @@
     "source_file": {
       "type": "REPEAT",
       "content": {
-        "type": "SYMBOL",
-        "name": "_token"
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "create_statement"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "terminator"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_token"
+          }
+        ]
       }
     },
-    "_token": {
+    "create_statement": {
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "kw_create"
+          },
+          {
+            "type": "REPEAT",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "language_clause"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "_create_token"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "language_clause": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "kw_language"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "keyword"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "type"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "identifier"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "kw_create": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 3,
+        "content": {
+          "type": "PATTERN",
+          "value": "[cC][rR][eE][aA][tT][eE]"
+        }
+      }
+    },
+    "kw_language": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 3,
+        "content": {
+          "type": "PATTERN",
+          "value": "[lL][aA][nN][gG][uU][aA][gG][eE]"
+        }
+      }
+    },
+    "_create_token": {
       "type": "CHOICE",
       "members": [
         {
@@ -58,6 +152,63 @@
           "name": "punctuation"
         }
       ]
+    },
+    "_token": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "stage_reference"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "keyword"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "kw_language"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "type"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "dollar_string"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "string"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "quoted_identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "number"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "variable"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "operator"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "punctuation"
+        }
+      ]
+    },
+    "terminator": {
+      "type": "STRING",
+      "value": ";"
     },
     "comment": {
       "type": "TOKEN",
@@ -505,10 +656,6 @@
             },
             {
               "type": "PATTERN",
-              "value": "[cC][rR][eE][aA][tT][eE]"
-            },
-            {
-              "type": "PATTERN",
               "value": "[rR][eE][pP][lL][aA][cC][eE]"
             },
             {
@@ -582,10 +729,6 @@
             {
               "type": "PATTERN",
               "value": "[pP][rR][iI][oO][rR]"
-            },
-            {
-              "type": "PATTERN",
-              "value": "[lL][aA][nN][gG][uU][aA][gG][eE]"
             },
             {
               "type": "PATTERN",
@@ -1242,10 +1385,6 @@
           {
             "type": "STRING",
             "value": "."
-          },
-          {
-            "type": "STRING",
-            "value": ";"
           }
         ]
       }

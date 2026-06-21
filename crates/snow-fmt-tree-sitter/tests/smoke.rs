@@ -249,6 +249,60 @@ fn highlight_and_support_queries_compile() {
 }
 
 #[test]
+fn javascript_udf_body_is_injected_as_javascript() {
+    // The injection query correlates the LANGUAGE clause with the `$$ … $$` body so editors
+    // highlight it with the right grammar.
+    let language = snow_fmt_tree_sitter::language();
+    let query = Query::new(&language, snow_fmt_tree_sitter::INJECTIONS_QUERY)
+        .expect("injections query compiles");
+    let sql = "CREATE PROCEDURE p() LANGUAGE JAVASCRIPT AS $$return 1;$$;";
+    let tree = parse(sql);
+    let names = query.capture_names();
+
+    let mut cursor = QueryCursor::new();
+    let mut captures = cursor.captures(&query, tree.root_node(), sql.as_bytes());
+    let mut injected_language = None;
+    let mut injected_content = None;
+    captures.advance();
+    while let Some((query_match, capture_index)) = captures.get() {
+        let capture = query_match.captures[*capture_index];
+        let text = capture
+            .node
+            .utf8_text(sql.as_bytes())
+            .expect("utf8")
+            .to_string();
+        match names[capture.index as usize] {
+            "injection.language" => injected_language = Some(text),
+            "injection.content" => injected_content = Some(text),
+            _ => {}
+        }
+        captures.advance();
+    }
+
+    assert_eq!(injected_language.as_deref(), Some("JAVASCRIPT"));
+    // The captured content node is the whole dollar string; the `#offset!` directive (applied by
+    // the highlighting host) trims the `$$` delimiters.
+    assert_eq!(injected_content.as_deref(), Some("$$return 1;$$"));
+}
+
+#[test]
+fn non_javascript_body_is_not_injected_as_javascript() {
+    let language = snow_fmt_tree_sitter::language();
+    let query = Query::new(&language, snow_fmt_tree_sitter::INJECTIONS_QUERY)
+        .expect("injections query compiles");
+    // A statement with no LANGUAGE clause yields no injection (the query requires language_clause).
+    let sql = "SELECT $$ raw $$;";
+    let tree = parse(sql);
+    let mut cursor = QueryCursor::new();
+    let mut captures = cursor.captures(&query, tree.root_node(), sql.as_bytes());
+    captures.advance();
+    assert!(
+        captures.get().is_none(),
+        "no injection without a LANGUAGE clause"
+    );
+}
+
+#[test]
 fn highlight_query_captures_expected_tokens() {
     for case in CAPTURE_CASES {
         let seen = highlight_captures(case.sql);

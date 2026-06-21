@@ -32,7 +32,7 @@ WHERE payload:name ILIKE 'nagaimo%'
   (operator)
   (keyword)
   (variable)
-  (punctuation))
+  (terminator))
 
 ==================
 Embedded body
@@ -48,15 +48,17 @@ $$;
 ---
 
 (source_file
-  (keyword)
-  (keyword)
-  (identifier)
-  (punctuation)
-  (punctuation)
-  (keyword)
-  (type)
-  (keyword)
-  (keyword)
-  (keyword)
-  (dollar_string)
-  (punctuation))
+  (create_statement
+    (kw_create)
+    (keyword)
+    (identifier)
+    (punctuation)
+    (punctuation)
+    (keyword)
+    (type)
+    (language_clause
+      (kw_language)
+      (keyword))
+    (keyword)
+    (dollar_string))
+  (terminator))

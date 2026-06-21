@@ -69,10 +69,14 @@
      **CLI(`Profile::Full`) が `CliEmbeddedFormatter` で外部ツールにシェルアウト**（JS=`npx @biomejs/biome`、
      Python=ruff/black。未インストール時は verbatim）= 「biome 入っていれば使う」を実現。
      highlight: `LANGUAGE <x>` を検出して `$$` 本体を **JS injection 領域**（`Injection{language,range}`）として出力。
+   - ✅ **tree-sitter 言語別 injection 実装済み**（[tree-sitter-snowflake/](tree-sitter-snowflake/)）: token grammar を最小限
+     構造化（`create_statement`/`language_clause`、アンカーは `kw_create`/`kw_language` token＝`@keyword` 着色、`;`→`terminator`）。
+     `injections.scm` が `(create_statement (language_clause name:(_) @injection.language) (dollar_string) @injection.content (#offset! …))`
+     で LANGUAGE と `$$` 本体を相関させ言語別着色（`#offset!` で `$$` を除去）。parser.c 再生成は `npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate`。
+     Rust 検証: [tests/smoke.rs](crates/snow-fmt-tree-sitter/tests/smoke.rs)（JS 本体が javascript として注入、LANGUAGE 無しは非注入）。
    - ⏳ **残（次の増分、優先順）**:
-     a. tree-sitter `injections.scm` で `$$` JS を tree-sitter-javascript に着色（highlight 側の injection 情報を利用）。
-     b. 型名・関数名のケーシング方針、未対応構文（PIVOT/UNPIVOT/FLATTEN 等）の専用ルール化（現状は verbatim フォールバック）。
-     c. 複数行ブロックコメントの内部再インデント、dangling コメントの配置改善、`insta` スナップショット、`format-dev` 類の類似度コーパス・ゲート。
+     a. 型名・関数名のケーシング方針、未対応構文（PIVOT/UNPIVOT/FLATTEN 等）の専用ルール化（現状は verbatim フォールバック）。
+     b. 複数行ブロックコメントの内部再インデント、dangling コメントの配置改善、`insta` スナップショット、`format-dev` 類の類似度コーパス・ゲート。
    - 注: SQL は SELECT リスト等に**末尾カンマを許さない**ため、JS/Python の magic trailing comma は採用せず
      （採用すると無効 SQL を生む）。折返しは幅駆動のみ。設計根拠は [docs/research/prior-art.md](docs/research/prior-art.md)。
 3. **rich hover**（§4）。

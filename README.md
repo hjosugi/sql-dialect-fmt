@@ -40,6 +40,7 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 | フロー/パイプ `->>`（statement チェーン、`$n` 参照） | ✅ parse + 整形 |
 | `CREATE FUNCTION/PROCEDURE`（埋め込み言語本体） | ✅ parse + 構造整形 + JS injection |
 | 埋め込み JS/Python 整形 | ✅ CLI `--profile full` が外部ツール検出（biome/ruff/black） |
+| `$$` 本体の言語別ハイライト | ✅ semantic 層 `Injection` ＋ tree-sitter `injections.scm`（LANGUAGE 連動） |
 | ハイライト / Hover / LSP / Tree-sitter | ✅ lexical highlight + hover + Tree-sitter grammar / ⏳ LSP |
 
 ## クレート構成
