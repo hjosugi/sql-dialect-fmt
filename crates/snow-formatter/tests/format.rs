@@ -170,20 +170,76 @@ fn indent_width_is_configurable() {
     );
 }
 
-// ---- conservative safety fallbacks ----
+// ---- comments ----
 
 #[test]
-fn input_with_comments_is_returned_unchanged() {
-    // Comment attachment is not implemented yet, so commented SQL must pass through verbatim
-    // rather than risk dropping the comment.
-    for input in [
-        "select 1 -- trailing\n",
-        "/* lead */ select a from t",
-        "select a, /* mid */ b from t",
-    ] {
-        assert_eq!(format(input), input, "comment input must be untouched");
-    }
+fn trailing_line_comment_after_statement() {
+    assert_format("select 1 -- trailing\n", "SELECT 1; -- trailing\n");
+    assert_format("select a from t -- end\n", "SELECT a\nFROM t; -- end\n");
 }
+
+#[test]
+fn leading_comment_above_statement() {
+    assert_format(
+        "/* lead */ select a from t",
+        "/* lead */\nSELECT a\nFROM t;\n",
+    );
+    assert_format("-- file head\nselect 1", "-- file head\nSELECT 1;\n");
+}
+
+#[test]
+fn comment_above_first_select_item() {
+    assert_format(
+        "select\n  -- the id\n  id,\n  name\nfrom t",
+        "SELECT\n  -- the id\n  id,\n  name\nFROM t;\n",
+    );
+}
+
+#[test]
+fn trailing_comment_on_a_select_item() {
+    assert_format(
+        "select a, -- comment on a\n b from t",
+        "SELECT\n  a, -- comment on a\n  b\nFROM t;\n",
+    );
+}
+
+#[test]
+fn trailing_comment_after_select_list_stays_inline() {
+    assert_format(
+        "select a -- after a\nfrom t",
+        "SELECT a -- after a\nFROM t;\n",
+    );
+    assert_format(
+        "select a, b -- after list\nfrom t",
+        "SELECT a, b -- after list\nFROM t;\n",
+    );
+}
+
+#[test]
+fn comment_between_clauses_leads_the_next_clause() {
+    assert_format(
+        "select a\n-- before from\nfrom t",
+        "SELECT a\n-- before from\nFROM t;\n",
+    );
+}
+
+#[test]
+fn trailing_comment_inside_a_where_predicate() {
+    assert_format(
+        "select a from t where x = 1 -- pred\n and y = 2",
+        "SELECT a\nFROM t\nWHERE x = 1 -- pred\n  AND y = 2;\n",
+    );
+}
+
+#[test]
+fn own_line_comment_after_a_statement() {
+    assert_format(
+        "select 1;\n-- trailing file comment\n",
+        "SELECT 1;\n-- trailing file comment\n",
+    );
+}
+
+// ---- conservative safety fallbacks ----
 
 #[test]
 fn broken_input_is_returned_unchanged() {

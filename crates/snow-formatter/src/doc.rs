@@ -26,6 +26,12 @@ pub(crate) enum Doc {
     /// A unit the printer tries to keep on one line ("flat"); if it doesn't fit the remaining
     /// width, every [`Line`](Doc::Line) directly inside flips to a real newline ("broken").
     Group(Group),
+    /// Content deferred to the end of the current line — the mechanism for trailing comments,
+    /// so `a, -- note` prints the comma first and the comment at the line's end.
+    LineSuffix(Box<Doc>),
+    /// Forces every enclosing group to break. A trailing line comment pairs a [`Doc::LineSuffix`]
+    /// with this so the line actually ends after the comment instead of swallowing what follows.
+    BreakParent,
 }
 
 /// A [`Doc::Group`] plus the break decision propagated into it before printing.

@@ -36,7 +36,7 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 | ロスレス Lexer（`->>`, `\|>`, `::`, `$$…$$`, コメント3種, エスケープ） | ✅ |
 | `SyntaxKind` ＋ `rowan` 連携 | ✅ |
 | Parser / CST（Pratt 式＋SELECT、ロスレス、エラー回復で無停止） | ✅ Phase 1–2 |
-| Formatter（Doc IR、`snow-formatter`） | ✅ Phase 3 v1（コメント／壊れた SQL は無変換） |
+| Formatter（Doc IR、`snow-formatter`、コメント付与あり） | ✅ Phase 3（壊れた SQL は無変換） |
 | 埋め込み JS 整形（Biome） | ⏳ Phase 8 |
 | ハイライト / Hover / LSP / Tree-sitter | ✅ lexical highlight + hover + Tree-sitter grammar / ⏳ LSP |
 

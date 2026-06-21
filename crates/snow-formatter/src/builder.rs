@@ -48,6 +48,16 @@ pub(crate) fn hard_line() -> Doc {
     Doc::Line(LineMode::Hard)
 }
 
+/// Defer `doc` to the end of the current line (used for trailing comments).
+pub(crate) fn line_suffix(doc: Doc) -> Doc {
+    Doc::LineSuffix(Box::new(doc))
+}
+
+/// Force every enclosing group to break.
+pub(crate) fn break_parent() -> Doc {
+    Doc::BreakParent
+}
+
 /// Interleave `items` with `sep`. Empty in → empty doc; single item → that item, no separator.
 pub(crate) fn join(sep: Doc, items: Vec<Doc>) -> Doc {
     let mut parts = Vec::with_capacity(items.len().saturating_mul(2).saturating_sub(1));

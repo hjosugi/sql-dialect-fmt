@@ -35,6 +35,16 @@ const CURATED: &[&str] = &[
     "select * from (select a from t) sub",
     "values (1, 'a'), (2, 'b'), (3, 'c')",
     "select 1; select 2; select 3",
+    // comments
+    "select 1 -- trailing\n",
+    "/* lead */ select a from t",
+    "select\n  -- the id\n  id,\n  name\nfrom t",
+    "select a, -- on a\n b from t",
+    "select a -- after list\nfrom t",
+    "select a\n-- before from\nfrom t",
+    "select a from t where x = 1 -- pred\n and y = 2",
+    "select 1;\n-- trailing file comment\n",
+    "select a from t -- end\n",
 ];
 
 /// Meaningful tokens, upper-cased and with statement terminators dropped — the canonical form a
@@ -48,10 +58,16 @@ fn signature(sql: &str) -> Vec<String> {
         .collect()
 }
 
-/// A clean, comment-free input is one the formatter actually reformats (rather than passing
-/// through via a safety fallback).
-fn is_formattable(sql: &str) -> bool {
-    parse(sql).errors().is_empty() && !tokenize(sql).tokens.iter().any(|t| t.kind.is_comment())
+/// The sorted multiset of comment texts in `sql` — a faithful formatter must keep them all.
+fn comments_of(sql: &str) -> Vec<String> {
+    let mut v: Vec<String> = tokenize(sql)
+        .tokens
+        .into_iter()
+        .filter(|t| t.kind.is_comment())
+        .map(|t| t.text.to_string())
+        .collect();
+    v.sort();
+    v
 }
 
 fn every_sql() -> impl Iterator<Item = String> {
@@ -87,17 +103,31 @@ fn formatting_preserves_meaningful_tokens() {
 }
 
 #[test]
-fn formattable_inputs_yield_clean_well_formed_sql() {
+fn formatting_preserves_comments() {
     for sql in every_sql() {
-        if !is_formattable(&sql) {
-            continue; // fallback path returns the input verbatim; nothing to assert here
+        let formatted = format(&sql);
+        assert_eq!(
+            comments_of(&sql),
+            comments_of(&formatted),
+            "a comment was dropped or altered for:\n{sql}\n--- formatted ---\n{formatted}"
+        );
+    }
+}
+
+#[test]
+fn clean_inputs_yield_clean_well_formed_sql() {
+    for sql in every_sql() {
+        if !parse(&sql).errors().is_empty() {
+            continue; // broken input is returned verbatim; nothing to assert
         }
         let formatted = format(&sql);
         assert!(
             parse(&formatted).errors().is_empty(),
             "formatted output is not valid SQL for:\n{sql}\n--- formatted ---\n{formatted}"
         );
-        if !formatted.is_empty() {
+        // When the formatter actually reformatted (not a verbatim safety-net passthrough), the
+        // output is well-formed: ends in exactly one newline, no trailing whitespace on any line.
+        if formatted != sql && !formatted.is_empty() {
             assert!(
                 formatted.ends_with('\n') && !formatted.ends_with("\n\n"),
                 "output must end with exactly one newline:\n{formatted:?}"

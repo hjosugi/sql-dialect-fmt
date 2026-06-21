@@ -11,41 +11,99 @@
 //!   verbatim.
 //! * **Unhandled nodes fall back to verbatim source text** ([`Ctx::verbatim`]) so the formatter is
 //!   *total*: it always produces valid SQL even for a construct it has no dedicated rule for yet.
-//!
-//! Comment handling is intentionally out of scope here — [`crate::format_with`] only lowers trees
-//! with no comments (see its safety fallback), so these rules never see comment trivia.
+//! * **Comments are re-anchored to nodes** by [`crate::comments`] and emitted by [`Ctx::lower`]
+//!   (leading above / trailing after each node). [`crate::format_with`] verifies the result and
+//!   falls back to the original if a comment would be dropped or the output isn't stable.
 
 use snow_fmt_syntax::SyntaxKind::*;
 use snow_fmt_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 
-use crate::builder::{concat, group, hard_line, indent, join, line, nil, soft_line, text};
+use crate::builder::{
+    break_parent, concat, group, hard_line, indent, join, line, line_suffix, nil, soft_line, text,
+};
+use crate::comments::Comments;
 use crate::doc::Doc;
 use crate::FormatOptions;
 
-/// Lower a whole `SOURCE_FILE` into a single doc.
-pub(crate) fn format_source(root: &SyntaxNode, opts: &FormatOptions) -> Doc {
-    Ctx { opts }.source_file(root)
+/// Lower a whole `SOURCE_FILE` into a single doc, attaching `src`'s comments to the tree.
+pub(crate) fn format_source(root: &SyntaxNode, src: &str, opts: &FormatOptions) -> Doc {
+    let comments = Comments::build(root, src);
+    Ctx {
+        opts,
+        comments: &comments,
+    }
+    .source_file(root)
 }
 
-struct Ctx<'o> {
-    opts: &'o FormatOptions,
+struct Ctx<'a> {
+    opts: &'a FormatOptions,
+    comments: &'a Comments,
 }
 
 impl Ctx<'_> {
     // ---- top level ----
 
     fn source_file(&self, node: &SyntaxNode) -> Doc {
+        // Statement comments are emitted here (not via `attach`) so the synthesized `;` lands
+        // tightly after the statement, before any trailing comment.
         let mut parts = Vec::new();
         for stmt in node.children() {
-            parts.push(self.lower(&stmt));
+            self.push_leading(&mut parts, &stmt);
+            parts.push(self.lower_inner(&stmt));
             parts.push(text(";"));
+            self.push_trailing(&mut parts, &stmt);
             parts.push(hard_line());
         }
         concat(parts)
     }
 
-    /// Dispatch a node to its formatting rule, falling back to verbatim source text.
+    /// Lower a node and wrap it with any comments attached to that node.
     fn lower(&self, node: &SyntaxNode) -> Doc {
+        let inner = self.lower_inner(node);
+        let has_comments = !self.comments.leading(node).is_empty()
+            || !self.comments.dangling(node).is_empty()
+            || !self.comments.trailing(node).is_empty();
+        if !has_comments {
+            return inner;
+        }
+        let mut parts = Vec::new();
+        self.push_leading(&mut parts, node);
+        parts.push(inner);
+        self.push_trailing(&mut parts, node);
+        concat(parts)
+    }
+
+    /// Append a node's leading (own-line, above) and dangling comments to `parts`.
+    fn push_leading(&self, parts: &mut Vec<Doc>, node: &SyntaxNode) {
+        for comment in self.comments.leading(node) {
+            parts.push(text(comment.clone()));
+            parts.push(hard_line());
+        }
+        for comment in self.comments.dangling(node) {
+            parts.push(text(comment.clone()));
+            parts.push(hard_line());
+        }
+    }
+
+    /// Append a node's trailing comments to `parts`. End-of-line comments become line suffixes
+    /// (printed at the end of the current line, forcing it to break); own-line ones go below.
+    fn push_trailing(&self, parts: &mut Vec<Doc>, node: &SyntaxNode) {
+        for comment in self.comments.trailing(node) {
+            if comment.own_line {
+                parts.push(hard_line());
+                parts.push(text(comment.text.clone()));
+            } else {
+                parts.push(line_suffix(concat(vec![
+                    text(" "),
+                    text(comment.text.clone()),
+                ])));
+                parts.push(break_parent());
+            }
+        }
+    }
+
+    /// Dispatch a node to its formatting rule, falling back to verbatim source text.
+    fn lower_inner(&self, node: &SyntaxNode) -> Doc {
         match node.kind() {
             SELECT_STMT => self.select_stmt(node),
             EXPR_STMT => self
@@ -115,8 +173,9 @@ impl Ctx<'_> {
             head.push(text(" "));
             head.push(self.kw("ALL"));
         }
-        let items = self
-            .child_of_kind(node, SELECT_LIST)
+        let list_node = self.child_of_kind(node, SELECT_LIST);
+        let items = list_node
+            .as_ref()
             .map(|list| {
                 list.children()
                     .filter(|c| c.kind() == SELECT_ITEM)
@@ -124,9 +183,22 @@ impl Ctx<'_> {
                     .collect()
             })
             .unwrap_or_default();
-        head.push(indent(concat(vec![line(), join(self.comma_line(), items)])));
+        // A comment before the first item (`SELECT -- note\n a`) attaches to SELECT_LIST as
+        // leading; emit it above the items, inside the indent.
+        let mut list_inner = vec![line()];
+        if let Some(list) = &list_node {
+            self.push_leading(&mut list_inner, list);
+        }
+        list_inner.push(join(self.comma_line(), items));
+        head.push(indent(concat(list_inner)));
 
         let mut parts = vec![group(concat(head))];
+        // A comment after the whole list (`SELECT a, b -- note`) attaches to SELECT_LIST, which is
+        // rendered inline above rather than via `lower`; emit its trailing comment here, outside
+        // the group, so it doesn't force the list to explode.
+        if let Some(list) = &list_node {
+            self.push_trailing(&mut parts, list);
+        }
         for clause in node.children() {
             if clause.kind() == SELECT_LIST {
                 continue; // already rendered above

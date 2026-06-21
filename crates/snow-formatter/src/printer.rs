@@ -61,6 +61,13 @@ pub(crate) fn propagate_breaks(doc: &mut Doc) -> bool {
             forced
         }
         Doc::Indent(inner) => propagate_breaks(inner),
+        Doc::LineSuffix(inner) => {
+            // A line suffix's own content (a comment) doesn't force its container to break; the
+            // paired BreakParent does that. Still recurse so any nested groups get annotated.
+            propagate_breaks(inner);
+            false
+        }
+        Doc::BreakParent => true,
         Doc::Group(group) => {
             if propagate_breaks(&mut group.doc) {
                 group.should_break = true;
@@ -84,52 +91,74 @@ impl Printer {
             mode: Mode::Break,
             doc: root,
         }];
+        // Deferred trailing content (comments), flushed just before the next real line break.
+        let mut line_suffixes: Vec<Cmd> = Vec::new();
 
-        while let Some(cmd) = cmds.pop() {
-            match cmd.doc {
-                Doc::Text(s) => {
-                    out.push_str(s);
-                    pos += char_width(s);
-                }
-                Doc::Concat(items) => {
-                    for item in items.iter().rev() {
-                        cmds.push(Cmd { doc: item, ..cmd });
+        loop {
+            while let Some(cmd) = cmds.pop() {
+                match cmd.doc {
+                    Doc::Text(s) => {
+                        out.push_str(s);
+                        pos += char_width(s);
                     }
-                }
-                Doc::Indent(inner) => cmds.push(Cmd {
-                    indent: cmd.indent + 1,
-                    doc: inner,
-                    ..cmd
-                }),
-                Doc::Line(mode) => {
-                    let do_break = matches!(mode, LineMode::Hard) || cmd.mode == Mode::Break;
-                    if do_break {
-                        trim_trailing_spaces(&mut out);
-                        out.push('\n');
-                        let spaces = cmd.indent * self.indent_width;
-                        out.extend(std::iter::repeat_n(' ', spaces));
-                        pos = spaces;
-                    } else if matches!(mode, LineMode::Space) {
-                        out.push(' ');
-                        pos += 1;
+                    Doc::Concat(items) => {
+                        for item in items.iter().rev() {
+                            cmds.push(Cmd { doc: item, ..cmd });
+                        }
                     }
-                    // A soft line in flat mode renders as nothing.
-                }
-                Doc::Group(group) => {
-                    let remaining = self.width as isize - pos as isize;
-                    let mode = if group.should_break
-                        || !self.fits(&group.doc, cmd.indent, &cmds, remaining)
-                    {
-                        Mode::Break
-                    } else {
-                        Mode::Flat
-                    };
-                    cmds.push(Cmd {
-                        mode,
-                        doc: &group.doc,
+                    Doc::Indent(inner) => cmds.push(Cmd {
+                        indent: cmd.indent + 1,
+                        doc: inner,
                         ..cmd
-                    });
+                    }),
+                    Doc::LineSuffix(inner) => line_suffixes.push(Cmd { doc: inner, ..cmd }),
+                    Doc::BreakParent => {}
+                    Doc::Line(mode) => {
+                        let do_break = matches!(mode, LineMode::Hard) || cmd.mode == Mode::Break;
+                        if do_break {
+                            // Flush any pending suffixes before the break: re-queue this line, then
+                            // the suffixes (reversed so they print in insertion order).
+                            if !line_suffixes.is_empty() {
+                                cmds.push(cmd);
+                                while let Some(suffix) = line_suffixes.pop() {
+                                    cmds.push(suffix);
+                                }
+                                continue;
+                            }
+                            trim_trailing_spaces(&mut out);
+                            out.push('\n');
+                            let spaces = cmd.indent * self.indent_width;
+                            out.extend(std::iter::repeat_n(' ', spaces));
+                            pos = spaces;
+                        } else if matches!(mode, LineMode::Space) {
+                            out.push(' ');
+                            pos += 1;
+                        }
+                        // A soft line in flat mode renders as nothing.
+                    }
+                    Doc::Group(group) => {
+                        let remaining = self.width as isize - pos as isize;
+                        let mode = if group.should_break
+                            || !self.fits(&group.doc, cmd.indent, &cmds, remaining)
+                        {
+                            Mode::Break
+                        } else {
+                            Mode::Flat
+                        };
+                        cmds.push(Cmd {
+                            mode,
+                            doc: &group.doc,
+                            ..cmd
+                        });
+                    }
                 }
+            }
+            // Flush trailing suffixes left at end of input (e.g. a comment at EOF).
+            if line_suffixes.is_empty() {
+                break;
+            }
+            while let Some(suffix) = line_suffixes.pop() {
+                cmds.push(suffix);
             }
         }
 
@@ -171,6 +200,8 @@ impl Printer {
                     }
                 }
                 Doc::Indent(inner) => local.push(Cmd { doc: inner, ..cmd }),
+                // Deferred to line end / handled by break propagation — no width here.
+                Doc::LineSuffix(_) | Doc::BreakParent => {}
                 Doc::Line(mode) => match cmd.mode {
                     Mode::Flat => match mode {
                         LineMode::Space => remaining -= 1,

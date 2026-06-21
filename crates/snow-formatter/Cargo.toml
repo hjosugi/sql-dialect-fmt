@@ -9,6 +9,7 @@ description = "Width-aware pretty-printer (Wadler/Prettier-style Doc IR) that fo
 [dependencies]
 snow-fmt-syntax = { path = "../snow-fmt-syntax", features = ["rowan"] }
 snow-fmt-parser = { path = "../snow-fmt-parser" }
+rowan = "0.15"
 
 [dev-dependencies]
 snow-fmt-lexer = { path = "../snow-fmt-lexer" }

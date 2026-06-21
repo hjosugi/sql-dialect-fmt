@@ -7,7 +7,7 @@
 
 ## 0. いまの状態（検証済み・緑）
 - `cargo build --workspace` … OK
-- `cargo test --workspace` … **全テストバイナリ ok（149 passed / 0 failed）**。`snow-formatter`（Phase 3 v1）追加済み。
+- `cargo test --workspace` … **全テストバイナリ ok（157 passed / 0 failed）**。`snow-formatter`（Phase 3、コメント付与まで）追加済み。
 - `cargo clippy --workspace --all-targets` … クリーン（本セッション確認）
 - `cargo test -p snow-fmt-syntax --features rowan` … OK
 - `tree-sitter-snowflake/` … `grammar.js` + `src/parser.c`（生成済み）+ `queries/` あり
@@ -26,7 +26,7 @@
 | `snow-fmt-syntax` | `SyntaxKind`・`keyword_kind`・`T!`・rowan `Language` | ✅ 中核 |
 | `snow-fmt-lexer` | ロスレス手書きレキサ（`->>`=FLOW_PIPE, `|>`, `::`, `$$..$$`, コメント3種, エスケープ） | ✅ 中核 |
 | `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/JOIN/サブクエリ/集合演算/CTE/述語/ウィンドウ。**決して失敗しない**・ロスレス | ✅ Phase 1–2 |
-| `snow-formatter` | CST→Doc IR（Wadler/Prettier 式 `group`/`indent`/`line`、自前エンジン）→幅対応プリンタ。SELECT 一式/JOIN/CTE/集合演算/CASE/ウィンドウ/semi-structured を整形。コメント・壊れた SQL は**安全に無変換**。**idempotent**・トークン保存をテストで担保 | ✅ Phase 3 v1 |
+| `snow-formatter` | CST→Doc IR（Wadler/Prettier 式 `group`/`indent`/`line`/`line_suffix`、自前エンジン）→幅対応プリンタ。SELECT 一式/JOIN/CTE/集合演算/CASE/ウィンドウ/semi-structured を整形。**コメント付与あり**（leading/trailing/dangling）。壊れた SQL は無変換。**idempotent**・トークン/コメント保存をテストで担保 | ✅ Phase 3 v2 |
 | `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
 | `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
 | `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル） | 🚧 初期 |
@@ -52,13 +52,15 @@
    ＋ CST→Doc の SQL ルール（[sql.rs](crates/snow-formatter/src/sql.rs)）。**idempotency** とトークン保存を
    コーパス（EASY_CASES + 厳選）で担保（[tests/corpus.rs](crates/snow-formatter/tests/corpus.rs)）。
    公開 API は `format` / `format_with(FormatOptions{line_width,indent_width,keyword_case})`。
+   - ✅ **コメント付与 実装済み**（[comments.rs](crates/snow-formatter/src/comments.rs)）: Prettier/Ruff 流に
+     各コメントを**ノード**へ leading/trailing/dangling で割当（`locate` は各ノードの *meaningful range*=非trivia
+     先頭〜末尾で判定し、CST が trivia を次トークンの leading に置く問題を回避）。Doc IR に `LineSuffix`/`BreakParent`
+     を追加（trailing は `line_suffix`+`break_parent` で行末へ）。`format_with` は**自己検証**（出力が valid SQL・
+     全コメント保存・再フォーマットで不変）に失敗したら原文へフォールバック。コメント無しは高速パス。
    - ⏳ **残（次の増分、優先順）**:
-     a. **コメント付与**（leading/trailing/dangling、trailing は `line_suffix`）。現状は
-        **コメント有り・パースエラー有りの入力は無変換でパススルー**（[lib.rs](crates/snow-formatter/src/lib.rs)
-        の安全フォールバック）。これを外すのが最大の次タスク。Doc IR に `LineSuffix`/`IfBreak`/`BreakParent` を追加。
-     b. **埋め込み `$$…$$` JS** を `biome_js_formatter` で整形し再インデント（root 揃え）。
-     c. 型名・関数名のケーシング方針、未対応構文（PIVOT/UNPIVOT/FLATTEN 等）の専用ルール化（現状は verbatim フォールバック）。
-     d. `insta` スナップショット、`format-dev` 類の類似度コーパス・ゲート。
+     a. **埋め込み `$$…$$` JS** を `biome_js_formatter` で整形し再インデント（root 揃え）。
+     b. 型名・関数名のケーシング方針、未対応構文（PIVOT/UNPIVOT/FLATTEN 等）の専用ルール化（現状は verbatim フォールバック）。
+     c. 複数行ブロックコメントの内部再インデント、dangling コメントの配置改善、`insta` スナップショット、`format-dev` 類の類似度コーパス・ゲート。
    - 注: SQL は SELECT リスト等に**末尾カンマを許さない**ため、JS/Python の magic trailing comma は採用せず
      （採用すると無効 SQL を生む）。折返しは幅駆動のみ。設計根拠は [docs/research/prior-art.md](docs/research/prior-art.md)。
 3. **rich hover**（§4）。

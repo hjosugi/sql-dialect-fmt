@@ -287,6 +287,7 @@ dependencies = [
 name = "snow-formatter"
 version = "0.0.0"
 dependencies = [
+ "rowan",
  "snow-fmt-lexer",
  "snow-fmt-parser",
  "snow-fmt-syntax",
