@@ -337,6 +337,80 @@ impl Lowerer {
         doc
     }
 
+    /// A statement laid out as a header line followed by clause "blocks", each on its own line.
+    /// Header tokens/nodes are emitted inline; nodes whose kind is a `block` go below, one per line.
+    fn lower_blocky(&mut self, node: &SyntaxNode, is_block: impl Fn(SyntaxKind) -> bool) -> Doc {
+        let mut header = Vec::new();
+        let mut blocks = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                header.push(self.token(token));
+            } else if let Some(node) = child.into_node() {
+                if is_block(node.kind()) {
+                    blocks.push(node);
+                } else {
+                    header.push(self.lower_node(&node));
+                }
+            }
+        }
+        let mut parts = vec![concat(header)];
+        for block in blocks {
+            parts.push(hard_line());
+            self.reset();
+            parts.push(self.lower_query(&block));
+        }
+        concat(parts)
+    }
+
+    /// `INSERT INTO t [(cols)]` then the `VALUES` rows or source query on their own lines.
+    fn lower_insert(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_blocky(node, |k| {
+            matches!(
+                k,
+                VALUES_CLAUSE | SELECT_STMT | SET_OP | SUBQUERY | WITH_QUERY
+            )
+        })
+    }
+
+    /// `UPDATE t` then `SET ...`, `FROM ...`, `WHERE ...` each on its own line.
+    fn lower_update(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_blocky(node, |k| {
+            matches!(k, SET_CLAUSE | FROM_CLAUSE | WHERE_CLAUSE)
+        })
+    }
+
+    /// `DELETE FROM t [USING ...]` then `WHERE ...` on its own line.
+    fn lower_delete(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_blocky(node, |k| k == WHERE_CLAUSE)
+    }
+
+    /// `MERGE INTO t USING s ON cond` with `USING`, `ON`, and each `WHEN` clause on their own lines.
+    fn lower_merge(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if matches!(token.kind(), USING_KW | ON_KW) {
+                    parts.push(hard_line());
+                    self.reset();
+                }
+                parts.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                if node.kind() == MERGE_WHEN {
+                    parts.push(hard_line());
+                    self.reset();
+                }
+                parts.push(self.lower_node(node));
+            }
+        }
+        concat(parts)
+    }
+
     /// Lower a single top-level `SELECT` clause. Most are inline; a few get structural layout.
     fn lower_clause(&mut self, clause: &SyntaxNode) -> Doc {
         match clause.kind() {
@@ -420,6 +494,15 @@ impl Lowerer {
         }
         if node.kind() == SET_OP {
             return self.lower_set_op(node);
+        }
+        match node.kind() {
+            INSERT_STMT => return self.lower_insert(node),
+            UPDATE_STMT => return self.lower_update(node),
+            DELETE_STMT => return self.lower_delete(node),
+            MERGE_STMT => return self.lower_merge(node),
+            // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
+            SET_CLAUSE | VALUES_CLAUSE => return self.lower_keyword_item_list(node),
+            _ => {}
         }
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {

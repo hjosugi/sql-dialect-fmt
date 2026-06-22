@@ -84,9 +84,9 @@
 - ⏳ 整形規則（`->>` ステップを1行ずつ、インデント揃え）
 - ⏳ パイプ／非パイプ混在の扱い
 
-## Phase 6 — DML ⏳
-- ⏳ `INSERT`（単一・`INSERT ALL`/`FIRST` の多テーブル）
-- ⏳ `UPDATE`, `DELETE`, `MERGE`（`WHEN MATCHED`/`NOT MATCHED`）
+## Phase 6 — DML 🚧
+- 🚧 `INSERT`（単一 `INSERT INTO t [(cols)] VALUES/<query>` をパース＋整形済み。残: `INSERT ALL`/`FIRST` の多テーブル, `OVERWRITE`）
+- ✅ `UPDATE`（`SET`/`FROM`/`WHERE`）, `DELETE`（`USING`/`WHERE`）, `MERGE`（`WHEN [NOT] MATCHED [AND] THEN UPDATE/DELETE/INSERT`）をパース＋構造的整形（各句1行）… パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_blocky`/`lower_merge`。新ノード `INSERT_STMT`/`UPDATE_STMT`/`DELETE_STMT`/`MERGE_STMT`/`SET_CLAUSE`/`ASSIGNMENT`/`MERGE_WHEN`、新キーワード `MATCHED`
 - ⏳ `COPY INTO`（`FILE_FORMAT`, 各種オプション, ステージ/URL）
 
 ## Phase 7 — DDL ⏳

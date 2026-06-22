@@ -22,6 +22,11 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT arr[0], obj['k'] FROM t t_alias",
         "1 + 2 * 3 ;\nSELECT 1 ;",
         "/* hi */ SELECT n FROM t -- tail comment\n",
+        "INSERT INTO t (a, b) VALUES (1, 2), (3, 4)",
+        "INSERT INTO t SELECT * FROM u",
+        "UPDATE t SET a = 1, b = a + 2 FROM s WHERE id = 5",
+        "DELETE FROM t USING u WHERE t.id = u.id",
+        "MERGE INTO tgt t USING src s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.v = s.v WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)",
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {

@@ -38,12 +38,27 @@ pub(crate) fn source_file(p: &mut Parser) {
 }
 
 fn at_stmt_start(p: &Parser) -> bool {
-    p.at(SELECT_KW) || p.at(WITH_KW) || p.at(VALUES_KW) || at_expr_start(p)
+    p.at(SELECT_KW)
+        || p.at(WITH_KW)
+        || p.at(VALUES_KW)
+        || p.at(INSERT_KW)
+        || p.at(UPDATE_KW)
+        || p.at(DELETE_KW)
+        || p.at(MERGE_KW)
+        || at_expr_start(p)
 }
 
 fn statement(p: &mut Parser) {
     if p.at(WITH_KW) {
         with_query(p);
+    } else if p.at(INSERT_KW) {
+        insert_stmt(p);
+    } else if p.at(UPDATE_KW) {
+        update_stmt(p);
+    } else if p.at(DELETE_KW) {
+        delete_stmt(p);
+    } else if p.at(MERGE_KW) {
+        merge_stmt(p);
     } else if p.at(SELECT_KW)
         || p.at(VALUES_KW)
         || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
@@ -54,6 +69,116 @@ fn statement(p: &mut Parser) {
         expr(p);
         m.complete(p, EXPR_STMT);
     }
+}
+
+// ---- DML (Phase 6) ----
+
+fn insert_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(INSERT_KW);
+    p.expect(INTO_KW);
+    name_ref(p);
+    if p.at(L_PAREN) {
+        column_list(p);
+    }
+    if p.at(VALUES_KW) {
+        values_clause(p);
+    } else {
+        query_expr(p);
+    }
+    m.complete(p, INSERT_STMT);
+}
+
+fn update_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(UPDATE_KW);
+    table_ref(p);
+    set_clause(p);
+    if p.at(FROM_KW) {
+        from_clause(p);
+    }
+    if p.at(WHERE_KW) {
+        where_clause(p);
+    }
+    m.complete(p, UPDATE_STMT);
+}
+
+fn delete_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(DELETE_KW);
+    p.expect(FROM_KW);
+    table_ref(p);
+    if p.eat(USING_KW) {
+        table_ref(p);
+        while p.eat(COMMA) {
+            table_ref(p);
+        }
+    }
+    if p.at(WHERE_KW) {
+        where_clause(p);
+    }
+    m.complete(p, DELETE_STMT);
+}
+
+fn set_clause(p: &mut Parser) {
+    let m = p.start();
+    p.expect(SET_KW);
+    assignment(p);
+    while p.eat(COMMA) {
+        assignment(p);
+    }
+    m.complete(p, SET_CLAUSE);
+}
+
+fn assignment(p: &mut Parser) {
+    let m = p.start();
+    name_ref(p);
+    p.expect(EQ);
+    expr(p);
+    m.complete(p, ASSIGNMENT);
+}
+
+fn merge_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(MERGE_KW);
+    p.expect(INTO_KW);
+    table_ref(p);
+    p.expect(USING_KW);
+    table_ref(p);
+    p.expect(ON_KW);
+    expr(p);
+    while p.at(WHEN_KW) {
+        merge_when(p);
+    }
+    m.complete(p, MERGE_STMT);
+}
+
+fn merge_when(p: &mut Parser) {
+    let m = p.start();
+    p.bump(WHEN_KW);
+    p.eat(NOT_KW);
+    p.expect(MATCHED_KW);
+    if p.eat(AND_KW) {
+        expr(p); // WHEN MATCHED AND <cond>
+    }
+    p.expect(THEN_KW);
+    if p.at(UPDATE_KW) {
+        p.bump(UPDATE_KW);
+        set_clause(p);
+    } else if p.at(DELETE_KW) {
+        p.bump(DELETE_KW);
+    } else if p.at(INSERT_KW) {
+        p.bump(INSERT_KW);
+        if p.at(L_PAREN) {
+            column_list(p);
+        }
+        if p.at(VALUES_KW) {
+            values_clause(p);
+        }
+    } else {
+        p.error("expected UPDATE, DELETE, or INSERT after THEN");
+    }
+    m.complete(p, MERGE_WHEN);
 }
 
 // ---- queries ----

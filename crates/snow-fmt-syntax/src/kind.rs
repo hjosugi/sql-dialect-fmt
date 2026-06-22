@@ -193,6 +193,7 @@ pub enum SyntaxKind {
     INPUT_KW,
     OUTPUT_KW,
     OUT_KW,
+    MATCHED_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -255,6 +256,14 @@ pub enum SyntaxKind {
     JSON_ACCESS,
     VALUES_CLAUSE,
     VALUES_ROW,
+    // Phase 6: DML statements
+    INSERT_STMT,
+    UPDATE_STMT,
+    DELETE_STMT,
+    MERGE_STMT,
+    SET_CLAUSE,
+    ASSIGNMENT,
+    MERGE_WHEN,
 
     #[doc(hidden)]
     __LAST,

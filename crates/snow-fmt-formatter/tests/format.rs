@@ -142,10 +142,12 @@ fn function_arguments_stay_inline_without_a_trailing_comma() {
 #[test]
 fn values_rows_honor_a_magic_trailing_comma() {
     let expected = "\
-VALUES (
-    1,
-    2,
-), (3, 4);
+VALUES
+    (
+        1,
+        2,
+    ),
+    (3, 4);
 ";
     assert_eq!(fmt("values (1, 2,), (3, 4)"), expected);
 }
@@ -332,6 +334,53 @@ fn chained_set_operations_flatten() {
     assert_eq!(
         fmt("select 1 union select 2 except select 3"),
         "SELECT 1\nUNION\nSELECT 2\nEXCEPT\nSELECT 3;\n"
+    );
+}
+
+#[test]
+fn insert_values_go_below_the_header() {
+    assert_eq!(
+        fmt("insert into t (a, b) values (1, 2), (3, 4)"),
+        "INSERT INTO t(a, b)\nVALUES (1, 2), (3, 4);\n"
+    );
+}
+
+#[test]
+fn insert_select_puts_the_query_below() {
+    assert_eq!(
+        fmt("insert into t select a, b from u"),
+        "INSERT INTO t\nSELECT a, b\nFROM u;\n"
+    );
+}
+
+#[test]
+fn update_set_and_where_each_on_their_own_line() {
+    assert_eq!(
+        fmt("update t set a = 1, b = a + 2 where id = 5"),
+        "UPDATE t\nSET a = 1, b = a + 2\nWHERE id = 5;\n"
+    );
+}
+
+#[test]
+fn delete_where_goes_below() {
+    assert_eq!(
+        fmt("delete from t where x > 0"),
+        "DELETE FROM t\nWHERE x > 0;\n"
+    );
+}
+
+#[test]
+fn merge_clauses_each_go_on_their_own_line() {
+    let expected = "\
+MERGE INTO target t
+USING source s
+ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET t.v = s.v
+WHEN NOT MATCHED THEN INSERT (id, v) VALUES (s.id, s.v);
+";
+    assert_eq!(
+        fmt("merge into target t using source s on t.id = s.id when matched then update set t.v = s.v when not matched then insert (id, v) values (s.id, s.v)"),
+        expected
     );
 }
 
