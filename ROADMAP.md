@@ -71,7 +71,7 @@
 - ✅ `QUALIFY`（Phase 2 で対応）, ウィンドウ関数（`OVER`, `PARTITION BY`, フレーム `ROWS/RANGE … PRECEDING/FOLLOWING`）, `WINDOW`句（フレームは Phase 2 で）。整形は当面インライン
 - ✅ セミ構造化アクセス（`col:path.to.field`=`JSON_ACCESS`, `[idx]`=`INDEX_EXPR`, `::type`=`CAST_EXPR`。Phase 1–2b で対応）。`OBJECT_CONSTRUCT`/`ARRAY_CONSTRUCT` は通常の関数呼び出しとして整形
 - ✅ **ordered-set 集約** `… WITHIN GROUP (ORDER BY …)`（`LISTAGG`/`ARRAY_AGG` 等。式の後置として `WITHIN_GROUP` ノード）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `expr_bp` / 新キーワード `WITHIN`
-- ⏳ `LATERAL FLATTEN` / `TABLE(FLATTEN(...))`
+- ✅ `LATERAL FLATTEN` / `TABLE(FLATTEN(...))` ＋ テーブル関数（`my_udtf(args)`）／**名前付き引数** `f(name => val)`（`NAMED_ARG` ノード、`FLATTEN`/`TABLE` を callable 化）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `table_ref`/`arg`
 - ✅ `PIVOT` / `UNPIVOT`（`<table> PIVOT(<agg>(col) FOR col IN (…))` を `table_ref` の後置として `PIVOT_CLAUSE` ノードで対応）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `pivot_clause` / 新キーワード `FOR`
 - ✅ `GROUP BY ALL` / `CUBE(...)` / `ROLLUP(...)`（関数呼び出しとして整形）/ `GROUPING SETS ((...), ...)`（`GROUPING(col)` 関数と衝突しない **contextual keyword**（text ベース判定）で `GROUPING_SETS` ノードに）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grouping_element` / [parser.rs](crates/snow-fmt-parser/src/parser.rs) `nth_contextual`
 - ⏳ `SAMPLE`/`TABLESAMPLE`, `MATCH_RECOGNIZE`, `CONNECT BY`/`START WITH`

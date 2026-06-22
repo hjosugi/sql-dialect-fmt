@@ -63,6 +63,9 @@ fn clean_sql_has_no_errors() {
         "SELECT a FROM t GROUP BY GROUPING SETS ((a, b), (c), ())",
         "SELECT a FROM t GROUP BY CUBE(a, b)",
         "SELECT a FROM t GROUP BY ROLLUP(a), b",
+        "SELECT f.value FROM t, LATERAL FLATTEN(input => t.items) f",
+        "SELECT * FROM TABLE(FLATTEN(input => parse_json(x), outer => TRUE))",
+        "SELECT f(a => 1, b => 2) FROM t",
     ] {
         assert_parse_clean(s);
     }

@@ -494,6 +494,26 @@ fn grouping_sets_and_cube_are_kept() {
 }
 
 #[test]
+fn named_arguments_are_kept() {
+    assert_eq!(
+        fmt("select object_construct('a', 1, b => 2) from t"),
+        "SELECT object_construct('a', 1, b => 2)\nFROM t;\n"
+    );
+}
+
+#[test]
+fn lateral_flatten_and_table_function_format() {
+    assert_eq!(
+        fmt("select f.value from t, lateral flatten(input => t.items) f"),
+        "SELECT f.value\nFROM t, LATERAL FLATTEN(INPUT => t.items) f;\n"
+    );
+    assert_eq!(
+        fmt("select * from table(flatten(input => parse_json(x)))"),
+        "SELECT *\nFROM TABLE(FLATTEN(INPUT => parse_json(x)));\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

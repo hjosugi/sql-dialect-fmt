@@ -585,10 +585,22 @@ fn from_clause(p: &mut Parser) {
 
 fn table_ref(p: &mut Parser) {
     let m = p.start();
+    p.eat(LATERAL_KW); // LATERAL FLATTEN(...) / LATERAL (subquery)
     if p.at(L_PAREN) {
         subquery(p); // derived table
+    } else if p.at(FLATTEN_KW) || p.at(TABLE_KW) {
+        // Keyword-named table function: FLATTEN(...) / TABLE(...).
+        p.bump_any();
+        if p.at(L_PAREN) {
+            arg_list(p);
+        } else {
+            p.error("expected '(' after table function");
+        }
     } else if p.at_name() {
         name_ref(p);
+        if p.at(L_PAREN) {
+            arg_list(p); // table function: my_udtf(args)
+        }
     } else {
         p.error("expected a table reference");
     }
@@ -864,6 +876,7 @@ fn at_expr_start(p: &Parser) -> bool {
         || p.at(CASE_KW)
         || p.at(CAST_KW)
         || p.at(TRY_CAST_KW)
+        || p.at(FLATTEN_KW)
         || p.at_name()
 }
 
@@ -1042,6 +1055,11 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         case_expr(p)
     } else if p.at(CAST_KW) || p.at(TRY_CAST_KW) {
         cast_fn_expr(p)
+    } else if p.at(FLATTEN_KW) {
+        // FLATTEN is a keyword but acts as a table/regular function; treat it as a callable name.
+        let m = p.start();
+        p.bump(FLATTEN_KW);
+        m.complete(p, NAME_REF)
     } else if p.at_name() {
         name_ref(p)
     } else {
@@ -1111,6 +1129,13 @@ fn arg(p: &mut Parser) {
         let m = p.start();
         p.bump(STAR);
         m.complete(p, STAR_EXPR);
+    } else if p.at_ident_like() && p.nth_at(1, FAT_ARROW) {
+        // Named argument: `name => value` (e.g. FLATTEN(INPUT => col, OUTER => TRUE)).
+        let m = p.start();
+        p.bump_any(); // the argument name
+        p.bump(FAT_ARROW);
+        expr(p);
+        m.complete(p, NAMED_ARG);
     } else if at_expr_start(p) {
         expr(p);
     } else {

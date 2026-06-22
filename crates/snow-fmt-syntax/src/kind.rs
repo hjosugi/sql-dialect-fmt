@@ -278,6 +278,7 @@ pub enum SyntaxKind {
     // Phase 4: Snowflake query extensions
     WITHIN_GROUP,
     PIVOT_CLAUSE,
+    NAMED_ARG,
     // Phase 8 / scripting-adjacent statements
     SET_STMT,
     EXECUTE_STMT,

@@ -75,6 +75,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Is the current token identifier-like (a bare `IDENT`, keyword or not, or a quoted
+    /// identifier)? Used to recognize a named-argument label before `=>`.
+    pub(crate) fn at_ident_like(&self) -> bool {
+        matches!(self.nth(0), SyntaxKind::IDENT | SyntaxKind::QUOTED_IDENT)
+    }
+
     /// Is the token `n` ahead a *contextual* keyword: a bare `IDENT` whose text matches `kw`
     /// case-insensitively? Used for non-reserved words like `GROUPING`/`SETS` that must not become
     /// real keywords (they double as the `GROUPING(col)` function and ordinary identifiers).

@@ -902,7 +902,14 @@ fn needs_space(prev: SyntaxKind, cur: SyntaxKind) -> bool {
     if cur == L_PAREN
         && matches!(
             prev,
-            IDENT | QUOTED_IDENT | R_PAREN | R_BRACKET | CAST_KW | TRY_CAST_KW
+            IDENT
+                | QUOTED_IDENT
+                | R_PAREN
+                | R_BRACKET
+                | CAST_KW
+                | TRY_CAST_KW
+                | FLATTEN_KW
+                | TABLE_KW
         )
     {
         return false;
