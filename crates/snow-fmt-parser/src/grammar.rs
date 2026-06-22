@@ -771,12 +771,19 @@ fn pivot_value(p: &mut Parser) {
 
 fn table_alias(p: &mut Parser) {
     let explicit_alias = p.eat(AS_KW);
-    if explicit_alias || p.at_name() {
+    if explicit_alias || (p.at_name() && !at_alias_blocker(p)) {
         name(p);
         if p.at(L_PAREN) {
             column_list(p); // derived-table column aliases: (c1, c2, ...)
         }
     }
+}
+
+/// A contextual word that follows a table but introduces a clause rather than being its alias:
+/// `ASOF JOIN`, `MATCH_CONDITION (...)`. (`MATCH_RECOGNIZE` is consumed before the alias already.)
+fn at_alias_blocker(p: &Parser) -> bool {
+    (p.nth_contextual(0, "asof") && p.nth_at(1, JOIN_KW))
+        || (p.nth_contextual(0, "match_condition") && p.nth_at(1, L_PAREN))
 }
 
 fn at_join_start(p: &Parser) -> bool {
@@ -787,12 +794,15 @@ fn at_join_start(p: &Parser) -> bool {
         || p.at(FULL_KW)
         || p.at(CROSS_KW)
         || p.at(NATURAL_KW)
+        || (p.nth_contextual(0, "asof") && p.nth_at(1, JOIN_KW))
 }
 
 fn join(p: &mut Parser) {
     let m = p.start();
     p.eat(NATURAL_KW);
-    if p.at(INNER_KW) {
+    if p.nth_contextual(0, "asof") {
+        p.bump_any(); // ASOF (contextual keyword)
+    } else if p.at(INNER_KW) {
         p.bump(INNER_KW);
     } else if p.at(LEFT_KW) || p.at(RIGHT_KW) || p.at(FULL_KW) {
         p.bump_any();
@@ -802,6 +812,13 @@ fn join(p: &mut Parser) {
     }
     p.expect(JOIN_KW);
     table_ref(p);
+    // ASOF joins carry a MATCH_CONDITION ( <predicate> ) before any ON.
+    if p.nth_contextual(0, "match_condition") {
+        p.bump_any(); // MATCH_CONDITION
+        p.expect(L_PAREN);
+        expr(p);
+        p.expect(R_PAREN);
+    }
     if p.eat(ON_KW) {
         expr(p);
     } else if p.eat(USING_KW) {

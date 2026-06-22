@@ -50,6 +50,8 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT * FROM t TABLESAMPLE BERNOULLI(25) REPEATABLE(99)",
         "SELECT * FROM sales PIVOT (sum(amt) FOR m IN (1 AS jan, 2 AS feb)) p",
         "SELECT * FROM t WHERE a IS DISTINCT FROM b",
+        "SELECT * FROM q ASOF JOIN t MATCH_CONDITION (q.ts >= t.ts) ON q.sym = t.sym",
+        "SELECT * FROM a ASOF JOIN b MATCH_CONDITION (a.t >= b.t)",
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {

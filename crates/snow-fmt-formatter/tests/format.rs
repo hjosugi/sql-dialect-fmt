@@ -569,6 +569,14 @@ on_error = continue;
 }
 
 #[test]
+fn asof_join_and_match_condition_are_kept() {
+    assert_eq!(
+        fmt("select * from q asof join t match_condition (q.ts >= t.ts) on q.sym = t.sym"),
+        "SELECT *\nFROM q\nasof JOIN t match_condition(q.ts >= t.ts) ON q.sym = t.sym;\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

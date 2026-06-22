@@ -75,7 +75,7 @@
 - ✅ `PIVOT` / `UNPIVOT`（`<table> PIVOT(<agg>(col) FOR col IN (…))` を `table_ref` の後置として `PIVOT_CLAUSE` ノードで対応）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `pivot_clause` / 新キーワード `FOR`
 - ✅ `GROUP BY ALL` / `CUBE(...)` / `ROLLUP(...)`（関数呼び出しとして整形）/ `GROUPING SETS ((...), ...)`（`GROUPING(col)` 関数と衝突しない **contextual keyword**（text ベース判定）で `GROUPING_SETS` ノードに）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grouping_element` / [parser.rs](crates/snow-fmt-parser/src/parser.rs) `nth_contextual`
 - ✅ `SAMPLE`/`TABLESAMPLE`（`[method] (n [ROWS]) [REPEATABLE/SEED(...)]` を `table_ref` 後置で寛容保持）, `MATCH_RECOGNIZE`（✅ 本体は balanced-paren 保持＝インライン）, ⏳ `CONNECT BY`/`START WITH`。`PIVOT` の `IN (val AS alias, ...)` も対応
-- ⏳ 🔎 `ASOF JOIN`, Time Travel（`AT`/`BEFORE`）, `CHANGES`
+- 🚧 `ASOF JOIN`（✅ `a ASOF JOIN b MATCH_CONDITION (...) [ON ...]`。contextual keyword `asof`/`match_condition` で、エイリアス誤食いを `at_alias_blocker` で回避）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `join`/`at_alias_blocker`。残: Time Travel（`AT`/`BEFORE`）, `CHANGES`
 
 ## Phase 5 — フロー/パイプ構文 `->>` ⏳ 🔎
 *目的: 既存ツールがほぼ未対応の差別化点。*
