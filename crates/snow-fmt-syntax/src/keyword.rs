@@ -160,6 +160,7 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "within" => WITHIN_KW,
         "for" => FOR_KW,
         "immediate" => IMMEDIATE_KW,
+        "overwrite" => OVERWRITE_KW,
         _ => return None,
     })
 }
@@ -304,6 +305,7 @@ mod tests {
         ("within", SyntaxKind::WITHIN_KW),
         ("for", SyntaxKind::FOR_KW),
         ("immediate", SyntaxKind::IMMEDIATE_KW),
+        ("overwrite", SyntaxKind::OVERWRITE_KW),
     ];
 
     #[test]

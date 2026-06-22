@@ -199,6 +199,7 @@ pub enum SyntaxKind {
     WITHIN_KW,
     FOR_KW,
     IMMEDIATE_KW,
+    OVERWRITE_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -288,6 +289,9 @@ pub enum SyntaxKind {
     COPY_STMT,
     COPY_LOCATION,
     COPY_OPTION,
+    // Phase 6: multi-table INSERT
+    INTO_CLAUSE,
+    INSERT_WHEN,
 
     #[doc(hidden)]
     __LAST,

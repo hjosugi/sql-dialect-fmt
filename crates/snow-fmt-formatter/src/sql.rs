@@ -365,14 +365,37 @@ impl Lowerer {
         concat(parts)
     }
 
-    /// `INSERT INTO t [(cols)]` then the `VALUES` rows or source query on their own lines.
+    /// Single-table `INSERT INTO t [(cols)]` with the `VALUES`/query below, or a multi-table
+    /// `INSERT {ALL|FIRST}` with each `WHEN`/`INTO`/`ELSE` and the source query on their own lines.
     fn lower_insert(&mut self, node: &SyntaxNode) -> Doc {
-        self.lower_blocky(node, |k| {
-            matches!(
-                k,
-                VALUES_CLAUSE | SELECT_STMT | SET_OP | SUBQUERY | WITH_QUERY
-            )
-        })
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if token.kind() == ELSE_KW {
+                    parts.push(hard_line());
+                    self.reset();
+                }
+                parts.push(self.token(token)); // INSERT, OVERWRITE, ALL/FIRST, INTO (single)
+            } else if let Some(node) = child.as_node() {
+                match node.kind() {
+                    INSERT_WHEN | INTO_CLAUSE => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.lower_node(node));
+                    }
+                    VALUES_CLAUSE | SELECT_STMT | SET_OP | SUBQUERY | WITH_QUERY => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.lower_query(node));
+                    }
+                    _ => parts.push(self.lower_node(node)), // NAME_REF / COLUMN_LIST header (single)
+                }
+            }
+        }
+        concat(parts)
     }
 
     /// `UPDATE t` then `SET ...`, `FROM ...`, `WHERE ...` each on its own line.

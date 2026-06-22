@@ -94,17 +94,68 @@ fn statement(p: &mut Parser) {
 fn insert_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(INSERT_KW);
-    p.expect(INTO_KW);
+    p.eat(OVERWRITE_KW);
+    if p.at(ALL_KW) || p.at(FIRST_KW) {
+        multi_table_insert(p);
+    } else {
+        // Single-table: INSERT [OVERWRITE] INTO t [(cols)] VALUES/<query>.
+        p.expect(INTO_KW);
+        name_ref(p);
+        if p.at(L_PAREN) {
+            column_list(p);
+        }
+        if p.at(VALUES_KW) {
+            values_clause(p);
+        } else {
+            query_expr(p);
+        }
+    }
+    m.complete(p, INSERT_STMT);
+}
+
+/// `INSERT [OVERWRITE] ALL <into>+ <query>` (unconditional) or
+/// `INSERT [OVERWRITE] {ALL|FIRST} (WHEN <cond> THEN <into>+)+ [ELSE <into>+] <query>`.
+fn multi_table_insert(p: &mut Parser) {
+    p.bump_any(); // ALL or FIRST
+    if p.at(WHEN_KW) {
+        while p.at(WHEN_KW) {
+            insert_when(p);
+        }
+        if p.eat(ELSE_KW) {
+            while p.at(INTO_KW) {
+                into_clause(p);
+            }
+        }
+    } else {
+        while p.at(INTO_KW) {
+            into_clause(p);
+        }
+    }
+    query_expr(p); // the source rows
+}
+
+fn insert_when(p: &mut Parser) {
+    let m = p.start();
+    p.bump(WHEN_KW);
+    expr(p);
+    p.expect(THEN_KW);
+    while p.at(INTO_KW) {
+        into_clause(p);
+    }
+    m.complete(p, INSERT_WHEN);
+}
+
+fn into_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(INTO_KW);
     name_ref(p);
     if p.at(L_PAREN) {
         column_list(p);
     }
     if p.at(VALUES_KW) {
         values_clause(p);
-    } else {
-        query_expr(p);
     }
-    m.complete(p, INSERT_STMT);
+    m.complete(p, INTO_CLAUSE);
 }
 
 fn update_stmt(p: &mut Parser) {

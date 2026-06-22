@@ -577,6 +577,22 @@ fn asof_join_and_match_condition_are_kept() {
 }
 
 #[test]
+fn multi_table_insert_first_puts_each_branch_on_its_own_line() {
+    let expected = "\
+INSERT FIRST
+WHEN sev >= 9 THEN INTO high
+ELSE
+INTO low
+SELECT sev
+FROM events;
+";
+    assert_eq!(
+        fmt("insert first when sev >= 9 then into high else into low select sev from events"),
+        expected
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),
