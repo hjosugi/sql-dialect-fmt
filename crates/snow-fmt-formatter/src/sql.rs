@@ -224,6 +224,13 @@ impl Lowerer {
         self.prev_unary = false;
     }
 
+    /// Resume spacing as if the previous significant token were `kind` (used after structurally
+    /// emitting a `)` so the following token spaces correctly).
+    fn resume_after(&mut self, kind: SyntaxKind) {
+        self.prev = Some(kind);
+        self.prev_unary = false;
+    }
+
     /// Remove and render the leading comments of the statement's first significant token, each on
     /// its own line. Returned content is placed *before* the statement body (outside its groups) so
     /// it does not force the first construct to break.
@@ -306,7 +313,7 @@ impl Lowerer {
         let magic_comma = list.as_ref().is_some_and(has_trailing_comma);
         let list_doc = list
             .as_ref()
-            .map(|list| self.lower_select_list(list))
+            .map(|list| self.lower_select_list(list, magic_comma))
             .unwrap_or_else(empty);
 
         let inner = concat(vec![concat(head), indent(concat(vec![line(), list_doc]))]);
@@ -327,10 +334,10 @@ impl Lowerer {
         concat(parts)
     }
 
-    fn lower_select_list(&mut self, list: &SyntaxNode) -> Doc {
+    fn lower_select_list(&mut self, list: &SyntaxNode, trailing_comma: bool) -> Doc {
         let items = self.lower_items(list.children().filter(|n| n.kind() == SELECT_ITEM));
-        let mut doc = join(concat(vec![text(","), line()]), items);
-        if has_trailing_comma(list) {
+        let mut doc = join(item_sep(), items);
+        if trailing_comma {
             // Re-emit the author's trailing comma (a token of the list, not of any item).
             doc = concat(vec![doc, text(",")]);
         }
@@ -436,8 +443,7 @@ impl Lowerer {
                         // node carries so we don't double it / grow on re-format.
                         parts.push(space());
                         parts.push(text(node.text().to_string().trim().to_string()));
-                        self.prev = Some(IDENT);
-                        self.prev_unary = false;
+                        self.resume_after(IDENT);
                     }
                     _ => parts.push(self.lower_node(node)), // a (subquery) source
                 }
@@ -509,8 +515,7 @@ impl Lowerer {
                 self.lower_node(&def)
             })
             .collect();
-        self.prev = Some(R_PAREN);
-        self.prev_unary = false;
+        self.resume_after(R_PAREN);
         bracketed(empty(), defs, trailing)
     }
 
@@ -569,10 +574,7 @@ impl Lowerer {
         if items.is_empty() {
             return concat(head);
         }
-        let body = indent(concat(vec![
-            line(),
-            join(concat(vec![text(","), line()]), items),
-        ]));
+        let body = indent(concat(vec![line(), join(item_sep(), items)]));
         group(concat(vec![concat(head), body]))
     }
 
@@ -580,37 +582,31 @@ impl Lowerer {
     /// a single (groupable) line by walking their tokens; parenthesized comma lists and `IN (...)`
     /// are lowered structurally so they can wrap and honor a magic trailing comma.
     fn lower_node(&mut self, node: &SyntaxNode) -> Doc {
-        if is_paren_list(node.kind()) {
-            return self.lower_paren_list(node);
-        }
-        if node.kind() == IN_EXPR {
-            return self.lower_in_expr(node);
-        }
-        if node.kind() == CASE_EXPR {
-            return self.lower_case(node);
-        }
-        if node.kind() == SUBQUERY {
-            return self.lower_subquery(node);
-        }
-        if node.kind() == WITH_QUERY {
-            return self.lower_with_query(node);
-        }
-        if node.kind() == SET_OP {
-            return self.lower_set_op(node);
-        }
         match node.kind() {
-            INSERT_STMT => return self.lower_insert(node),
-            UPDATE_STMT => return self.lower_update(node),
-            DELETE_STMT => return self.lower_delete(node),
-            MERGE_STMT => return self.lower_merge(node),
-            CREATE_STMT => return self.lower_create(node),
-            COPY_STMT => return self.lower_copy(node),
-            COPY_LOCATION => return verbatim(node),
-            COLUMN_DEF_LIST => return self.lower_column_def_list(node),
+            // Parenthesized comma lists, lowered structurally (wrap + magic trailing comma).
+            ARG_LIST | VALUES_ROW | COLUMN_LIST => self.lower_paren_list(node),
+            IN_EXPR => self.lower_in_expr(node),
+            CASE_EXPR => self.lower_case(node),
+            SUBQUERY => self.lower_subquery(node),
+            WITH_QUERY => self.lower_with_query(node),
+            SET_OP => self.lower_set_op(node),
+            INSERT_STMT => self.lower_insert(node),
+            UPDATE_STMT => self.lower_update(node),
+            DELETE_STMT => self.lower_delete(node),
+            MERGE_STMT => self.lower_merge(node),
+            CREATE_STMT => self.lower_create(node),
+            COPY_STMT => self.lower_copy(node),
+            COPY_LOCATION => verbatim(node),
+            COLUMN_DEF_LIST => self.lower_column_def_list(node),
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
-            SET_CLAUSE | VALUES_CLAUSE => return self.lower_keyword_item_list(node),
-            _ => {}
+            SET_CLAUSE | VALUES_CLAUSE => self.lower_keyword_item_list(node),
+            _ => self.lower_children(node),
         }
+    }
+
+    /// The generic fallback: emit a node's significant tokens with spacing, recursing into child
+    /// nodes. Used for any construct without a more specific rule.
+    fn lower_children(&mut self, node: &SyntaxNode) -> Doc {
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {
             if let Some(token) = child.as_token() {
@@ -642,8 +638,7 @@ impl Lowerer {
             empty()
         };
         let items = self.lower_items(node.children());
-        self.prev = Some(R_PAREN);
-        self.prev_unary = false;
+        self.resume_after(R_PAREN);
         concat(vec![open_sep, bracketed(prefix, items, trailing)])
     }
 
@@ -662,8 +657,7 @@ impl Lowerer {
         let inner = node.children().next();
         self.reset();
         let body = inner.map(|n| self.lower_query(&n)).unwrap_or_else(empty);
-        self.prev = Some(R_PAREN);
-        self.prev_unary = false;
+        self.resume_after(R_PAREN);
         let content = concat(vec![
             text("("),
             indent(concat(vec![soft_line(), body])),
@@ -831,15 +825,13 @@ impl Lowerer {
                     if inner.kind() == EXPR_LIST {
                         let trailing = has_trailing_comma(inner);
                         let items = self.lower_items(inner.children());
-                        self.prev = Some(R_PAREN);
-                        self.prev_unary = false;
+                        self.resume_after(R_PAREN);
                         parts.push(concat(vec![open_sep, bracketed(empty(), items, trailing)]));
                     } else {
                         // A subquery or query expression: keep the parentheses, render inline.
                         self.reset();
                         let body = self.lower_node(inner);
-                        self.prev = Some(R_PAREN);
-                        self.prev_unary = false;
+                        self.resume_after(R_PAREN);
                         parts.push(concat(vec![open_sep, text("("), body, text(")")]));
                     }
                     i += 2; // `(` and the inner node
@@ -878,7 +870,7 @@ fn bracketed(prefix: Doc, items: Vec<Doc>, trailing: bool) -> Doc {
     if items.is_empty() {
         return concat(vec![text("("), prefix, text(")")]);
     }
-    let joined = join(concat(vec![text(","), line()]), items);
+    let joined = join(item_sep(), items);
     let body = if trailing {
         concat(vec![soft_line(), joined, text(",")])
     } else {
@@ -921,19 +913,23 @@ fn is_select_clause(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Parenthesized comma lists with a uniform `( items )` shape that we lower structurally.
-fn is_paren_list(kind: SyntaxKind) -> bool {
-    matches!(kind, ARG_LIST | VALUES_ROW | COLUMN_LIST)
+/// The separator between comma-list items: a comma, then a space (flat) or newline (broken).
+fn item_sep() -> Doc {
+    concat(vec![text(","), line()])
 }
 
-/// Does a parenthesized list end with `, )` — a tolerated trailing comma?
+/// Does a parenthesized list end with `, )` — a tolerated trailing comma? (The last two significant
+/// tokens are `COMMA R_PAREN`.)
 fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
-    let significant: Vec<SyntaxKind> = node
-        .children_with_tokens()
-        .map(|el| el.kind())
-        .filter(|k| !k.is_trivia())
-        .collect();
-    matches!(significant.as_slice(), [.., COMMA, R_PAREN])
+    let mut prev = None;
+    let mut last = None;
+    for el in node.children_with_tokens() {
+        if !el.kind().is_trivia() {
+            prev = last;
+            last = Some(el.kind());
+        }
+    }
+    last == Some(R_PAREN) && prev == Some(COMMA)
 }
 
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.
