@@ -387,6 +387,42 @@ impl Lowerer {
         self.lower_blocky(node, |k| k == WHERE_CLAUSE)
     }
 
+    /// `COPY INTO <target> FROM <source>` with `FROM` and each option on their own line. Location
+    /// operands are emitted verbatim so stage paths (`@stage/path`) keep their `/` untouched.
+    fn lower_copy(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if token.kind() == FROM_KW {
+                    parts.push(hard_line());
+                    self.reset();
+                }
+                parts.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                match node.kind() {
+                    COPY_OPTION => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.lower_node(node));
+                    }
+                    COPY_LOCATION => {
+                        // Verbatim (preserve `@stage/path`), but trim the leading-trivia space the
+                        // node carries so we don't double it / grow on re-format.
+                        parts.push(space());
+                        parts.push(text(node.text().to_string().trim().to_string()));
+                        self.prev = Some(IDENT);
+                        self.prev_unary = false;
+                    }
+                    _ => parts.push(self.lower_node(node)), // a (subquery) source
+                }
+            }
+        }
+        concat(parts)
+    }
+
     /// `MERGE INTO t USING s ON cond` with `USING`, `ON`, and each `WHEN` clause on their own lines.
     fn lower_merge(&mut self, node: &SyntaxNode) -> Doc {
         let mut parts = Vec::new();
@@ -545,6 +581,8 @@ impl Lowerer {
             DELETE_STMT => return self.lower_delete(node),
             MERGE_STMT => return self.lower_merge(node),
             CREATE_STMT => return self.lower_create(node),
+            COPY_STMT => return self.lower_copy(node),
+            COPY_LOCATION => return verbatim(node),
             COLUMN_DEF_LIST => return self.lower_column_def_list(node),
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
             SET_CLAUSE | VALUES_CLAUSE => return self.lower_keyword_item_list(node),

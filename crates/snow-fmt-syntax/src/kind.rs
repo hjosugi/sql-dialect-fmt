@@ -284,6 +284,10 @@ pub enum SyntaxKind {
     SET_STMT,
     EXECUTE_STMT,
     GROUPING_SETS,
+    // Phase 6: COPY INTO
+    COPY_STMT,
+    COPY_LOCATION,
+    COPY_OPTION,
 
     #[doc(hidden)]
     __LAST,

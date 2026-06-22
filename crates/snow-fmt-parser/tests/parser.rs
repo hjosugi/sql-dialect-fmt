@@ -36,6 +36,8 @@ fn lossless_roundtrip_valid_and_broken() {
         "SET (a, b) = (1, 2)",
         "EXECUTE IMMEDIATE 'select 1'",
         "EXECUTE IMMEDIATE $$ begin return 1; end $$",
+        "COPY INTO raw.orders FROM @raw.stage/orders/ FILE_FORMAT = (TYPE = JSON) ON_ERROR = CONTINUE",
+        "COPY INTO @mart.stage/out/ FROM (SELECT * FROM t) FILE_FORMAT = (TYPE = CSV) PARTITION BY (dt)",
         "DROP TABLE IF EXISTS db.s.t CASCADE",
         "ALTER TABLE t ADD COLUMN c INT",
         "SELECT listagg(x, ',') WITHIN GROUP (ORDER BY x DESC) FROM t",

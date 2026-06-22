@@ -555,6 +555,20 @@ fn pivot_value_aliases_are_kept() {
 }
 
 #[test]
+fn copy_into_puts_from_and_options_on_their_own_lines() {
+    let expected = "\
+COPY INTO raw.orders
+FROM @raw.stage/orders/
+file_format = (type = json)
+on_error = continue;
+";
+    assert_eq!(
+        fmt("copy into raw.orders from @raw.stage/orders/ file_format = (type = json) on_error = continue"),
+        expected
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

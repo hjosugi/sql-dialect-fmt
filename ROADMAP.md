@@ -87,7 +87,7 @@
 ## Phase 6 — DML 🚧
 - 🚧 `INSERT`（単一 `INSERT INTO t [(cols)] VALUES/<query>` をパース＋整形済み。残: `INSERT ALL`/`FIRST` の多テーブル, `OVERWRITE`）
 - ✅ `UPDATE`（`SET`/`FROM`/`WHERE`）, `DELETE`（`USING`/`WHERE`）, `MERGE`（`WHEN [NOT] MATCHED [AND] THEN UPDATE/DELETE/INSERT`）をパース＋構造的整形（各句1行）… パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_blocky`/`lower_merge`。新ノード `INSERT_STMT`/`UPDATE_STMT`/`DELETE_STMT`/`MERGE_STMT`/`SET_CLAUSE`/`ASSIGNMENT`/`MERGE_WHEN`、新キーワード `MATCHED`
-- ⏳ `COPY INTO`（`FILE_FORMAT`, 各種オプション, ステージ/URL）
+- ✅ `COPY INTO`（ロード/アンロード両形。`COPY INTO <target> FROM <source>` ＋各オプション (`FILE_FORMAT = (...)`, `PATTERN`, `ON_ERROR`, `PARTITION BY (...)` 等) を1行ずつ。ステージパス `@stage/path` は verbatim 保持）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `copy_stmt` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_copy`。新ノード `COPY_STMT`/`COPY_LOCATION`/`COPY_OPTION`。**コーパス 32→34**
 
 ## Phase 7 — DDL 🚧
 - 🚧 `CREATE [OR REPLACE] TABLE`（`AS SELECT`(CTAS)・列定義 `( ... )` を寛容パース＋整形済み。残: `CLONE`, 制約の構造化, `CLUSTER BY` 等オプションの構造化）, `DROP`（`IF EXISTS`/`CASCADE`）, `ALTER`（寛容にトークン列としてパース→インライン整形）… パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_stmt`/`drop_stmt`/`alter_stmt` / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create`。新ノード `CREATE_STMT`/`DROP_STMT`/`ALTER_STMT`/`COLUMN_DEF_LIST`/`COLUMN_DEF`、新キーワード `DROP`/`ALTER`

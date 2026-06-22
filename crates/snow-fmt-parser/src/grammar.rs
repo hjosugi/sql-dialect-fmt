@@ -50,6 +50,7 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(ALTER_KW)
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
+        || p.at(COPY_KW)
         || at_expr_start(p)
 }
 
@@ -74,6 +75,8 @@ fn statement(p: &mut Parser) {
         set_stmt(p);
     } else if p.at(EXECUTE_KW) {
         execute_stmt(p);
+    } else if p.at(COPY_KW) {
+        copy_stmt(p);
     } else if p.at(SELECT_KW)
         || p.at(VALUES_KW)
         || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
@@ -263,6 +266,66 @@ fn create_routine(p: &mut Parser) {
 /// At `AS` immediately followed by a delimited body token (so we don't stop on `EXECUTE AS`).
 fn at_routine_body(p: &Parser) -> bool {
     p.at(AS_KW) && (p.nth_at(1, DOLLAR_STRING) || p.nth_at(1, STRING))
+}
+
+// ---- COPY INTO (Phase 6) ----
+
+/// `COPY INTO <target> FROM <source> <option>*` (both the load and unload shapes). The location
+/// operands (`@stage/path`, table names) are captured verbatim — stage paths use `/` which would be
+/// mangled by operator spacing — while options are parsed as `name = value` (or `PARTITION BY (...)`)
+/// so each can sit on its own line.
+fn copy_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(COPY_KW);
+    p.expect(INTO_KW);
+    copy_operand(p);
+    if p.eat(FROM_KW) {
+        copy_operand(p);
+    }
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        copy_option(p);
+    }
+    m.complete(p, COPY_STMT);
+}
+
+/// A COPY target/source: a parenthesized query, or a location captured as a verbatim token run up
+/// to `FROM`, the first option, or the statement end.
+fn copy_operand(p: &mut Parser) {
+    if p.at(L_PAREN) {
+        subquery(p);
+        return;
+    }
+    let m = p.start();
+    while !p.at(FROM_KW) && !p.at(SEMICOLON) && !p.at_eof() && !at_copy_option_start(p) {
+        p.bump_any();
+    }
+    m.complete(p, COPY_LOCATION);
+}
+
+/// A COPY option starts at `PARTITION BY` or any word immediately followed by `=`.
+fn at_copy_option_start(p: &Parser) -> bool {
+    p.at(PARTITION_KW) || p.nth_at(1, EQ)
+}
+
+fn copy_option(p: &mut Parser) {
+    let m = p.start();
+    if p.at(PARTITION_KW) {
+        p.bump(PARTITION_KW);
+        p.expect(BY_KW);
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        }
+    } else {
+        p.bump_any(); // option name
+        if p.eat(EQ) {
+            if p.at(L_PAREN) {
+                balanced_parens(p);
+            } else {
+                p.bump_any(); // a single literal / bare word value
+            }
+        }
+    }
+    m.complete(p, COPY_OPTION);
 }
 
 // ---- session SET / EXECUTE IMMEDIATE ----
