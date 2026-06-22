@@ -96,9 +96,9 @@
 - ⏳ 🔎 `STREAM`, `TASK`, `DYNAMIC TABLE`（新しめ。構文要確認）
 - ⏳ マスキング/行アクセスポリシー, タグ, `GRANT`/`REVOKE`
 
-## Phase 8 — 手続き・関数・埋め込み言語 ⏳ ＜第2の差別化点＞
-- ⏳ `CREATE PROCEDURE`/`FUNCTION`/`UDTF`（`LANGUAGE` 別: SQL/JS/Python/Java/Scala, `RETURNS`, `HANDLER`, `IMPORTS`, `PACKAGES`）
-- ⏳ Snowflake Scripting（`DECLARE`/`BEGIN`/`EXCEPTION`/`END`, `LET`, `:=`, `FOR`/`WHILE`/`REPEAT`/`LOOP`, `IF`/`CASE`, カーソル, `RESULTSET`, `RETURN`）
+## Phase 8 — 手続き・関数・埋め込み言語 🚧 ＜第2の差別化点＞
+- 🚧 `CREATE PROCEDURE`/`FUNCTION`（**骨格**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持、ボディは区切りトークン `$$ … $$` / `'…'` を **verbatim** 保持。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create`。**コーパス clean 0→20件** に。残: UDTF の `TABLE(...)` 戻り、区切りなし scripting ボディ（現状はエラー→素通しで誤分割を防止）
+- ⏳ Snowflake Scripting（`DECLARE`/`BEGIN`/`EXCEPTION`/`END`, `LET`, `:=`, `FOR`/`WHILE`/`REPEAT`/`LOOP`, `IF`/`CASE`, カーソル, `RESULTSET`, `RETURN`）— ボディ内部の整形（現状は verbatim 保持）
 - ⏳ delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
   - ⏳ **JavaScript**: Biome の `biome_js_formatter` を組み込み
   - ⏳ Python: 整形方針を決定（外部 ruff か、当面は無加工パススルー）

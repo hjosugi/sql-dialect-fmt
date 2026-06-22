@@ -209,17 +209,54 @@ fn create_stmt(p: &mut Parser) {
         p.expect(REPLACE_KW);
     }
     // Modifiers before the object kind (SECURE / TEMPORARY / TRANSIENT / MATERIALIZED / ...).
-    while !p.at(TABLE_KW) && !p.at(VIEW_KW) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !p.at(TABLE_KW)
+        && !p.at(VIEW_KW)
+        && !p.at(PROCEDURE_KW)
+        && !p.at(FUNCTION_KW)
+        && !p.at(SEMICOLON)
+        && !p.at_eof()
+    {
         p.bump_any();
     }
     if p.at(VIEW_KW) {
         create_view(p);
     } else if p.at(TABLE_KW) {
         create_table(p);
+    } else if p.at(PROCEDURE_KW) || p.at(FUNCTION_KW) {
+        create_routine(p);
     } else {
-        p.error("expected TABLE or VIEW");
+        p.error("expected TABLE, VIEW, PROCEDURE, or FUNCTION");
     }
     m.complete(p, CREATE_STMT);
+}
+
+/// `CREATE ... PROCEDURE/FUNCTION name (params) RETURNS ... <options> AS <body>`.
+///
+/// Skeleton support (Phase 8): the signature/options are kept leniently as tokens and the body is
+/// the lexer's single delimited token (`$$ … $$` or a quoted string), preserved verbatim. Only the
+/// delimited-body form parses cleanly; an unquoted scripting body (`AS BEGIN …; … END`) is left to
+/// error so the statement passes through untouched rather than being mis-split on its inner `;`.
+fn create_routine(p: &mut Parser) {
+    p.bump_any(); // PROCEDURE or FUNCTION
+    name_ref(p);
+    if p.at(L_PAREN) {
+        column_def_list(p); // parameter list, parsed leniently like column defs
+    }
+    // RETURNS / LANGUAGE / RUNTIME_VERSION / PACKAGES / HANDLER / EXECUTE AS / ... up to `AS <body>`.
+    while !at_routine_body(p) && !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    if at_routine_body(p) {
+        p.bump(AS_KW);
+        p.bump_any(); // the delimited body token
+    } else {
+        p.error("expected a delimited routine body (AS $$ … $$ or AS '…')");
+    }
+}
+
+/// At `AS` immediately followed by a delimited body token (so we don't stop on `EXECUTE AS`).
+fn at_routine_body(p: &Parser) -> bool {
+    p.at(AS_KW) && (p.nth_at(1, DOLLAR_STRING) || p.nth_at(1, STRING))
 }
 
 fn create_view(p: &mut Parser) {

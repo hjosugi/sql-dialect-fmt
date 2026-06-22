@@ -447,6 +447,29 @@ fn pivot_and_unpivot_are_kept() {
 }
 
 #[test]
+fn procedure_header_is_structured_and_body_is_verbatim() {
+    let src = "create or replace procedure p(x int) returns int language sql as $$\nbegin\n  return x;\nend\n$$";
+    let out = fmt(src);
+    // Header reflowed/up-cased, the delimited body preserved verbatim.
+    assert!(
+        out.starts_with("CREATE OR REPLACE PROCEDURE p (x int) RETURNS int LANGUAGE SQL AS $$"),
+        "header not structured: {out:?}"
+    );
+    assert!(
+        out.contains("\nbegin\n  return x;\nend\n$$"),
+        "body changed: {out:?}"
+    );
+    assert_eq!(fmt(&out), out, "not idempotent");
+}
+
+#[test]
+fn unquoted_scripting_body_passes_through_unchanged() {
+    // No delimited body → parse error → returned unchanged (never mis-split on inner `;`).
+    let src = "create procedure p() returns string language sql as begin return 'x'; end";
+    assert_eq!(fmt(src), src);
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

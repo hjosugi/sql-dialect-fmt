@@ -30,6 +30,8 @@ fn lossless_roundtrip_valid_and_broken() {
         "CREATE OR REPLACE VIEW v AS SELECT a, b FROM t",
         "CREATE TABLE t (a INT, b VARCHAR(10) NOT NULL, c NUMBER(10,2) DEFAULT 0)",
         "CREATE TABLE t AS SELECT * FROM u",
+        "CREATE OR REPLACE PROCEDURE p(x INT) RETURNS INT LANGUAGE SQL AS $$ begin return x; end $$",
+        "CREATE FUNCTION add1(n FLOAT) RETURNS FLOAT AS 'n + 1'",
         "DROP TABLE IF EXISTS db.s.t CASCADE",
         "ALTER TABLE t ADD COLUMN c INT",
         "SELECT listagg(x, ',') WITHIN GROUP (ORDER BY x DESC) FROM t",
