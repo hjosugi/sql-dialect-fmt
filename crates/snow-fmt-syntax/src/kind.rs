@@ -279,6 +279,7 @@ pub enum SyntaxKind {
     WITHIN_GROUP,
     PIVOT_CLAUSE,
     NAMED_ARG,
+    MATCH_RECOGNIZE,
     // Phase 8 / scripting-adjacent statements
     SET_STMT,
     EXECUTE_STMT,

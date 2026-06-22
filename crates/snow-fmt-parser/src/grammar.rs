@@ -604,12 +604,44 @@ fn table_ref(p: &mut Parser) {
     } else {
         p.error("expected a table reference");
     }
-    // PIVOT / UNPIVOT apply to the table before its alias.
+    // MATCH_RECOGNIZE and PIVOT / UNPIVOT apply to the table before its alias.
+    if p.nth_contextual(0, "match_recognize") {
+        match_recognize(p);
+    }
     while p.at(PIVOT_KW) || p.at(UNPIVOT_KW) {
         pivot_clause(p);
     }
     table_alias(p);
     m.complete(p, TABLE_REF);
+}
+
+/// `<table> MATCH_RECOGNIZE ( ... )`. The body (PARTITION/ORDER/MEASURES/PATTERN/DEFINE/...) is rich
+/// and not yet modelled, so capture it as a balanced-parenthesis token run for verbatim-ish inline
+/// formatting; the `MATCH_RECOGNIZE` word is a contextual keyword (also a valid identifier).
+fn match_recognize(p: &mut Parser) {
+    let m = p.start();
+    p.bump_any(); // MATCH_RECOGNIZE
+    if p.at(L_PAREN) {
+        balanced_parens(p);
+    } else {
+        p.error("expected '(' after MATCH_RECOGNIZE");
+    }
+    m.complete(p, MATCH_RECOGNIZE);
+}
+
+/// Consume a balanced `( ... )` token run, tracking only token-level parentheses (string and
+/// `$$ … $$` tokens are opaque, so their inner parens don't count).
+fn balanced_parens(p: &mut Parser) {
+    p.bump(L_PAREN);
+    let mut depth = 1u32;
+    while depth > 0 && !p.at_eof() {
+        if p.at(L_PAREN) {
+            depth += 1;
+        } else if p.at(R_PAREN) {
+            depth -= 1;
+        }
+        p.bump_any();
+    }
 }
 
 fn pivot_clause(p: &mut Parser) {

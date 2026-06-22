@@ -41,6 +41,7 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT listagg(x, ',') WITHIN GROUP (ORDER BY x DESC) FROM t",
         "SELECT * FROM t PIVOT (sum(amount) FOR month IN ('jan', 'feb')) AS p",
         "SELECT * FROM sales UNPIVOT (amount FOR quarter IN (q1, q2))",
+        "SELECT * FROM t MATCH_RECOGNIZE (PARTITION BY id PATTERN (a b+) DEFINE b AS b.v > 0) mr",
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {
