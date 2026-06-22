@@ -87,7 +87,10 @@ pub fn classify(kind: SyntaxKind, text: &str) -> HighlightKind {
         };
     }
 
-    if kind.is_keyword() || (kind == SyntaxKind::IDENT && keyword_kind(text).is_some()) {
+    if kind.is_keyword()
+        || kind == SyntaxKind::CONTEXTUAL_KEYWORD
+        || (kind == SyntaxKind::IDENT && keyword_kind(text).is_some())
+    {
         return HighlightKind::Keyword;
     }
     if kind == SyntaxKind::IDENT && is_builtin_type(text) {

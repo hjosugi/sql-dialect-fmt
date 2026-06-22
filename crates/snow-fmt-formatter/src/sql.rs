@@ -881,7 +881,10 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
 
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.
 fn keyword_text(token: &SyntaxToken, ctx: Ctx) -> Doc {
-    if ctx.uppercase_keywords && token.kind().is_keyword() {
+    // Soft (contextual) keywords are tagged `CONTEXTUAL_KEYWORD` rather than living in the keyword
+    // range, but they upper-case just like real keywords.
+    let is_keyword = token.kind().is_keyword() || token.kind() == CONTEXTUAL_KEYWORD;
+    if ctx.uppercase_keywords && is_keyword {
         text(token.text().to_ascii_uppercase())
     } else {
         text(token.text().to_string())

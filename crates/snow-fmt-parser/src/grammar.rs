@@ -748,7 +748,7 @@ fn at_time_travel(p: &Parser) -> bool {
 
 /// `<table> {AT|BEFORE} ( TIMESTAMP|OFFSET|STATEMENT => ... )`, captured leniently.
 fn time_travel(p: &mut Parser) {
-    p.bump_any(); // AT / BEFORE
+    p.bump_as(CONTEXTUAL_KEYWORD); // AT / BEFORE (contextual keyword)
     if p.at(L_PAREN) {
         balanced_parens(p);
     }
@@ -776,7 +776,7 @@ fn sample_clause(p: &mut Parser) {
 /// formatting; the `MATCH_RECOGNIZE` word is a contextual keyword (also a valid identifier).
 fn match_recognize(p: &mut Parser) {
     let m = p.start();
-    p.bump_any(); // MATCH_RECOGNIZE
+    p.bump_as(CONTEXTUAL_KEYWORD); // MATCH_RECOGNIZE (contextual keyword)
     if p.at(L_PAREN) {
         balanced_parens(p);
     } else {
@@ -871,7 +871,7 @@ fn join(p: &mut Parser) {
     let m = p.start();
     p.eat(NATURAL_KW);
     if p.nth_contextual(0, ContextualKeyword::Asof) {
-        p.bump_any(); // ASOF (contextual keyword)
+        p.bump_as(CONTEXTUAL_KEYWORD); // ASOF (contextual keyword)
     } else if p.at(INNER_KW) {
         p.bump(INNER_KW);
     } else if p.at(LEFT_KW) || p.at(RIGHT_KW) || p.at(FULL_KW) {
@@ -884,7 +884,7 @@ fn join(p: &mut Parser) {
     table_ref(p);
     // ASOF joins carry a MATCH_CONDITION ( <predicate> ) before any ON.
     if p.nth_contextual(0, ContextualKeyword::MatchCondition) {
-        p.bump_any(); // MATCH_CONDITION
+        p.bump_as(CONTEXTUAL_KEYWORD); // MATCH_CONDITION (contextual keyword)
         p.expect(L_PAREN);
         expr(p);
         p.expect(R_PAREN);
@@ -928,8 +928,8 @@ fn grouping_element(p: &mut Parser) {
         && p.nth_contextual(1, ContextualKeyword::Sets)
     {
         let m = p.start();
-        p.bump_any(); // GROUPING
-        p.bump_any(); // SETS
+        p.bump_as(CONTEXTUAL_KEYWORD); // GROUPING (contextual keyword)
+        p.bump_as(CONTEXTUAL_KEYWORD); // SETS (contextual keyword)
         p.expect(L_PAREN);
         if !p.at(R_PAREN) {
             grouping_set(p);

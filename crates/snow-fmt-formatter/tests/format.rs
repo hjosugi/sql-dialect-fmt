@@ -485,7 +485,7 @@ fn session_set_and_execute_immediate_format_inline() {
 fn grouping_sets_and_cube_are_kept() {
     assert_eq!(
         fmt("select a, count(*) from t group by grouping sets ((a, b), (c), ())"),
-        "SELECT a, count(*)\nFROM t\nGROUP BY grouping sets((a, b), (c), ());\n"
+        "SELECT a, count(*)\nFROM t\nGROUP BY GROUPING SETS ((a, b), (c), ());\n"
     );
     assert_eq!(
         fmt("select a from t group by cube(a, b)"),
@@ -572,7 +572,7 @@ on_error = continue;
 fn asof_join_and_match_condition_are_kept() {
     assert_eq!(
         fmt("select * from q asof join t match_condition (q.ts >= t.ts) on q.sym = t.sym"),
-        "SELECT *\nFROM q\nasof JOIN t match_condition(q.ts >= t.ts) ON q.sym = t.sym;\n"
+        "SELECT *\nFROM q\nASOF JOIN t MATCH_CONDITION (q.ts >= t.ts) ON q.sym = t.sym;\n"
     );
 }
 
@@ -596,7 +596,17 @@ FROM events;
 fn time_travel_at_before_is_kept() {
     assert_eq!(
         fmt("select * from orders before (statement => 'abc') o"),
-        "SELECT *\nFROM orders before(statement => 'abc') o;\n"
+        "SELECT *\nFROM orders BEFORE (statement => 'abc') o;\n"
+    );
+}
+
+#[test]
+fn contextual_keywords_stay_identifiers_outside_their_clause() {
+    // `at`/`before`/`asof`/`grouping`/`sets` are soft keywords: up-cased only where the grammar
+    // recognizes them as a clause, and ordinary (lowercase) identifiers everywhere else.
+    assert_eq!(
+        fmt("select asof, at, before, grouping, sets from t"),
+        "SELECT asof, at, before, grouping, sets\nFROM t;\n"
     );
 }
 

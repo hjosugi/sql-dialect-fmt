@@ -207,6 +207,12 @@ pub enum SyntaxKind {
     SOURCE_FILE,
     ERROR,
     EOF,
+    /// A *soft* (contextual) keyword token: a word that the grammar recognized as a keyword in a
+    /// specific position (e.g. `ASOF`, `MATCH_RECOGNIZE`, `AT`/`BEFORE`, `GROUPING SETS`) but that
+    /// is **not** reserved — elsewhere it is an ordinary identifier. Tagged via `bump_as`, it sits
+    /// outside the keyword range (so it never reserves the word) yet lets the formatter upper-case
+    /// it and the highlighter colour it like a keyword. See `parser::ContextualKeyword`.
+    CONTEXTUAL_KEYWORD,
     // statements
     SELECT_STMT,
     EXPR_STMT,
