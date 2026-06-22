@@ -14,6 +14,44 @@ use crate::ParseError;
 
 const INITIAL_FUEL: u32 = 256;
 
+/// Snowflake's *contextual keywords*: words that act as keywords only in a specific syntactic
+/// position and otherwise remain ordinary identifiers. They are never lexed as keywords and never
+/// reserved, so the grammar recognizes them by text via [`Parser::nth_contextual`]. Listing them in
+/// one enum keeps the set discoverable and the match texts typo-proof (a misspelling is a compile
+/// error rather than a silently-never-matching string).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContextualKeyword {
+    /// `<table> AT (...)` — time travel.
+    At,
+    /// `<table> BEFORE (...)` — time travel.
+    Before,
+    /// `ASOF JOIN` — the join-type word.
+    Asof,
+    /// `ASOF JOIN ... MATCH_CONDITION (...)`.
+    MatchCondition,
+    /// `<table> MATCH_RECOGNIZE (...)`.
+    MatchRecognize,
+    /// `GROUP BY GROUPING SETS (...)` — first word.
+    Grouping,
+    /// `GROUPING SETS (...)` — second word.
+    Sets,
+}
+
+impl ContextualKeyword {
+    /// The lowercase source text this word matches case-insensitively.
+    fn text(self) -> &'static str {
+        match self {
+            ContextualKeyword::At => "at",
+            ContextualKeyword::Before => "before",
+            ContextualKeyword::Asof => "asof",
+            ContextualKeyword::MatchCondition => "match_condition",
+            ContextualKeyword::MatchRecognize => "match_recognize",
+            ContextualKeyword::Grouping => "grouping",
+            ContextualKeyword::Sets => "sets",
+        }
+    }
+}
+
 pub(crate) struct Parser<'a> {
     input: &'a Input<'a>,
     pos: usize,
@@ -81,11 +119,15 @@ impl<'a> Parser<'a> {
         matches!(self.nth(0), SyntaxKind::IDENT | SyntaxKind::QUOTED_IDENT)
     }
 
-    /// Is the token `n` ahead a *contextual* keyword: a bare `IDENT` whose text matches `kw`
+    /// Is the token `n` ahead a given [`ContextualKeyword`]: a bare `IDENT` whose text matches
     /// case-insensitively? Used for non-reserved words like `GROUPING`/`SETS` that must not become
     /// real keywords (they double as the `GROUPING(col)` function and ordinary identifiers).
-    pub(crate) fn nth_contextual(&self, n: usize, kw: &str) -> bool {
-        self.nth(n) == SyntaxKind::IDENT && self.input.text(self.pos + n).eq_ignore_ascii_case(kw)
+    pub(crate) fn nth_contextual(&self, n: usize, kw: ContextualKeyword) -> bool {
+        self.nth(n) == SyntaxKind::IDENT
+            && self
+                .input
+                .text(self.pos + n)
+                .eq_ignore_ascii_case(kw.text())
     }
 
     /// Like [`Self::at`], but `n` tokens ahead — used for the handful of two-token decisions

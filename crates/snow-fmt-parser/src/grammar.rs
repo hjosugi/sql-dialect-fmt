@@ -9,7 +9,7 @@
 
 use snow_fmt_syntax::SyntaxKind::*;
 
-use crate::parser::{CompletedMarker, Parser};
+use crate::parser::{CompletedMarker, ContextualKeyword, Parser};
 
 // Binding powers for the Pratt parser. Higher binds tighter; (left, right) for infix.
 const BP_OR: (u8, u8) = (1, 2);
@@ -730,7 +730,7 @@ fn table_ref(p: &mut Parser) {
     if p.at(SAMPLE_KW) || p.at(TABLESAMPLE_KW) {
         sample_clause(p);
     }
-    if p.nth_contextual(0, "match_recognize") {
+    if p.nth_contextual(0, ContextualKeyword::MatchRecognize) {
         match_recognize(p);
     }
     while p.at(PIVOT_KW) || p.at(UNPIVOT_KW) {
@@ -742,7 +742,8 @@ fn table_ref(p: &mut Parser) {
 
 /// Time-travel: `AT ( ... )` / `BEFORE ( ... )` (`at`/`before` are contextual keywords).
 fn at_time_travel(p: &Parser) -> bool {
-    (p.nth_contextual(0, "at") || p.nth_contextual(0, "before")) && p.nth_at(1, L_PAREN)
+    (p.nth_contextual(0, ContextualKeyword::At) || p.nth_contextual(0, ContextualKeyword::Before))
+        && p.nth_at(1, L_PAREN)
 }
 
 /// `<table> {AT|BEFORE} ( TIMESTAMP|OFFSET|STATEMENT => ... )`, captured leniently.
@@ -850,8 +851,8 @@ fn table_alias(p: &mut Parser) {
 /// A contextual word that follows a table but introduces a clause rather than being its alias:
 /// `ASOF JOIN`, `MATCH_CONDITION (...)`. (`MATCH_RECOGNIZE` is consumed before the alias already.)
 fn at_alias_blocker(p: &Parser) -> bool {
-    (p.nth_contextual(0, "asof") && p.nth_at(1, JOIN_KW))
-        || (p.nth_contextual(0, "match_condition") && p.nth_at(1, L_PAREN))
+    (p.nth_contextual(0, ContextualKeyword::Asof) && p.nth_at(1, JOIN_KW))
+        || (p.nth_contextual(0, ContextualKeyword::MatchCondition) && p.nth_at(1, L_PAREN))
         || at_time_travel(p)
 }
 
@@ -863,13 +864,13 @@ fn at_join_start(p: &Parser) -> bool {
         || p.at(FULL_KW)
         || p.at(CROSS_KW)
         || p.at(NATURAL_KW)
-        || (p.nth_contextual(0, "asof") && p.nth_at(1, JOIN_KW))
+        || (p.nth_contextual(0, ContextualKeyword::Asof) && p.nth_at(1, JOIN_KW))
 }
 
 fn join(p: &mut Parser) {
     let m = p.start();
     p.eat(NATURAL_KW);
-    if p.nth_contextual(0, "asof") {
+    if p.nth_contextual(0, ContextualKeyword::Asof) {
         p.bump_any(); // ASOF (contextual keyword)
     } else if p.at(INNER_KW) {
         p.bump(INNER_KW);
@@ -882,7 +883,7 @@ fn join(p: &mut Parser) {
     p.expect(JOIN_KW);
     table_ref(p);
     // ASOF joins carry a MATCH_CONDITION ( <predicate> ) before any ON.
-    if p.nth_contextual(0, "match_condition") {
+    if p.nth_contextual(0, ContextualKeyword::MatchCondition) {
         p.bump_any(); // MATCH_CONDITION
         p.expect(L_PAREN);
         expr(p);
@@ -923,7 +924,9 @@ fn group_by_clause(p: &mut Parser) {
 /// A `GROUP BY` element: `GROUPING SETS (...)`, or an ordinary expression (which already covers
 /// `CUBE(...)` / `ROLLUP(...)`, parsed as function calls).
 fn grouping_element(p: &mut Parser) {
-    if p.nth_contextual(0, "grouping") && p.nth_contextual(1, "sets") {
+    if p.nth_contextual(0, ContextualKeyword::Grouping)
+        && p.nth_contextual(1, ContextualKeyword::Sets)
+    {
         let m = p.start();
         p.bump_any(); // GROUPING
         p.bump_any(); // SETS
