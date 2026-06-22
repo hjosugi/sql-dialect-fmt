@@ -1,17 +1,34 @@
-# snow-fmt 引き継ぎ (HANDOFF) — 2026-06-21 夜
+# snow-fmt 引き継ぎ (HANDOFF) — 2026-06-22
 
-> このファイルは「翌朝きれいに再開する」ための引き継ぎメモです。前セッション（および並行ローカル
-> セッション）が limit に達したため、**現状を緑のまま固定**し、次にやることを優先順位つきで残します。
-> 関連: [README.md](README.md) / [ROADMAP.md](ROADMAP.md) / [GUIDE.md](GUIDE.md)（学習用・gitignore） /
-> [docs/research/](docs/research/) / [spec/](spec/)（Snowflake 仕様トラッカー、cargo 対象外）。
+> 「きれいに再開する」ための引き継ぎメモ。**現状を緑のまま固定**し、次タスクを優先順位つきで残す。
+> 関連: [README.md](README.md) / [ROADMAP.md](ROADMAP.md) / [docs/research/](docs/research/) /
+> [spec/](spec/)（Snowflake 仕様トラッカー、cargo 対象外）。
 
 ## 0. いまの状態（検証済み・緑）
-- `cargo build --workspace` … OK
-- `cargo test --workspace` … **全テストバイナリ ok（失敗 0）**
-- `cargo clippy --workspace --all-targets` … クリーン（前セッション報告 + 本セッション確認）
-- `cargo test -p snow-fmt-syntax --features rowan` … OK
-- `tree-sitter-snowflake/` … `grammar.js` + `src/parser.c`（生成済み）+ `queries/` あり
-- **触ると壊れうるので、再開時はまず上記を再実行して緑を確認してから着手すること。**
+- `cargo build --workspace` / `cargo test --workspace` … **全テストバイナリ ok（失敗 0）**
+- `cargo clippy --workspace --all-targets` … クリーン
+- `cargo fmt --all --check` … OK
+- **再開時はまず上記を再実行して緑を確認してから着手。**
+
+## 0.5 このセッションの成果（Phase 3 → 4/6/7/8 横断）
+**フォーマッタ `snow-fmt-formatter` をゼロから構築**し、CLI まで実用化した。
+
+- **Doc IR エンジン**（`Text`/`Line(Soft/Space/Hard)`/`Group`/`Indent`/`LineSuffix`/`BreakParent`/`group_expanded`）＋幅対応プリンタ（Wadler→Prettier 系 `fits`）。
+- **SQL 整形**: SELECT パイプライン、JOIN/ORDER BY/GROUP BY 構造化、CASE、サブクエリ/CTE、集合演算、**magic trailing comma**（看板機能）、**本物のコメント付与**（leading/trailing/dangling）。
+- **構文拡張（パーサ）**: 集約 `DISTINCT`、`WITHIN GROUP`、`PIVOT/UNPIVOT`、`GROUPING SETS/CUBE/ROLLUP`、`LATERAL FLATTEN`/テーブル関数/名前付き引数、`MATCH_RECOGNIZE`、`ASOF JOIN`、time travel `AT/BEFORE`、`IS [NOT] DISTINCT FROM`、`FROM VALUES`、`WITH` を query primary に。
+- **DML**: `INSERT`（単一/`OVERWRITE`/`ALL`/`FIRST`）, `UPDATE`, `DELETE`, `MERGE`。
+- **DDL**: `CREATE TABLE/VIEW/CTAS`, `DROP`, `ALTER`(寛容), `CREATE PROCEDURE/FUNCTION` 骨格（`$$…$$` ボディ verbatim）。
+- **COPY INTO**（ロード/アンロード、ステージパス verbatim）。
+- **CLI `snow-fmt`**: `--write`/`--check`/stdin、エンコーディング保持（v0.1.0、`cargo install` 可）。
+- **無破壊・べき等・トークン/コメント保存**を内蔵 easy corpus 全件で機械ガード。
+- **コーパス clean パース 0 → 38 / 77**（残りは安全に無変更パススルー）。
+
+### 既知の技術的負債（次のリファクタ対象）
+- `Lowerer`（[sql.rs](crates/snow-fmt-formatter/src/sql.rs)）に `lower_select/insert/merge/copy/create/case…` の特殊ケースが増殖 → データ駆動/共通化の余地。
+- 寛容な balanced-paren 捕捉（`MATCH_RECOGNIZE`/`SAMPLE`/time travel/COPY）は未構造化＝長い1行。
+- contextual keyword（`asof`/`at`/`match_condition`）が IDENT 扱いで小文字のまま（大文字化と不統一）。
+- コメントを含む文は丸ごと verbatim（再整形しない）。
+- `insta` スナップショット未導入。`text_width` は char 数（CJK 幅が厳密でない）。`INSERT INTO t(cols)` の `(` 前スペース不統一。
 
 ## 1. ゴール（ユーザー指示の要約）
 - **最高の Snowflake SQL 解析器**を作る。最新の論文・実装も参照し「完璧な解析」を目指す。
@@ -25,34 +42,30 @@
 |---|---|---|
 | `snow-fmt-syntax` | `SyntaxKind`・`keyword_kind`・`T!`・rowan `Language` | ✅ 中核 |
 | `snow-fmt-lexer` | ロスレス手書きレキサ（`->>`=FLOW_PIPE, `|>`, `::`, `$$..$$`, コメント3種, エスケープ） | ✅ 中核 |
-| `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/JOIN/サブクエリ/集合演算/CTE/述語/ウィンドウ。**決して失敗しない**・ロスレス | ✅ Phase 1–2 |
-| `snow-fmt-formatter` | 汎用 Doc IR エンジン（`Text`/`Line`/`Group`/`Indent`/`LineSuffix`/`BreakParent`/`group_expanded`＋幅対応プリンタ）＋ `SELECT` 整形規則（句改行・JOIN/ORDER BY/GROUP BY 構造化・magic trailing comma・コメント帰属）。べき等・無破壊（パース失敗はパススルー、未配置コメントは文単位 verbatim） | 🚧 Phase 3 進行中 |
+| `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/DML/DDL/プロシージャ骨格/Snowflake 拡張。**決して失敗しない**・ロスレス | ✅ Phase 1–8 部分 |
+| `snow-fmt-formatter` | 汎用 Doc IR エンジン ＋ SQL 整形規則（上記 §0.5）。べき等・無破壊（パース失敗はパススルー、未配置コメントは文単位 verbatim） | ✅ Phase 3 + 実用 |
 | `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
 | `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
 | `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル） | 🚧 初期 |
-| `snow-fmt-cli` | `--fixtures` 指定時のみ golden 変換を行う安全な bootstrap CLI | 🚧 初期 |
+| `snow-fmt-cli` | 実用 `snow-fmt` CLI（`--write`/`--check`/stdin、エンコーディング保持）。v0.1.0 | ✅ |
 | `snow-fmt-encoding` | 文字コード/改行ユーティリティ | 🚧 |
 | `snow-fmt-test-fixtures` | easy-test-cases を `include_str!` で内蔵（外部 `easy-test-cases/` 無しでも `cargo test` 通る） | ✅ |
 | `snow-fmt-test-support` | テスト共有ユーティリティ | ✅ |
 
 設計の真実の源は **rowan CST**。tree-sitter は競合させず、エディタ向けの寛容・高速な認識層という役割分担。
 
-## 3. 翌朝の優先タスク（順番）
-1. **パーサの高頻度ギャップを埋める**（ユーザー明示・未対応。`spec/` でも `todo`）:
-   - `CASE [x] WHEN .. THEN .. ELSE .. END`（最頻出。`primary()` に追加。ノード `CASE_EXPR`/`CASE_WHEN`）
-   - `CAST(x AS t)` / `TRY_CAST(x AS t)` 関数形（`::` キャストは対応済み）
-   - セミ構造化パス `col:path.to.field`（`expr_bp` の後置に `COLON` を追加。ノード `JSON_ACCESS`）
-   - `VALUES (..),(..)`（`query_primary` と文として。ノード `VALUES_CLAUSE`/`VALUES_ROW`）
-   - パイプ構文 `|>`（**最新の演算子一覧を docs で要確認** → §5）
-   - 実装メモ: 文法は [crates/snow-fmt-parser/src/grammar.rs](crates/snow-fmt-parser/src/grammar.rs)、ノード追加は
-     [crates/snow-fmt-syntax/src/kind.rs](crates/snow-fmt-syntax/src/kind.rs)（`__LAST` の直前に追加 → キーワードを足したら
-     [keyword.rs](crates/snow-fmt-syntax/src/keyword.rs) の match と KEYWORDS テストの両方を更新）。各追加に網羅テスト。
-2. **Phase 3: フォーマッタ（最大の未実装中核）**。自前の汎用 Doc IR エンジン（biome/ruff の `FormatElement`
-   を模倣、`biome_formatter` 非依存）＋ 幅対応プリンタ。SELECT 整形・magic trailing comma・コメント付与。
-   idempotency（`format(format(x))==format(x)`）と reparse 等価のテスト。詳細は [docs/research/prior-art.md](docs/research/prior-art.md)。
-3. **rich hover**（§4）。
+## 3. 次の優先タスク（順番）
+1. **formatter リファクタ（負債返済）**: §0.5 の「既知の負債」を潰す。`Lowerer` の特殊ケースを共通ヘルパ
+   （ヘッダ＋ブロック行、寛容リスト等）に統合、contextual keyword の大文字化統一、`insta` 導入を検討。
+   ノード追加の手順: 文法 [grammar.rs](crates/snow-fmt-parser/src/grammar.rs)、種別は
+   [kind.rs](crates/snow-fmt-syntax/src/kind.rs)（`__LAST`/`__KW_END` 直前に追加 → キーワードなら
+   [keyword.rs](crates/snow-fmt-syntax/src/keyword.rs) の match と KEYWORDS テスト両方）。各追加に往復＋整形テスト。
+2. **残コーパスの整形カバレッジ拡大**（clean 38→）: `CREATE` 各種（TASK/STREAM/PIPE/POLICY/FILE FORMAT/
+   DATABASE/SCHEMA/WAREHOUSE/TAG/DYNAMIC TABLE/SEQUENCE）を「綺麗に整形できる形」で。`CHANGES`、semantic view、
+   `MERGE … METADATA$`、scripting ボディ内部整形。※インライン巨大1行になるなら無理に取り込まず素通しのまま。
+3. **rich hover**（§4）／ LSP（`snow-fmt-lsp` 別 crate）。
 4. tree-sitter の corpus テストと `queries/highlights.scm` 拡充。
-5. `spec/` を docs ソースで更新し直す（現状はキュレーションのシード）。
+5. crates.io 公開 / GitHub Release（タグ）。設定ファイル `snow-fmt.toml`。
 
 ## 4. rich hover の設計案
 - LSP `textDocument/hover` を `snow-fmt-hover` で実装。CST 上の位置 → 最小ノードを特定し、種別ごとに内容を返す:
