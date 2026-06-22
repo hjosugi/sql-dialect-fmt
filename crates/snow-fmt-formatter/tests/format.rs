@@ -304,6 +304,26 @@ FROM (
 }
 
 #[test]
+fn set_operations_put_each_query_and_operator_on_its_own_line() {
+    let expected = "\
+SELECT a
+FROM t
+UNION ALL
+SELECT a
+FROM u;
+";
+    assert_eq!(fmt("select a from t union all select a from u"), expected);
+}
+
+#[test]
+fn chained_set_operations_flatten() {
+    assert_eq!(
+        fmt("select 1 union select 2 except select 3"),
+        "SELECT 1\nUNION\nSELECT 2\nEXCEPT\nSELECT 3;\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

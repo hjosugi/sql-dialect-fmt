@@ -418,6 +418,9 @@ impl Lowerer {
         if node.kind() == WITH_QUERY {
             return self.lower_with_query(node);
         }
+        if node.kind() == SET_OP {
+            return self.lower_set_op(node);
+        }
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {
             if let Some(token) = child.as_token() {
@@ -467,6 +470,45 @@ impl Lowerer {
             text(")"),
         ]);
         concat(vec![open_sep, group(content)])
+    }
+
+    /// A set operation (`UNION [ALL] / EXCEPT / INTERSECT / MINUS`): each operand on its own line(s)
+    /// with the operator keyword(s) between them. Chained operations flatten because the left
+    /// operand is itself a `SET_OP`.
+    fn lower_set_op(&mut self, node: &SyntaxNode) -> Doc {
+        let mut operands = Vec::new();
+        let mut ops = Vec::new();
+        let mut op_started = false;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                // Reset only before the first operator keyword; the rest (`ALL`/`DISTINCT`) keep
+                // their normal spacing so we get `UNION ALL`, not `UNIONALL`.
+                if !op_started {
+                    self.reset();
+                    op_started = true;
+                }
+                ops.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                self.reset();
+                op_started = false;
+                operands.push(self.lower_query(node));
+            }
+        }
+        let mut parts = Vec::new();
+        if let Some(lhs) = operands.first() {
+            parts.push(lhs.clone());
+        }
+        // Operator keywords (e.g. `UNION ALL`) share one line between the operands.
+        parts.push(hard_line());
+        parts.push(concat(ops));
+        if let Some(rhs) = operands.get(1) {
+            parts.push(hard_line());
+            parts.push(rhs.clone());
+        }
+        concat(parts)
     }
 
     /// A `WITH` query: the CTE clause, then the main query on its own line.
