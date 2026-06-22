@@ -608,7 +608,10 @@ fn table_ref(p: &mut Parser) {
     } else {
         p.error("expected a table reference");
     }
-    // MATCH_RECOGNIZE and PIVOT / UNPIVOT apply to the table before its alias.
+    // SAMPLE / TABLESAMPLE, MATCH_RECOGNIZE, and PIVOT / UNPIVOT apply to the table before its alias.
+    if p.at(SAMPLE_KW) || p.at(TABLESAMPLE_KW) {
+        sample_clause(p);
+    }
     if p.nth_contextual(0, "match_recognize") {
         match_recognize(p);
     }
@@ -617,6 +620,23 @@ fn table_ref(p: &mut Parser) {
     }
     table_alias(p);
     m.complete(p, TABLE_REF);
+}
+
+/// `<table> {SAMPLE|TABLESAMPLE} [method] ( n [ROWS] ) [REPEATABLE|SEED ( seed )]`. The fraction
+/// and any method/seed are captured leniently (balanced parens) for inline formatting.
+fn sample_clause(p: &mut Parser) {
+    p.bump_any(); // SAMPLE / TABLESAMPLE
+    if p.at_name() {
+        name_ref(p); // sampling method: BERNOULLI / SYSTEM / ROW / BLOCK
+    }
+    if p.at(L_PAREN) {
+        balanced_parens(p);
+    }
+    // Optional REPEATABLE(seed) / SEED(seed).
+    if p.at_name() && p.nth_at(1, L_PAREN) {
+        name_ref(p);
+        balanced_parens(p);
+    }
 }
 
 /// `<table> MATCH_RECOGNIZE ( ... )`. The body (PARTITION/ORDER/MEASURES/PATTERN/DEFINE/...) is rich
@@ -665,17 +685,25 @@ fn pivot_clause(p: &mut Parser) {
     p.expect(IN_KW);
     p.expect(L_PAREN);
     if !p.at(R_PAREN) {
-        expr(p);
+        pivot_value(p);
         while p.eat(COMMA) {
             if p.at(R_PAREN) {
                 break;
             }
-            expr(p);
+            pivot_value(p);
         }
     }
     p.expect(R_PAREN);
     p.expect(R_PAREN);
     m.complete(p, PIVOT_CLAUSE);
+}
+
+/// A PIVOT `IN` value: an expression with an optional alias (`1 AS JAN`, `'jan' AS January`).
+fn pivot_value(p: &mut Parser) {
+    expr(p);
+    if p.eat(AS_KW) || p.at_name() {
+        name(p);
+    }
 }
 
 fn table_alias(p: &mut Parser) {

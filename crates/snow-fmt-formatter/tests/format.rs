@@ -539,6 +539,22 @@ fn from_values_is_a_table_source() {
 }
 
 #[test]
+fn tablesample_is_kept() {
+    assert_eq!(
+        fmt("select * from t tablesample bernoulli(25) repeatable(99)"),
+        "SELECT *\nFROM t TABLESAMPLE bernoulli(25) repeatable(99);\n"
+    );
+}
+
+#[test]
+fn pivot_value_aliases_are_kept() {
+    assert_eq!(
+        fmt("select * from sales pivot (sum(amt) for m in (1 as jan, 2 as feb)) p"),
+        "SELECT *\nFROM sales PIVOT (sum(amt) FOR m IN (1 AS jan, 2 AS feb)) p;\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

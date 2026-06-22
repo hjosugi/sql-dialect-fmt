@@ -45,6 +45,9 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT * FROM (WITH c AS (SELECT 1) SELECT * FROM c)",
         "CREATE VIEW v AS WITH c AS (SELECT 1) SELECT * FROM c",
         "MERGE INTO tgt USING (WITH c AS (SELECT 1 id) SELECT * FROM c) s ON tgt.id = s.id WHEN MATCHED THEN DELETE",
+        "SELECT * FROM t TABLESAMPLE BERNOULLI(25) REPEATABLE(99)",
+        "SELECT * FROM sales PIVOT (sum(amt) FOR m IN (1 AS jan, 2 AS feb)) p",
+        "SELECT * FROM t WHERE a IS DISTINCT FROM b",
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {
