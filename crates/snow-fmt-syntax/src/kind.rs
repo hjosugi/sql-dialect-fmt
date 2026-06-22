@@ -198,6 +198,7 @@ pub enum SyntaxKind {
     ALTER_KW,
     WITHIN_KW,
     FOR_KW,
+    IMMEDIATE_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -277,6 +278,9 @@ pub enum SyntaxKind {
     // Phase 4: Snowflake query extensions
     WITHIN_GROUP,
     PIVOT_CLAUSE,
+    // Phase 8 / scripting-adjacent statements
+    SET_STMT,
+    EXECUTE_STMT,
 
     #[doc(hidden)]
     __LAST,

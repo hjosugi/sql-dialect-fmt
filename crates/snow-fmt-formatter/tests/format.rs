@@ -470,6 +470,18 @@ fn unquoted_scripting_body_passes_through_unchanged() {
 }
 
 #[test]
+fn session_set_and_execute_immediate_format_inline() {
+    assert_eq!(
+        fmt("set target_table = 'MART.X'"),
+        "SET target_table = 'MART.X';\n"
+    );
+    assert_eq!(
+        fmt("execute immediate 'insert into t values (1)' using (x)"),
+        "EXECUTE IMMEDIATE 'insert into t values (1)' USING (x);\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

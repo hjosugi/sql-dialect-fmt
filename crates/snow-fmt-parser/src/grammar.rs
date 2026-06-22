@@ -48,6 +48,8 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(CREATE_KW)
         || p.at(DROP_KW)
         || p.at(ALTER_KW)
+        || p.at(SET_KW)
+        || p.at(EXECUTE_KW)
         || at_expr_start(p)
 }
 
@@ -68,6 +70,10 @@ fn statement(p: &mut Parser) {
         drop_stmt(p);
     } else if p.at(ALTER_KW) {
         alter_stmt(p);
+    } else if p.at(SET_KW) {
+        set_stmt(p);
+    } else if p.at(EXECUTE_KW) {
+        execute_stmt(p);
     } else if p.at(SELECT_KW)
         || p.at(VALUES_KW)
         || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
@@ -257,6 +263,56 @@ fn create_routine(p: &mut Parser) {
 /// At `AS` immediately followed by a delimited body token (so we don't stop on `EXECUTE AS`).
 fn at_routine_body(p: &Parser) -> bool {
     p.at(AS_KW) && (p.nth_at(1, DOLLAR_STRING) || p.nth_at(1, STRING))
+}
+
+// ---- session SET / EXECUTE IMMEDIATE ----
+
+/// `SET <name> = <expr>` or `SET (<name>, ...) = (<expr>, ...)` (session variables).
+fn set_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(SET_KW);
+    if p.at(L_PAREN) {
+        column_list(p);
+    } else {
+        name_ref(p);
+    }
+    p.expect(EQ);
+    if p.at(L_PAREN) {
+        // A tuple / subquery right-hand side.
+        p.bump(L_PAREN);
+        if p.at(SELECT_KW) || p.at(WITH_KW) {
+            query_expr(p);
+        } else if !p.at(R_PAREN) {
+            expr_list(p);
+        }
+        p.expect(R_PAREN);
+    } else {
+        expr(p);
+    }
+    m.complete(p, SET_STMT);
+}
+
+/// `EXECUTE IMMEDIATE <string|$$…$$|:var> [USING (<binds>)]`.
+fn execute_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(EXECUTE_KW);
+    p.expect(IMMEDIATE_KW);
+    expr(p);
+    if p.eat(USING_KW) {
+        if p.at(L_PAREN) {
+            p.bump(L_PAREN);
+            if !p.at(R_PAREN) {
+                expr_list(p);
+            }
+            p.expect(R_PAREN);
+        } else {
+            expr(p);
+            while p.eat(COMMA) {
+                expr(p);
+            }
+        }
+    }
+    m.complete(p, EXECUTE_STMT);
 }
 
 fn create_view(p: &mut Parser) {
@@ -751,6 +807,7 @@ fn at_expr_start(p: &Parser) -> bool {
     p.at(INT_NUMBER)
         || p.at(FLOAT_NUMBER)
         || p.at(STRING)
+        || p.at(DOLLAR_STRING)
         || p.at(TRUE_KW)
         || p.at(FALSE_KW)
         || p.at(NULL_KW)
@@ -915,6 +972,7 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
     let cm = if p.at(INT_NUMBER)
         || p.at(FLOAT_NUMBER)
         || p.at(STRING)
+        || p.at(DOLLAR_STRING)
         || p.at(TRUE_KW)
         || p.at(FALSE_KW)
         || p.at(NULL_KW)
