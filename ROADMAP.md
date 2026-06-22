@@ -51,15 +51,17 @@
 - ⏳ `WITH`（CTE, `RECURSIVE`）, 集合演算（`UNION [ALL]`/`EXCEPT`/`INTERSECT`/`MINUS`）
 - ⏳ 関数呼び出し, `CASE`, `CAST`/`::`, 名前付き引数 `=>`, ラムダ `->`, 修飾名 `a.b.c`
 
-## Phase 3 — フォーマッタ基盤 ⏳
-*目的: Phase 2 までの構文を綺麗に出力する。SQL 規則の前に自前 Doc エンジンを立ち上げる。*
-- ⏳ 汎用 Doc エンジン `snow-fmt-formatter`（`FormatElement`: `Text`/`SourceCodeSlice`/`Line(Soft/Hard/Empty/SoftOrSpace)`/`Group`/`Indent`/`LineSuffix`/`BestFitting`）。`biome_formatter` には依存しない
-- ⏳ ビルダ（`group`/`indent`/`block_indent`/`soft_block_indent`/4種改行/`line_suffix`/`if_group_breaks`/`best_fitting`）＋ `Format`/`FormatRule` トレイト＋ `write!`/`format!` マクロ
-- ⏳ 幅対応プリンタ（行幅で `group` を1行/折返し決定）
-- ⏳ コメント付与（leading/trailing/dangling。末尾は `line_suffix`。ディレクティブ `-- noqa`/`-- snow-fmt:` は幅計算から除外）
+## Phase 3 — フォーマッタ基盤 🚧
+*目的: Phase 2 までの構文を綺麗に出力する。SQL 規則の前に自前 Doc エンジンを立ち上げる。クレート [crates/snow-fmt-formatter/](crates/snow-fmt-formatter/)。*
+- ✅ 汎用 Doc エンジン `snow-fmt-formatter`（`FormatElement` 中核サブセット: `Text`/`Line(Soft/Space/Hard)`/`Group`/`Indent`、`breakParent` 伝播）。`biome_formatter` 非依存 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs)。残: `SourceCodeSlice`/`LineSuffix`/`BestFitting`
+- ✅ ビルダ（`text`/`concat`/`join`/`group`/`indent`/`line`/`soft_line`/`hard_line`/`space`/`empty`）＋ 幅対応プリンタ（Prettier 系 `fits`／flat-or-break）。残: `block_indent`/`line_suffix`/`if_group_breaks`/`best_fitting`／`Format`/`FormatRule` トレイト・`write!` マクロ
+- ✅ 幅対応プリンタ（行幅で `group` を1行/折返し決定）… [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `print`
+- ✅ SQL 規則の最初の薄切り: `SELECT` パイプライン（文の区切り/終端、各句を改行、SELECT 列が幅超過で1列1行に展開、句内空白の正規化、キーワード大文字化）… [sql.rs](crates/snow-fmt-formatter/src/sql.rs)
+- 🚧 コメント付与（leading/trailing/dangling。末尾は `line_suffix`。ディレクティブ `-- noqa`/`-- snow-fmt:` は幅計算から除外）。現状は **verbatim フォールバック**（コメント/`ERROR` を含む部分木はそのまま出力して無破壊を保証）で代替
 - ⏳ **magic trailing comma**（SELECT列/`IN(...)`/`VALUES`/引数で末尾カンマ→展開固定）
-- ⏳ 設定は最小（`line-length`・インデント幅・`keyword-case`）。opinionated・ほぼ設定なし
-- ⏳ テスト: `insta` スナップショット ＋ **stability-check（べき等）** ＋ ラウンドトリップ。フィクスチャは sqlparser-rs(Apache-2.0) から流用
+- 🚧 設定は最小（`line-length`・インデント幅・`keyword-case`）。`FormatOptions { line_width, indent_width, uppercase_keywords }` 実装済み。opinionated・ほぼ設定なし
+- ✅ テスト: **stability-check（べき等 `format(format(x))==format(x)`）** ＋ ラウンドトリップ（有意トークン列の保存）＋ クリーン入力の再パース無エラー、内蔵 easy fixture 全 SQL で検証 … [tests/format.rs](crates/snow-fmt-formatter/tests/format.rs)。残: `insta` スナップショット
+- 📝 Phase 3 のスコープ境界: パーサが**完全に受理した入力のみ整形**し、`ParseError` が出る入力は無変更パススルー（無破壊・べき等を機械的に保証）。Phase 2 文法の拡張に従ってカバレッジが自動的に広がる
 
 ## Phase 4 — Snowflake 固有のクエリ構文 ⏳
 *目的: 汎用 SQL フォーマッタが取りこぼす部分を制覇。*
@@ -117,4 +119,4 @@
 ---
 
 ### 次の一手
-**Phase 3（フォーマッタ Doc IR）** を立ち上げつつ、Phase 2 文法を内蔵 fixture の頻出構文から広げる。現時点では Rust テストに golden/full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter の全 SQL ロスレス検証が組み込まれているため、`cargo test --workspace` を自己完結した回帰ゲートにして進められる。
+**Phase 3 の Doc IR エンジンは立ち上げ済み**（`snow-fmt-formatter`：汎用 Doc + 幅対応プリンタ + `SELECT` の最初の整形規則、べき等/無破壊テスト緑）。次は (a) Phase 2 文法を内蔵 fixture の頻出構文（`JOIN`/CTE/集合演算/ウィンドウ等は CST 化済み、未対応の `GROUPING SETS`/`PIVOT`/`MATCH_RECOGNIZE`/`WITHIN GROUP`/`LATERAL FLATTEN` を順次）から広げて整形対象を増やす、(b) フォーマッタ側で `JOIN`/`GROUP BY`/`ORDER BY`/関数引数の構造的整形と magic trailing comma、(c) 本物のコメント付与（leading/trailing/dangling）に着手。`cargo test --workspace`（golden/full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）を自己完結した回帰ゲートにして進められる。

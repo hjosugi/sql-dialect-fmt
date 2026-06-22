@@ -1,0 +1,16 @@
+[package]
+name = "snow-fmt-formatter"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+description = "Generic Wadler/Prettier-style Doc IR + width-aware printer, plus the Snowflake SQL formatting rules built on the lossless CST."
+
+[dependencies]
+snow-fmt-syntax = { path = "../snow-fmt-syntax", features = ["rowan"] }
+snow-fmt-parser = { path = "../snow-fmt-parser" }
+
+[dev-dependencies]
+snow-fmt-lexer = { path = "../snow-fmt-lexer" }
+snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures" }
+snow-fmt-test-support = { path = "../snow-fmt-test-support" }

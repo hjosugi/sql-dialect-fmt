@@ -26,6 +26,7 @@
 | `snow-fmt-syntax` | `SyntaxKind`・`keyword_kind`・`T!`・rowan `Language` | ✅ 中核 |
 | `snow-fmt-lexer` | ロスレス手書きレキサ（`->>`=FLOW_PIPE, `|>`, `::`, `$$..$$`, コメント3種, エスケープ） | ✅ 中核 |
 | `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/JOIN/サブクエリ/集合演算/CTE/述語/ウィンドウ。**決して失敗しない**・ロスレス | ✅ Phase 1–2 |
+| `snow-fmt-formatter` | 汎用 Doc IR エンジン（`Text`/`Line`/`Group`/`Indent`＋幅対応プリンタ）＋ `SELECT` 整形規則。べき等・無破壊（パース失敗入力はパススルー、コメント/`ERROR` は verbatim） | 🚧 Phase 3 初期 |
 | `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
 | `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
 | `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル） | 🚧 初期 |
