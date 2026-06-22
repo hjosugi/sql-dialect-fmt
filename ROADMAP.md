@@ -58,6 +58,7 @@
 - ✅ 幅対応プリンタ（行幅で `group` を1行/折返し決定）… [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `print`
 - ✅ SQL 規則の `SELECT` パイプライン: 文の区切り/終端、各句を改行、SELECT 列が幅超過で1列1行に展開、句内空白の正規化、キーワード大文字化 … [sql.rs](crates/snow-fmt-formatter/src/sql.rs)
 - ✅ 句の構造的整形: `JOIN` を1行ずつ（`FROM` 直下に整列）、`ORDER BY`/`GROUP BY` の項目を幅超過で1項目1行に折返し（`GROUP BY ALL` 等の項目なし形はそのまま）… [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_from`/`lower_keyword_item_list`
+- ✅ 式の構造的整形: `CASE`（収まれば1行、溢れたら `WHEN`/`ELSE` を1アーム1行・`END` をデデント。単純 CASE のオペランド対応）… [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_case`
 - ✅ コメント付与（leading/trailing/dangling）: コメントを有意トークンに帰属（前トークンと同じ行＝trailing、改行後＝次トークンの leading、行コメントは `line_suffix`＋`break_parent` で行末へ）。各コメントを1度だけ出力し、**帰属先トークンを実際に描画できないコメントが1つでも残ればその文だけ verbatim にフォールバック**（無破壊を機械保証）。Doc エンジンに `line_suffix`/`break_parent` を追加 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs) / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `Comments`。残: ディレクティブ（`-- noqa`/`-- snow-fmt:`）の幅計算除外、リーディング文コメントが SELECT を展開させる微調整
 - ✅ **magic trailing comma**（看板機能）: SELECT 列・関数引数 (`ARG_LIST`)・`VALUES` 行・列リスト (`COLUMN_LIST`)・`IN (...)`（`EXPR_LIST` を親の括弧と束ねて構造化）で実装済み（作者の末尾カンマ＝「展開固定」と解釈し幅に関わらず展開。展開したコレクションは祖先グループも改行させる＝Black 流。既存カンマを保持しトークンは合成しない＝無破壊）。Doc エンジンに**伝播する `group_expanded`**（Prettier `shouldBreak`）を追加 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `group_expanded` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `bracketed`/`lower_in_expr`
 - 🚧 設定は最小（`line-length`・インデント幅・`keyword-case`）。`FormatOptions { line_width, indent_width, uppercase_keywords }` 実装済み。opinionated・ほぼ設定なし

@@ -409,6 +409,9 @@ impl Lowerer {
         if node.kind() == IN_EXPR {
             return self.lower_in_expr(node);
         }
+        if node.kind() == CASE_EXPR {
+            return self.lower_case(node);
+        }
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {
             if let Some(token) = child.as_token() {
@@ -432,6 +435,68 @@ impl Lowerer {
         self.prev = Some(R_PAREN);
         self.prev_unary = false;
         concat(vec![open_sep, bracketed(items, trailing)])
+    }
+
+    /// A `CASE` expression: flat when it fits, otherwise one arm per line with `END` dedented:
+    ///
+    /// ```text
+    /// CASE
+    ///     WHEN c THEN r
+    ///     ELSE e
+    /// END
+    /// ```
+    fn lower_case(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = Vec::new(); // `CASE` and an optional simple-CASE operand
+        let mut arms = Vec::new(); // each `WHEN .. THEN ..` and the `ELSE ..`
+        let mut end = empty();
+        let mut else_kw: Option<Doc> = None;
+        let mut seen_arm = false;
+
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                match token.kind() {
+                    k if k.is_trivia() => {}
+                    CASE_KW => head.push(self.token(token)),
+                    ELSE_KW => {
+                        self.reset();
+                        else_kw = Some(self.token(token));
+                    }
+                    END_KW => {
+                        self.reset();
+                        end = self.token(token);
+                    }
+                    _ => head.push(self.token(token)),
+                }
+            } else if let Some(node) = child.as_node() {
+                if node.kind() == CASE_WHEN {
+                    seen_arm = true;
+                    self.reset();
+                    arms.push(self.lower_node(node));
+                } else if let Some(kw) = else_kw.take() {
+                    self.reset();
+                    arms.push(concat(vec![kw, space(), self.lower_node(node)]));
+                } else if !seen_arm {
+                    // A simple CASE operand: `CASE x WHEN ...`.
+                    self.reset();
+                    head.push(space());
+                    head.push(self.lower_node(node));
+                }
+            }
+        }
+
+        let mut body = Vec::new();
+        for arm in arms {
+            body.push(line());
+            body.push(arm);
+        }
+        self.prev = Some(END_KW);
+        self.prev_unary = false;
+        group(concat(vec![
+            concat(head),
+            indent(concat(body)),
+            line(),
+            end,
+        ]))
     }
 
     /// `x [NOT] IN ( ... )`. Unlike a call's `ARG_LIST`, the parentheses here are tokens of the
@@ -604,6 +669,7 @@ fn is_value_end(kind: SyntaxKind) -> bool {
             | NULL_KW
             | TRUE_KW
             | FALSE_KW
+            | END_KW
     )
 }
 

@@ -223,6 +223,43 @@ ORDER BY
 }
 
 #[test]
+fn short_case_stays_on_one_line() {
+    assert_eq!(
+        fmt("select case when a then 1 else 2 end from t"),
+        "SELECT CASE WHEN a THEN 1 ELSE 2 END\nFROM t;\n"
+    );
+}
+
+#[test]
+fn long_case_breaks_one_arm_per_line() {
+    let out = format(
+        "select case when a > 10 then 'big' when a > 0 then 'small' else 'zero' end as label from t",
+        &FormatOptions {
+            line_width: 40,
+            ..FormatOptions::default()
+        },
+    );
+    let expected = "\
+SELECT
+    CASE
+        WHEN a > 10 THEN 'big'
+        WHEN a > 0 THEN 'small'
+        ELSE 'zero'
+    END AS label
+FROM t;
+";
+    assert_eq!(out, expected);
+}
+
+#[test]
+fn simple_case_keeps_its_operand() {
+    assert_eq!(
+        fmt("select case status when 1 then 'a' when 2 then 'b' end from t"),
+        "SELECT CASE status WHEN 1 THEN 'a' WHEN 2 THEN 'b' END\nFROM t;\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),
