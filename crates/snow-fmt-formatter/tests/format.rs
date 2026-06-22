@@ -149,6 +149,78 @@ fn empty_argument_list_stays_tight() {
 }
 
 #[test]
+fn joins_each_go_on_their_own_line() {
+    let expected = "\
+SELECT a.x, b.y
+FROM a
+INNER JOIN b ON a.id = b.id
+LEFT JOIN c ON b.k = c.k;
+";
+    assert_eq!(
+        fmt("select a.x, b.y from a inner join b on a.id = b.id left join c on b.k = c.k"),
+        expected
+    );
+}
+
+#[test]
+fn in_list_honors_a_magic_trailing_comma() {
+    let expected = "\
+SELECT *
+FROM t
+WHERE x IN (
+    1,
+    2,
+    3,
+);
+";
+    assert_eq!(fmt("select * from t where x in (1, 2, 3,)"), expected);
+}
+
+#[test]
+fn in_list_stays_inline_without_a_trailing_comma() {
+    assert_eq!(
+        fmt("select * from t where x in (1, 2, 3)"),
+        "SELECT *\nFROM t\nWHERE x IN (1, 2, 3);\n"
+    );
+}
+
+#[test]
+fn in_subquery_stays_inline() {
+    assert_eq!(
+        fmt("select * from t where x in (select id from s)"),
+        "SELECT *\nFROM t\nWHERE x IN (SELECT id FROM s);\n"
+    );
+}
+
+#[test]
+fn order_by_items_wrap_when_they_do_not_fit() {
+    let out = format(
+        "select * from t order by alpha, bravo desc, charlie nulls last",
+        &FormatOptions {
+            line_width: 30,
+            ..FormatOptions::default()
+        },
+    );
+    let expected = "\
+SELECT *
+FROM t
+ORDER BY
+    alpha,
+    bravo DESC,
+    charlie NULLS LAST;
+";
+    assert_eq!(out, expected);
+}
+
+#[test]
+fn group_by_all_stays_inline() {
+    assert_eq!(
+        fmt("select a from t group by all"),
+        "SELECT a\nFROM t\nGROUP BY ALL;\n"
+    );
+}
+
+#[test]
 fn empty_input_formats_to_empty() {
     assert_eq!(fmt(""), "");
     assert_eq!(fmt("   \n\t "), "");

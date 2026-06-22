@@ -110,10 +110,76 @@ fn lower_select(select: &SyntaxNode, ctx: Ctx) -> Doc {
     for clause in select.children() {
         if is_select_clause(clause.kind()) {
             parts.push(hard_line());
-            parts.push(inline(&clause, ctx));
+            parts.push(lower_clause(&clause, ctx));
         }
     }
     concat(parts)
+}
+
+/// Lower a single top-level `SELECT` clause. Most are rendered inline; a few get structural layout.
+fn lower_clause(clause: &SyntaxNode, ctx: Ctx) -> Doc {
+    match clause.kind() {
+        FROM_CLAUSE => lower_from(clause, ctx),
+        ORDER_BY_CLAUSE | GROUP_BY_CLAUSE => lower_keyword_item_list(clause, ctx),
+        _ => inline(clause, ctx),
+    }
+}
+
+/// `FROM` with each `JOIN` on its own line (aligned under `FROM`); comma-separated tables stay
+/// inline. Layout only — the token stream is untouched.
+fn lower_from(node: &SyntaxNode, ctx: Ctx) -> Doc {
+    let mut low = Lowerer::new(ctx);
+    let mut parts = Vec::new();
+    for child in node.children_with_tokens() {
+        if let Some(token) = child.as_token() {
+            if token.kind().is_trivia() {
+                continue;
+            }
+            parts.push(low.token(token));
+        } else if let Some(node) = child.as_node() {
+            if node.kind() == JOIN {
+                parts.push(hard_line());
+                low.prev = None;
+                low.prev_unary = false;
+            }
+            parts.push(low.lower_node(node));
+        }
+    }
+    concat(parts)
+}
+
+/// A `KEYWORD item, item` clause (`ORDER BY`, `GROUP BY`) whose items wrap one-per-line when they
+/// do not fit. The leading keywords are the tokens before the first item node; valueless forms
+/// like `GROUP BY ALL` (no item nodes) are emitted as-is.
+fn lower_keyword_item_list(node: &SyntaxNode, ctx: Ctx) -> Doc {
+    let mut low = Lowerer::new(ctx);
+    let mut head = Vec::new();
+    let mut items = Vec::new();
+    let mut seen_item = false;
+    for child in node.children_with_tokens() {
+        if let Some(token) = child.as_token() {
+            if token.kind().is_trivia() {
+                continue;
+            }
+            if !seen_item {
+                head.push(low.token(token));
+            }
+            // Commas between items are dropped here; the join re-synthesizes them.
+        } else if let Some(node) = child.as_node() {
+            seen_item = true;
+            low.prev = None;
+            low.prev_unary = false;
+            items.push(low.lower_node(node));
+        }
+    }
+    if items.is_empty() {
+        return concat(head);
+    }
+    let body = indent(concat(vec![
+        line(),
+        join(concat(vec![text(","), line()]), items),
+    ]));
+    group(concat(vec![concat(head), body]))
 }
 
 fn lower_select_list(list: &SyntaxNode, ctx: Ctx) -> Doc {
@@ -201,6 +267,9 @@ impl Lowerer {
         if is_paren_list(node.kind()) {
             return self.lower_paren_list(node);
         }
+        if node.kind() == IN_EXPR {
+            return self.lower_in_expr(node);
+        }
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {
             if let Some(token) = child.as_token() {
@@ -222,35 +291,88 @@ impl Lowerer {
     fn lower_paren_list(&mut self, node: &SyntaxNode) -> Doc {
         let open_sep = self.sep_before(L_PAREN);
         let trailing = paren_list_has_trailing_comma(node);
+        let items = self.lower_items(node.children());
+        concat(vec![open_sep, bracketed(items, trailing)])
+    }
 
-        let mut items = Vec::new();
-        for item in node.children() {
-            self.prev = None;
-            self.prev_unary = false;
-            items.push(self.lower_node(&item));
+    /// `x [NOT] IN ( ... )`. Unlike a call's `ARG_LIST`, the parentheses here are tokens of the
+    /// `IN_EXPR` itself and the comma list is a nested `EXPR_LIST`, so we stitch them back into the
+    /// same structural bracket (a value subquery is rendered inline).
+    fn lower_in_expr(&mut self, node: &SyntaxNode) -> Doc {
+        let elems: Vec<_> = node
+            .children_with_tokens()
+            .filter(|el| !el.kind().is_trivia())
+            .collect();
+        let mut parts = Vec::new();
+        let mut i = 0;
+        while i < elems.len() {
+            // The list/subquery: `(` then a node then `)`.
+            if elems[i].kind() == L_PAREN {
+                if let Some(inner) = elems.get(i + 1).and_then(|e| e.as_node()) {
+                    let open_sep = self.sep_before(L_PAREN);
+                    if inner.kind() == EXPR_LIST {
+                        let trailing = has_trailing_comma(inner);
+                        let items = self.lower_items(inner.children());
+                        self.prev = Some(R_PAREN);
+                        self.prev_unary = false;
+                        parts.push(concat(vec![open_sep, bracketed(items, trailing)]));
+                    } else {
+                        // A subquery or query expression: keep the parentheses, render inline.
+                        self.prev = None;
+                        self.prev_unary = false;
+                        let body = self.lower_node(inner);
+                        self.prev = Some(R_PAREN);
+                        self.prev_unary = false;
+                        parts.push(concat(vec![open_sep, text("("), body, text(")")]));
+                    }
+                    i += 2; // `(` and the inner node
+                    if elems.get(i).map(|e| e.kind()) == Some(R_PAREN) {
+                        i += 1; // the matching `)`
+                    }
+                    continue;
+                }
+            }
+            if let Some(token) = elems[i].as_token() {
+                parts.push(self.token(token));
+            } else if let Some(node) = elems[i].as_node() {
+                parts.push(self.lower_node(node));
+            }
+            i += 1;
         }
-        // Whatever was inside, we resume after the closing paren.
-        self.prev = Some(R_PAREN);
-        self.prev_unary = false;
+        concat(parts)
+    }
 
-        if items.is_empty() {
-            return concat(vec![open_sep, text("("), text(")")]);
-        }
+    /// Lower each child node as a list item from a fresh spacing state (the surrounding brackets and
+    /// the join own all inter-item spacing).
+    fn lower_items(&mut self, nodes: impl Iterator<Item = SyntaxNode>) -> Vec<Doc> {
+        nodes
+            .map(|item| {
+                self.prev = None;
+                self.prev_unary = false;
+                self.lower_node(&item)
+            })
+            .collect()
+    }
+}
 
-        let joined = join(concat(vec![text(","), line()]), items);
-        let body = if trailing {
-            // Preserve the author's trailing comma; never synthesize a new one.
-            concat(vec![soft_line(), joined, text(",")])
-        } else {
-            concat(vec![soft_line(), joined])
-        };
-        let content = concat(vec![text("("), indent(body), soft_line(), text(")")]);
-        let list = if trailing {
-            group_expanded(content)
-        } else {
-            group(content)
-        };
-        concat(vec![open_sep, list])
+/// Build `( items )`: flat when it fits, one-per-line when it does not, and force-exploded (with
+/// the preserved trailing comma) when `trailing` is set. An exploded list propagates the break to
+/// its ancestors, so a multiline collection never sits inline.
+fn bracketed(items: Vec<Doc>, trailing: bool) -> Doc {
+    if items.is_empty() {
+        return concat(vec![text("("), text(")")]);
+    }
+    let joined = join(concat(vec![text(","), line()]), items);
+    let body = if trailing {
+        concat(vec![soft_line(), joined, text(",")])
+    } else {
+        concat(vec![soft_line(), joined])
+    };
+    let content = concat(vec![text("("), indent(body), soft_line(), text(")")]);
+    if trailing {
+        group_expanded(content)
+    } else {
+        group(content)
     }
 }
 
