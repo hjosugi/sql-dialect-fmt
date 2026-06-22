@@ -260,6 +260,50 @@ fn simple_case_keeps_its_operand() {
 }
 
 #[test]
+fn cte_bodies_are_indented_and_one_per_line() {
+    let expected = "\
+WITH a AS (
+    SELECT x
+    FROM t
+),
+b AS (
+    SELECT y
+    FROM u
+)
+SELECT *
+FROM a;
+";
+    assert_eq!(
+        fmt("with a as (select x from t), b as (select y from u) select * from a"),
+        expected
+    );
+}
+
+#[test]
+fn short_cte_stays_inline() {
+    assert_eq!(
+        fmt("with recursive r as (select 1) select * from r"),
+        "WITH RECURSIVE r AS (SELECT 1)\nSELECT *\nFROM r;\n"
+    );
+}
+
+#[test]
+fn derived_table_subquery_is_indented() {
+    let expected = "\
+SELECT *
+FROM (
+    SELECT id
+    FROM users
+    WHERE active
+) u;
+";
+    assert_eq!(
+        fmt("select * from (select id from users where active) u"),
+        expected
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

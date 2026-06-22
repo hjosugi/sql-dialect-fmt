@@ -412,6 +412,12 @@ impl Lowerer {
         if node.kind() == CASE_EXPR {
             return self.lower_case(node);
         }
+        if node.kind() == SUBQUERY {
+            return self.lower_subquery(node);
+        }
+        if node.kind() == WITH_QUERY {
+            return self.lower_with_query(node);
+        }
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {
             if let Some(token) = child.as_token() {
@@ -435,6 +441,72 @@ impl Lowerer {
         self.prev = Some(R_PAREN);
         self.prev_unary = false;
         concat(vec![open_sep, bracketed(items, trailing)])
+    }
+
+    /// Dispatch a query expression to its structural rule (a bare `SELECT`) or the generic walker.
+    fn lower_query(&mut self, node: &SyntaxNode) -> Doc {
+        match node.kind() {
+            SELECT_STMT => self.lower_select(node),
+            _ => self.lower_node(node),
+        }
+    }
+
+    /// A parenthesized subquery `( query )`: inline when it fits, otherwise the body is indented on
+    /// its own lines. A multi-clause inner `SELECT` carries hard lines, which force the break.
+    fn lower_subquery(&mut self, node: &SyntaxNode) -> Doc {
+        let open_sep = self.sep_before(L_PAREN);
+        let inner = node.children().next();
+        self.reset();
+        let body = inner.map(|n| self.lower_query(&n)).unwrap_or_else(empty);
+        self.prev = Some(R_PAREN);
+        self.prev_unary = false;
+        let content = concat(vec![
+            text("("),
+            indent(concat(vec![soft_line(), body])),
+            soft_line(),
+            text(")"),
+        ]);
+        concat(vec![open_sep, group(content)])
+    }
+
+    /// A `WITH` query: the CTE clause, then the main query on its own line.
+    fn lower_with_query(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children() {
+            if child.kind() == WITH_CLAUSE {
+                self.reset();
+                parts.push(self.lower_with_clause(&child));
+            } else {
+                parts.push(hard_line());
+                self.reset();
+                parts.push(self.lower_query(&child));
+            }
+        }
+        concat(parts)
+    }
+
+    /// `WITH [RECURSIVE] cte AS (...), other AS (...)` — one CTE per line.
+    fn lower_with_clause(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = Vec::new(); // `WITH` and an optional `RECURSIVE`
+        let mut ctes = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() || token.kind() == COMMA {
+                    continue;
+                }
+                if ctes.is_empty() {
+                    head.push(self.token(token));
+                }
+            } else if let Some(node) = child.as_node() {
+                self.reset();
+                ctes.push(self.lower_node(node));
+            }
+        }
+        concat(vec![
+            concat(head),
+            space(),
+            join(concat(vec![text(","), hard_line()]), ctes),
+        ])
     }
 
     /// A `CASE` expression: flat when it fits, otherwise one arm per line with `END` dedented:
