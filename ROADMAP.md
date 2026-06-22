@@ -28,7 +28,6 @@
 - ✅ 手書きロスレス Lexer（`->>`, `|>`, `::`, delimiter-aware body token（現行 `$$…$$`）, 3種コメント, 文字列エスケープ, 数値, 変数, ステージ`@`） … [crates/snow-fmt-lexer/](crates/snow-fmt-lexer/)
 - ✅ キーワード認識（アロケーションフリー） … [keyword.rs](crates/snow-fmt-syntax/src/keyword.rs)
 - ✅ テスト基盤（ロスレス不変条件・ファズ・網羅・完全性） … [tests/corpus.rs](crates/snow-fmt-lexer/tests/corpus.rs)
-- ✅ 解説ドキュメント [GUIDE.md](GUIDE.md)
 - ✅ 既存ツール調査 [docs/research/prior-art.md](docs/research/prior-art.md)（Biome / rust-analyzer / Ruff / Prettier / tree-sitter / sqlfluff / sqlparser-rs …）
 - ✅ `T!` マクロ（句読点→`SyntaxKind`） … [macros.rs](crates/snow-fmt-syntax/src/macros.rs)
 
