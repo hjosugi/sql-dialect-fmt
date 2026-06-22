@@ -436,14 +436,25 @@ impl Lowerer {
     }
 
     /// `( item, item )` with width-driven wrapping and magic-trailing-comma explosion. The items
-    /// are the node's child *nodes*; parentheses and commas are its tokens.
+    /// are the node's child *nodes*; parentheses and commas are its tokens. An aggregate quantifier
+    /// (`DISTINCT`/`ALL`) is a leading token of the list and is emitted just inside the `(`.
     fn lower_paren_list(&mut self, node: &SyntaxNode) -> Doc {
         let open_sep = self.sep_before(L_PAREN);
         let trailing = paren_list_has_trailing_comma(node);
+        let quantifier = node
+            .children_with_tokens()
+            .filter_map(|el| el.into_token())
+            .find(|t| matches!(t.kind(), DISTINCT_KW | ALL_KW));
+        let prefix = if let Some(token) = quantifier {
+            self.reset();
+            concat(vec![self.token(&token), space()])
+        } else {
+            empty()
+        };
         let items = self.lower_items(node.children());
         self.prev = Some(R_PAREN);
         self.prev_unary = false;
-        concat(vec![open_sep, bracketed(items, trailing)])
+        concat(vec![open_sep, bracketed(prefix, items, trailing)])
     }
 
     /// Dispatch a query expression to its structural rule (a bare `SELECT`) or the generic walker.
@@ -632,7 +643,7 @@ impl Lowerer {
                         let items = self.lower_items(inner.children());
                         self.prev = Some(R_PAREN);
                         self.prev_unary = false;
-                        parts.push(concat(vec![open_sep, bracketed(items, trailing)]));
+                        parts.push(concat(vec![open_sep, bracketed(empty(), items, trailing)]));
                     } else {
                         // A subquery or query expression: keep the parentheses, render inline.
                         self.reset();
@@ -673,9 +684,9 @@ impl Lowerer {
 /// Build `( items )`: flat when it fits, one-per-line when it does not, and force-exploded (with
 /// the preserved trailing comma) when `trailing` is set. An exploded list propagates the break to
 /// its ancestors, so a multiline collection never sits inline.
-fn bracketed(items: Vec<Doc>, trailing: bool) -> Doc {
+fn bracketed(prefix: Doc, items: Vec<Doc>, trailing: bool) -> Doc {
     if items.is_empty() {
-        return concat(vec![text("("), text(")")]);
+        return concat(vec![text("("), prefix, text(")")]);
     }
     let joined = join(concat(vec![text(","), line()]), items);
     let body = if trailing {
@@ -683,7 +694,14 @@ fn bracketed(items: Vec<Doc>, trailing: bool) -> Doc {
     } else {
         concat(vec![soft_line(), joined])
     };
-    let content = concat(vec![text("("), indent(body), soft_line(), text(")")]);
+    // `prefix` (e.g. an aggregate `DISTINCT`) hugs the open paren, before the (soft) first break.
+    let content = concat(vec![
+        text("("),
+        prefix,
+        indent(body),
+        soft_line(),
+        text(")"),
+    ]);
     if trailing {
         group_expanded(content)
     } else {

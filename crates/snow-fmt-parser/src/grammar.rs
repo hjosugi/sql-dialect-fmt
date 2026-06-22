@@ -641,6 +641,10 @@ fn expr_list(p: &mut Parser) {
 fn arg_list(p: &mut Parser) {
     let m = p.start();
     p.bump(L_PAREN);
+    // Aggregate quantifier applying to the whole argument list: COUNT(DISTINCT x), ARRAY_AGG(ALL x).
+    if p.at(DISTINCT_KW) || p.at(ALL_KW) {
+        p.bump_any();
+    }
     if !p.at(R_PAREN) {
         arg(p);
         while p.eat(COMMA) {

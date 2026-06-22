@@ -37,6 +37,8 @@ fn clean_sql_has_no_errors() {
         "SELECT count(*) FROM db.s.t",
         "SELECT a::int, (a + b) * c FROM t",
         "SELECT DISTINCT a FROM t",
+        "SELECT count(DISTINCT x), array_agg(ALL y) FROM t",
+        "SELECT listagg(DISTINCT x, ',') FROM t",
     ] {
         assert_parse_clean(s);
     }

@@ -151,6 +151,18 @@ VALUES (
 }
 
 #[test]
+fn aggregate_distinct_quantifier_is_kept() {
+    assert_eq!(
+        fmt("select count(distinct x) from t"),
+        "SELECT count(DISTINCT x)\nFROM t;\n"
+    );
+    assert_eq!(
+        fmt("select listagg(distinct x, ',') from t"),
+        "SELECT listagg(DISTINCT x, ',')\nFROM t;\n"
+    );
+}
+
+#[test]
 fn empty_argument_list_stays_tight() {
     assert_eq!(
         fmt("select current_timestamp() from t"),

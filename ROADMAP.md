@@ -49,7 +49,7 @@
 - ⏳ `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`/`OFFSET`/`FETCH`
 - ⏳ `JOIN`（INNER/LEFT/RIGHT/FULL/CROSS/NATURAL, `ON`/`USING`）, サブクエリ
 - ⏳ `WITH`（CTE, `RECURSIVE`）, 集合演算（`UNION [ALL]`/`EXCEPT`/`INTERSECT`/`MINUS`）
-- ⏳ 関数呼び出し, `CASE`, `CAST`/`::`, 名前付き引数 `=>`, ラムダ `->`, 修飾名 `a.b.c`
+- 🚧 関数呼び出し（集約 `DISTINCT`/`ALL` 量化子 `COUNT(DISTINCT x)` 対応）, `CASE`, `CAST`/`::`, 名前付き引数 `=>`, ラムダ `->`, 修飾名 `a.b.c`
 
 ## Phase 3 — フォーマッタ基盤 🚧
 *目的: Phase 2 までの構文を綺麗に出力する。SQL 規則の前に自前 Doc エンジンを立ち上げる。クレート [crates/snow-fmt-formatter/](crates/snow-fmt-formatter/)。*
