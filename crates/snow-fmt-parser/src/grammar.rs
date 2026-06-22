@@ -45,6 +45,9 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(UPDATE_KW)
         || p.at(DELETE_KW)
         || p.at(MERGE_KW)
+        || p.at(CREATE_KW)
+        || p.at(DROP_KW)
+        || p.at(ALTER_KW)
         || at_expr_start(p)
 }
 
@@ -59,6 +62,12 @@ fn statement(p: &mut Parser) {
         delete_stmt(p);
     } else if p.at(MERGE_KW) {
         merge_stmt(p);
+    } else if p.at(CREATE_KW) {
+        create_stmt(p);
+    } else if p.at(DROP_KW) {
+        drop_stmt(p);
+    } else if p.at(ALTER_KW) {
+        alter_stmt(p);
     } else if p.at(SELECT_KW)
         || p.at(VALUES_KW)
         || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
@@ -179,6 +188,135 @@ fn merge_when(p: &mut Parser) {
         p.error("expected UPDATE, DELETE, or INSERT after THEN");
     }
     m.complete(p, MERGE_WHEN);
+}
+
+// ---- DDL (Phase 7) ----
+
+/// `IF [NOT] EXISTS`, tolerated wherever Snowflake allows it.
+fn if_exists_clause(p: &mut Parser) {
+    if p.at(IF_KW) {
+        p.bump(IF_KW);
+        p.eat(NOT_KW);
+        p.eat(EXISTS_KW);
+    }
+}
+
+fn create_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(CREATE_KW);
+    if p.at(OR_KW) {
+        p.bump(OR_KW);
+        p.expect(REPLACE_KW);
+    }
+    // Modifiers before the object kind (SECURE / TEMPORARY / TRANSIENT / MATERIALIZED / ...).
+    while !p.at(TABLE_KW) && !p.at(VIEW_KW) && !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    if p.at(VIEW_KW) {
+        create_view(p);
+    } else if p.at(TABLE_KW) {
+        create_table(p);
+    } else {
+        p.error("expected TABLE or VIEW");
+    }
+    m.complete(p, CREATE_STMT);
+}
+
+fn create_view(p: &mut Parser) {
+    p.bump(VIEW_KW);
+    if_exists_clause(p);
+    name_ref(p);
+    if p.at(L_PAREN) {
+        column_list(p);
+    }
+    // Tolerate view options (COMMENT = '...', masking policies, ...) up to the defining query.
+    while !p.at(AS_KW) && !p.at(SELECT_KW) && !p.at(WITH_KW) && !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    p.eat(AS_KW);
+    if p.at(SELECT_KW) || p.at(WITH_KW) || p.at(VALUES_KW) || p.at(L_PAREN) {
+        query_expr(p);
+    }
+}
+
+fn create_table(p: &mut Parser) {
+    p.bump(TABLE_KW);
+    if_exists_clause(p);
+    name_ref(p);
+    if p.at(L_PAREN) {
+        column_def_list(p);
+    }
+    // Tolerate table options (CLUSTER BY (...), COMMENT = '...', ...) up to an optional CTAS query.
+    while !p.at(AS_KW) && !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    if p.eat(AS_KW) {
+        query_expr(p);
+    }
+}
+
+fn column_def_list(p: &mut Parser) {
+    let m = p.start();
+    p.bump(L_PAREN);
+    if !p.at(R_PAREN) {
+        column_def(p);
+        while p.eat(COMMA) {
+            if p.at(R_PAREN) {
+                break;
+            }
+            column_def(p);
+        }
+    }
+    p.expect(R_PAREN);
+    m.complete(p, COLUMN_DEF_LIST);
+}
+
+/// A column definition or table constraint, captured leniently as `name type constraints...` up to
+/// the next top-level comma or the closing paren (balanced inner parens for `NUMBER(10,2)` etc.).
+fn column_def(p: &mut Parser) {
+    let m = p.start();
+    let mut depth = 0u32;
+    while !p.at_eof() {
+        if depth == 0 && (p.at(COMMA) || p.at(R_PAREN)) {
+            break;
+        }
+        if p.at(L_PAREN) {
+            depth += 1;
+        } else if p.at(R_PAREN) {
+            depth -= 1;
+        }
+        p.bump_any();
+    }
+    m.complete(p, COLUMN_DEF);
+}
+
+fn drop_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(DROP_KW);
+    // Object kind (TABLE / VIEW / SCHEMA / ...).
+    if !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    if_exists_clause(p);
+    if p.at_name() {
+        name_ref(p);
+    }
+    // Tolerate trailing options (CASCADE / RESTRICT / ...).
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, DROP_STMT);
+}
+
+/// `ALTER` has enormous surface; parse it leniently as a flat token run so it round-trips and gets
+/// inline formatting rather than erroring the whole file.
+fn alter_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(ALTER_KW);
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, ALTER_STMT);
 }
 
 // ---- queries ----

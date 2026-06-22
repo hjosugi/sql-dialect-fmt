@@ -194,6 +194,8 @@ pub enum SyntaxKind {
     OUTPUT_KW,
     OUT_KW,
     MATCHED_KW,
+    DROP_KW,
+    ALTER_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -264,6 +266,12 @@ pub enum SyntaxKind {
     SET_CLAUSE,
     ASSIGNMENT,
     MERGE_WHEN,
+    // Phase 7: DDL statements
+    CREATE_STMT,
+    DROP_STMT,
+    ALTER_STMT,
+    COLUMN_DEF_LIST,
+    COLUMN_DEF,
 
     #[doc(hidden)]
     __LAST,

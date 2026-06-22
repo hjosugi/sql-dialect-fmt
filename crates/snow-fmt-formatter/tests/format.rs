@@ -385,6 +385,48 @@ WHEN NOT MATCHED THEN INSERT (id, v) VALUES (s.id, s.v);
 }
 
 #[test]
+fn create_view_puts_the_query_after_as() {
+    assert_eq!(
+        fmt("create or replace view v as select a, b from t"),
+        "CREATE OR REPLACE VIEW v AS\nSELECT a, b\nFROM t;\n"
+    );
+}
+
+#[test]
+fn create_table_as_select_is_a_ctas() {
+    assert_eq!(
+        fmt("create table t as select a from u"),
+        "CREATE TABLE t AS\nSELECT a\nFROM u;\n"
+    );
+}
+
+#[test]
+fn create_table_column_defs_wrap_one_per_line() {
+    let out = format(
+        "create table t (id int, name varchar(100) not null)",
+        &FormatOptions {
+            line_width: 30,
+            ..FormatOptions::default()
+        },
+    );
+    let expected = "\
+CREATE TABLE t (
+    id int,
+    name varchar(100) NOT NULL
+);
+";
+    assert_eq!(out, expected);
+}
+
+#[test]
+fn drop_statement_is_inline() {
+    assert_eq!(
+        fmt("drop table if exists db.s.t"),
+        "DROP TABLE IF EXISTS db.s.t;\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),

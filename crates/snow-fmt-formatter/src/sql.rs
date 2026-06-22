@@ -411,6 +411,50 @@ impl Lowerer {
         concat(parts)
     }
 
+    /// `CREATE [OR REPLACE] ... TABLE/VIEW ...`: the header inline, a column-def list expanded, and
+    /// a defining/CTAS query (after `AS`) on its own line(s).
+    fn lower_create(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token));
+            } else if let Some(child) = child.as_node() {
+                match child.kind() {
+                    COLUMN_DEF_LIST => {
+                        parts.push(space());
+                        parts.push(self.lower_column_def_list(child));
+                    }
+                    SELECT_STMT | SET_OP | WITH_QUERY | SUBQUERY | VALUES_CLAUSE => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.lower_query(child));
+                    }
+                    _ => parts.push(self.lower_node(child)),
+                }
+            }
+        }
+        concat(parts)
+    }
+
+    /// `( col type ..., col type ... )` — one column definition per line when it does not fit.
+    fn lower_column_def_list(&mut self, node: &SyntaxNode) -> Doc {
+        let trailing = paren_list_has_trailing_comma(node);
+        let defs: Vec<Doc> = node
+            .children()
+            .filter(|n| n.kind() == COLUMN_DEF)
+            .map(|def| {
+                self.reset();
+                self.lower_node(&def)
+            })
+            .collect();
+        self.prev = Some(R_PAREN);
+        self.prev_unary = false;
+        bracketed(empty(), defs, trailing)
+    }
+
     /// Lower a single top-level `SELECT` clause. Most are inline; a few get structural layout.
     fn lower_clause(&mut self, clause: &SyntaxNode) -> Doc {
         match clause.kind() {
@@ -500,6 +544,8 @@ impl Lowerer {
             UPDATE_STMT => return self.lower_update(node),
             DELETE_STMT => return self.lower_delete(node),
             MERGE_STMT => return self.lower_merge(node),
+            CREATE_STMT => return self.lower_create(node),
+            COLUMN_DEF_LIST => return self.lower_column_def_list(node),
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
             SET_CLAUSE | VALUES_CLAUSE => return self.lower_keyword_item_list(node),
             _ => {}

@@ -155,6 +155,8 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "output" => OUTPUT_KW,
         "out" => OUT_KW,
         "matched" => MATCHED_KW,
+        "drop" => DROP_KW,
+        "alter" => ALTER_KW,
         _ => return None,
     })
 }
@@ -294,6 +296,8 @@ mod tests {
         ("output", SyntaxKind::OUTPUT_KW),
         ("out", SyntaxKind::OUT_KW),
         ("matched", SyntaxKind::MATCHED_KW),
+        ("drop", SyntaxKind::DROP_KW),
+        ("alter", SyntaxKind::ALTER_KW),
     ];
 
     #[test]

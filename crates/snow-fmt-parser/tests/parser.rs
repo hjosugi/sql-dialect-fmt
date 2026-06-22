@@ -27,6 +27,11 @@ fn lossless_roundtrip_valid_and_broken() {
         "UPDATE t SET a = 1, b = a + 2 FROM s WHERE id = 5",
         "DELETE FROM t USING u WHERE t.id = u.id",
         "MERGE INTO tgt t USING src s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.v = s.v WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)",
+        "CREATE OR REPLACE VIEW v AS SELECT a, b FROM t",
+        "CREATE TABLE t (a INT, b VARCHAR(10) NOT NULL, c NUMBER(10,2) DEFAULT 0)",
+        "CREATE TABLE t AS SELECT * FROM u",
+        "DROP TABLE IF EXISTS db.s.t CASCADE",
+        "ALTER TABLE t ADD COLUMN c INT",
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {
