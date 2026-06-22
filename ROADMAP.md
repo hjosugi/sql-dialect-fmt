@@ -58,7 +58,7 @@
 - ✅ 幅対応プリンタ（行幅で `group` を1行/折返し決定）… [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `print`
 - ✅ SQL 規則の最初の薄切り: `SELECT` パイプライン（文の区切り/終端、各句を改行、SELECT 列が幅超過で1列1行に展開、句内空白の正規化、キーワード大文字化）… [sql.rs](crates/snow-fmt-formatter/src/sql.rs)
 - 🚧 コメント付与（leading/trailing/dangling。末尾は `line_suffix`。ディレクティブ `-- noqa`/`-- snow-fmt:` は幅計算から除外）。現状は **verbatim フォールバック**（コメント/`ERROR` を含む部分木はそのまま出力して無破壊を保証）で代替
-- 🚧 **magic trailing comma**（看板機能）: SELECT 列で実装済み（作者の末尾カンマ＝「展開固定」と解釈し幅に関わらず1列1行へ。既存カンマを保持しトークンは合成しない＝無破壊）。残: `IN(...)`/`VALUES`/関数引数へ展開 … [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `has_trailing_comma`
+- ✅ **magic trailing comma**（看板機能）: SELECT 列・関数引数 (`ARG_LIST`)・`VALUES` 行・列リスト (`COLUMN_LIST`) で実装済み（作者の末尾カンマ＝「展開固定」と解釈し幅に関わらず展開。展開したコレクションは祖先グループも改行させる＝Black 流。既存カンマを保持しトークンは合成しない＝無破壊）。Doc エンジンに非伝播でなく**伝播する `group_expanded`**（Prettier `shouldBreak`）を追加 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `group_expanded` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_paren_list`。残: `IN(...)` の `EXPR_LIST`（括弧が親ノード `IN_EXPR` 側のため別扱い）
 - 🚧 設定は最小（`line-length`・インデント幅・`keyword-case`）。`FormatOptions { line_width, indent_width, uppercase_keywords }` 実装済み。opinionated・ほぼ設定なし
 - ✅ テスト: **stability-check（べき等 `format(format(x))==format(x)`）** ＋ ラウンドトリップ（有意トークン列の保存）＋ クリーン入力の再パース無エラー、内蔵 easy fixture 全 SQL で検証 … [tests/format.rs](crates/snow-fmt-formatter/tests/format.rs)。残: `insta` スナップショット
 - 📝 Phase 3 のスコープ境界: パーサが**完全に受理した入力のみ整形**し、`ParseError` が出る入力は無変更パススルー（無破壊・べき等を機械的に保証）。Phase 2 文法の拡張に従ってカバレッジが自動的に広がる

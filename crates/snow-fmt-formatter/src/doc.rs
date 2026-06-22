@@ -28,8 +28,11 @@ pub enum Doc {
     Line(LineKind),
     /// A sequence of documents laid out one after another.
     Concat(Vec<Doc>),
-    /// A layout-choice boundary: printed flat if it fits, otherwise broken.
-    Group(Box<Doc>),
+    /// A layout-choice boundary. Printed flat if it fits, otherwise broken. When `expand` is set
+    /// the group always breaks (Prettier's `shouldBreak`) — used for "explode this collection"
+    /// decisions like a magic trailing comma. Unlike a hard line, `expand` does **not** propagate
+    /// to enclosing groups, so an inner collection can explode while its parent stays flat.
+    Group { content: Box<Doc>, expand: bool },
     /// Increases the indentation level applied to line breaks inside it.
     Indent(Box<Doc>),
 }
@@ -59,7 +62,19 @@ pub fn concat(parts: Vec<Doc>) -> Doc {
 
 /// A layout-choice group: flat when it fits on the line, broken otherwise.
 pub fn group(inner: Doc) -> Doc {
-    Doc::Group(Box::new(inner))
+    Doc::Group {
+        content: Box::new(inner),
+        expand: false,
+    }
+}
+
+/// A group forced to break (its soft lines always become newlines), without forcing enclosing
+/// groups to break. The building block for magic-trailing-comma "keep this exploded".
+pub fn group_expanded(inner: Doc) -> Doc {
+    Doc::Group {
+        content: Box::new(inner),
+        expand: true,
+    }
 }
 
 /// Indent every line break that occurs inside `inner` by one more level.
@@ -150,7 +165,10 @@ fn has_forced_break(doc: &Doc) -> bool {
         Doc::Line(LineKind::Hard) => true,
         Doc::Line(_) | Doc::Text(_) => false,
         Doc::Concat(parts) => parts.iter().any(has_forced_break),
-        Doc::Group(inner) | Doc::Indent(inner) => has_forced_break(inner),
+        Doc::Indent(inner) => has_forced_break(inner),
+        // An exploded group propagates to ancestors: a multiline collection can't sit inline, so
+        // every group containing it must break too (cf. Black's magic trailing comma).
+        Doc::Group { content, expand } => *expand || has_forced_break(content),
     }
 }
 
@@ -191,8 +209,8 @@ fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> b
                 doc: inner,
                 mode: cmd.mode,
             }),
-            Doc::Group(inner) => {
-                let mode = if has_forced_break(inner) {
+            Doc::Group { content, expand } => {
+                let mode = if *expand || has_forced_break(content) {
                     Mode::Break
                 } else {
                     Mode::Flat
@@ -200,7 +218,7 @@ fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> b
                 stack.push(Cmd {
                     indent: cmd.indent,
                     mode,
-                    doc: inner,
+                    doc: content,
                 });
             }
             Doc::Line(kind) => match cmd.mode {
@@ -248,8 +266,8 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                 doc: inner,
                 mode: cmd.mode,
             }),
-            Doc::Group(inner) => {
-                let mode = if has_forced_break(inner) {
+            Doc::Group { content, expand } => {
+                let mode = if *expand || has_forced_break(content) {
                     Mode::Break
                 } else if fits(
                     opts.line_width as isize - col as isize,
@@ -257,7 +275,7 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                     Cmd {
                         indent: cmd.indent,
                         mode: Mode::Flat,
-                        doc: inner,
+                        doc: content,
                     },
                     opts,
                 ) {
@@ -268,7 +286,7 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                 cmds.push(Cmd {
                     indent: cmd.indent,
                     mode,
-                    doc: inner,
+                    doc: content,
                 });
             }
             Doc::Line(kind) => {
@@ -375,6 +393,31 @@ mod tests {
             ])),
         ]);
         assert_eq!(p(&doc, 80), "a\n    b\n        c\n");
+    }
+
+    #[test]
+    fn expanded_group_breaks_even_when_it_fits() {
+        let doc = group_expanded(concat(vec![
+            text("("),
+            indent(concat(vec![soft_line(), text("a")])),
+            soft_line(),
+            text(")"),
+        ]));
+        assert_eq!(p(&doc, 80), "(\n    a\n)\n");
+    }
+
+    #[test]
+    fn expanded_inner_group_forces_outer_to_break() {
+        // An exploded inner collection can't sit inline, so the outer group breaks too: the soft
+        // line before the inner group becomes a newline.
+        let inner = group_expanded(concat(vec![
+            text("("),
+            indent(concat(vec![soft_line(), text("x")])),
+            soft_line(),
+            text(")"),
+        ]));
+        let outer = group(concat(vec![text("a"), line(), inner]));
+        assert_eq!(p(&outer, 80), "a\n(\n    x\n)\n");
     }
 
     #[test]

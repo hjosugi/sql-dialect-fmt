@@ -110,6 +110,45 @@ fn no_trailing_comma_stays_inline_when_it_fits() {
 }
 
 #[test]
+fn function_arguments_honor_a_magic_trailing_comma() {
+    // The trailing comma after `b` explodes the argument list, which in turn forces the SELECT
+    // list to break (a multiline item can't sit inline).
+    let expected = "\
+SELECT
+    f(
+        a,
+        b,
+    )
+FROM t;
+";
+    assert_eq!(fmt("select f(a, b,) from t"), expected);
+}
+
+#[test]
+fn function_arguments_stay_inline_without_a_trailing_comma() {
+    assert_eq!(fmt("select f(a, b) from t"), "SELECT f(a, b)\nFROM t;\n");
+}
+
+#[test]
+fn values_rows_honor_a_magic_trailing_comma() {
+    let expected = "\
+VALUES (
+    1,
+    2,
+), (3, 4);
+";
+    assert_eq!(fmt("values (1, 2,), (3, 4)"), expected);
+}
+
+#[test]
+fn empty_argument_list_stays_tight() {
+    assert_eq!(
+        fmt("select current_timestamp() from t"),
+        "SELECT current_timestamp()\nFROM t;\n"
+    );
+}
+
+#[test]
 fn empty_input_formats_to_empty() {
     assert_eq!(fmt(""), "");
     assert_eq!(fmt("   \n\t "), "");

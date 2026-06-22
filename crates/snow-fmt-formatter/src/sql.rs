@@ -11,7 +11,10 @@
 use snow_fmt_syntax::{SyntaxKind, SyntaxNode};
 use SyntaxKind::*;
 
-use crate::doc::{concat, empty, group, hard_line, indent, join, line, space, text, Doc};
+use crate::doc::{
+    concat, empty, group, group_expanded, hard_line, indent, join, line, soft_line, space, text,
+    Doc,
+};
 
 /// Formatting context threaded through lowering.
 #[derive(Clone, Copy)]
@@ -95,9 +98,13 @@ fn lower_select(select: &SyntaxNode, ctx: Ctx) -> Doc {
     let magic_comma = list.as_ref().is_some_and(has_trailing_comma);
 
     let inner = concat(vec![concat(head), indent(concat(vec![line(), list_doc]))]);
-    // A normal header shares one group (flat when it fits, else one item per line); a magic comma
-    // drops the group so the soft lines always break.
-    let header = if magic_comma { inner } else { group(inner) };
+    // A normal header is one group (flat when it fits, else one item per line); a magic comma
+    // forces that group to break.
+    let header = if magic_comma {
+        group_expanded(inner)
+    } else {
+        group(inner)
+    };
 
     let mut parts = vec![header];
     for clause in select.children() {
@@ -145,33 +152,121 @@ fn is_select_clause(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Render a node from its significant tokens on a single (groupable) line, normalizing spacing and
-/// upper-casing keywords. This is the fallback for any construct without a bespoke rule yet.
+/// Render a node, normalizing spacing and upper-casing keywords. Most constructs are emitted on a
+/// single (groupable) line by walking their tokens; parenthesized comma lists (call arguments,
+/// `VALUES` rows, column lists) are lowered structurally so they can wrap and honor a magic
+/// trailing comma. This is the fallback for any construct without a more specific rule yet.
 fn inline(node: &SyntaxNode, ctx: Ctx) -> Doc {
-    let mut out = Vec::new();
-    let mut prev: Option<SyntaxKind> = None;
-    // Whether the previously emitted token was a unary `+`/`-`, which suppresses the next space.
-    let mut prev_unary = false;
+    Lowerer::new(ctx).lower_node(node)
+}
 
-    for token in node
-        .descendants_with_tokens()
-        .filter_map(|el| el.into_token())
-    {
-        let kind = token.kind();
-        if kind.is_trivia() {
-            continue;
+/// A cursor that walks a subtree in document order, tracking just enough state (the previous
+/// significant token, and whether it was a unary sign) to decide inter-token spacing as it goes.
+struct Lowerer {
+    ctx: Ctx,
+    prev: Option<SyntaxKind>,
+    prev_unary: bool,
+}
+
+impl Lowerer {
+    fn new(ctx: Ctx) -> Self {
+        Lowerer {
+            ctx,
+            prev: None,
+            prev_unary: false,
         }
-        if let Some(prev_kind) = prev {
-            if !prev_unary && needs_space(prev_kind, kind) {
-                out.push(space());
+    }
+
+    /// The separator (a space or nothing) that belongs before a token of kind `cur`.
+    fn sep_before(&self, cur: SyntaxKind) -> Doc {
+        match self.prev {
+            Some(prev) if !self.prev_unary && needs_space(prev, cur) => space(),
+            _ => empty(),
+        }
+    }
+
+    fn advance(&mut self, kind: SyntaxKind) {
+        self.prev_unary =
+            matches!(kind, PLUS | MINUS) && self.prev.is_none_or(|p| !is_value_end(p));
+        self.prev = Some(kind);
+    }
+
+    fn token(&mut self, token: &snow_fmt_syntax::SyntaxToken) -> Doc {
+        let sep = self.sep_before(token.kind());
+        self.advance(token.kind());
+        concat(vec![sep, keyword_text(token, self.ctx)])
+    }
+
+    fn lower_node(&mut self, node: &SyntaxNode) -> Doc {
+        if is_paren_list(node.kind()) {
+            return self.lower_paren_list(node);
+        }
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                parts.push(self.lower_node(node));
             }
         }
-        out.push(keyword_text(&token, ctx));
-
-        prev_unary = matches!(kind, PLUS | MINUS) && prev.is_none_or(|p| !is_value_end(p));
-        prev = Some(kind);
+        concat(parts)
     }
-    concat(out)
+
+    /// `( item, item )` with width-driven wrapping and magic-trailing-comma explosion. The items
+    /// are the node's child *nodes*; parentheses and commas are its tokens. Spacing across the
+    /// boundaries is owned here (no space after `(`, the join provides inter-item separators), so
+    /// each item is lowered from a fresh spacing state.
+    fn lower_paren_list(&mut self, node: &SyntaxNode) -> Doc {
+        let open_sep = self.sep_before(L_PAREN);
+        let trailing = paren_list_has_trailing_comma(node);
+
+        let mut items = Vec::new();
+        for item in node.children() {
+            self.prev = None;
+            self.prev_unary = false;
+            items.push(self.lower_node(&item));
+        }
+        // Whatever was inside, we resume after the closing paren.
+        self.prev = Some(R_PAREN);
+        self.prev_unary = false;
+
+        if items.is_empty() {
+            return concat(vec![open_sep, text("("), text(")")]);
+        }
+
+        let joined = join(concat(vec![text(","), line()]), items);
+        let body = if trailing {
+            // Preserve the author's trailing comma; never synthesize a new one.
+            concat(vec![soft_line(), joined, text(",")])
+        } else {
+            concat(vec![soft_line(), joined])
+        };
+        let content = concat(vec![text("("), indent(body), soft_line(), text(")")]);
+        let list = if trailing {
+            group_expanded(content)
+        } else {
+            group(content)
+        };
+        concat(vec![open_sep, list])
+    }
+}
+
+/// Parenthesized comma lists with a uniform `( items )` shape that we lower structurally.
+fn is_paren_list(kind: SyntaxKind) -> bool {
+    matches!(kind, ARG_LIST | VALUES_ROW | COLUMN_LIST)
+}
+
+/// Does a parenthesized list end with `, )` — a tolerated trailing comma?
+fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
+    let significant: Vec<SyntaxKind> = node
+        .children_with_tokens()
+        .map(|el| el.kind())
+        .filter(|k| !k.is_trivia())
+        .collect();
+    matches!(significant.as_slice(), [.., COMMA, R_PAREN])
 }
 
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.
