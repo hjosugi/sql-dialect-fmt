@@ -313,11 +313,16 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
     fn operator(&mut self, start: usize) {
         let c = self.peek();
         // A stray multi-byte (non-ASCII) char outside any literal: consume the whole char so
-        // we never slice the &str off a UTF-8 boundary, and report it.
+        // we never slice the &str off a UTF-8 boundary, and report it. `c >= 0x80` guarantees a
+        // char starts here, but fall back to a single byte rather than panic if that ever changes.
         if c >= 0x80 {
-            let ch = self.input[self.pos..].chars().next().unwrap();
-            self.pos += ch.len_utf8();
-            self.error(format!("unexpected character {ch:?}"), start);
+            if let Some(ch) = self.input[self.pos..].chars().next() {
+                self.pos += ch.len_utf8();
+                self.error(format!("unexpected character {ch:?}"), start);
+            } else {
+                self.pos += 1;
+                self.error("unexpected byte", start);
+            }
             self.push(SyntaxKind::ERROR, start);
             return;
         }
