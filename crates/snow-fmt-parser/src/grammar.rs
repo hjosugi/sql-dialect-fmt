@@ -414,11 +414,11 @@ fn alter_stmt(p: &mut Parser) {
 
 // ---- queries ----
 
-fn with_query(p: &mut Parser) {
+fn with_query(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
     with_clause(p);
     query_expr(p);
-    m.complete(p, WITH_QUERY);
+    m.complete(p, WITH_QUERY)
 }
 
 fn with_clause(p: &mut Parser) {
@@ -465,10 +465,12 @@ fn query_primary(p: &mut Parser) -> Option<CompletedMarker> {
         Some(subquery(p))
     } else if p.at(SELECT_KW) {
         Some(select_core(p))
+    } else if p.at(WITH_KW) {
+        Some(with_query(p)) // a CTE query is a valid (sub)query: `(WITH ... SELECT ...)`, `AS WITH ...`
     } else if p.at(VALUES_KW) {
         Some(values_clause(p))
     } else {
-        p.error("expected a query (SELECT, VALUES, or a parenthesized subquery)");
+        p.error("expected a query (SELECT, VALUES, WITH, or a parenthesized subquery)");
         None
     }
 }
