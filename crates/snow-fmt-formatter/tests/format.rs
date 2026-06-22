@@ -28,6 +28,16 @@ fn significant_kinds(src: &str) -> Vec<SyntaxKind> {
         .collect()
 }
 
+/// The (whitespace-trimmed) text of every comment token in `src`.
+fn comment_texts(src: &str) -> Vec<String> {
+    tokenize(src)
+        .tokens
+        .iter()
+        .filter(|t| t.kind.is_comment())
+        .map(|t| t.text.trim_end().to_string())
+        .collect()
+}
+
 #[test]
 fn formats_a_basic_select() {
     assert_eq!(fmt("select a,b from t"), "SELECT a, b\nFROM t;\n");
@@ -235,7 +245,7 @@ fn unary_minus_does_not_get_a_trailing_space() {
 }
 
 #[test]
-fn statements_with_comments_are_preserved_verbatim() {
+fn statements_with_comments_keep_them() {
     let src = "select /* keep me */ a from t -- trailing note\n";
     let out = fmt(src);
     assert!(out.contains("/* keep me */"), "block comment lost: {out:?}");
@@ -246,12 +256,59 @@ fn statements_with_comments_are_preserved_verbatim() {
 }
 
 #[test]
+fn leading_comment_sits_on_its_own_line() {
+    let out = fmt("-- header\nselect a from t");
+    assert!(
+        out.starts_with("-- header\n"),
+        "leading comment misplaced: {out:?}"
+    );
+    assert!(out.contains("FROM t;"), "{out:?}");
+}
+
+#[test]
+fn trailing_line_comment_attaches_to_its_column() {
+    // A `--` comment after a column (even after the comma) trails that column's line, and forces
+    // the list to break so the comment ends its line.
+    let expected = "\
+SELECT
+    a, -- first
+    b
+FROM t;
+";
+    assert_eq!(fmt("select a, -- first\n b from t"), expected);
+}
+
+#[test]
+fn inline_block_comment_stays_inline() {
+    assert_eq!(
+        fmt("select a /* note */ + b from t"),
+        "SELECT a /* note */ + b\nFROM t;\n"
+    );
+}
+
+#[test]
 fn comment_only_input_is_not_dropped() {
     let out = fmt("-- just a note\n");
     assert!(
         out.contains("-- just a note"),
         "comment-only input lost: {out:?}"
     );
+}
+
+#[test]
+fn comments_are_never_dropped_on_the_embedded_corpus() {
+    for case in EASY_CASES {
+        for (label, sql) in case.sqls() {
+            let out = fmt(sql);
+            for comment in comment_texts(sql) {
+                assert!(
+                    out.contains(&comment),
+                    "comment {comment:?} dropped for {}/{label}\n--- out ---\n{out}",
+                    case.name
+                );
+            }
+        }
+    }
 }
 
 #[test]

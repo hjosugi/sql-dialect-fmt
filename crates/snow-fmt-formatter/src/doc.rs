@@ -35,6 +35,12 @@ pub enum Doc {
     Group { content: Box<Doc>, expand: bool },
     /// Increases the indentation level applied to line breaks inside it.
     Indent(Box<Doc>),
+    /// Content deferred to just before the next newline (or the document's end). The vehicle for
+    /// trailing line comments, which must not have code emitted after them on the same line.
+    LineSuffix(Box<Doc>),
+    /// A zero-width marker that forces every enclosing group to break, without itself emitting a
+    /// newline. Pairs with [`LineSuffix`] so a trailing `--` comment actually ends its line.
+    BreakParent,
 }
 
 /// How a [`Doc::Line`] renders, as a function of the enclosing group's mode.
@@ -107,6 +113,16 @@ pub fn empty() -> Doc {
     Doc::Concat(Vec::new())
 }
 
+/// Defer `inner` to just before the next newline (used for trailing line comments).
+pub fn line_suffix(inner: Doc) -> Doc {
+    Doc::LineSuffix(Box::new(inner))
+}
+
+/// Force enclosing groups to break without emitting a newline here.
+pub fn break_parent() -> Doc {
+    Doc::BreakParent
+}
+
 /// Interleave `sep` between `items` (no separator before the first or after the last).
 pub fn join(sep: Doc, items: Vec<Doc>) -> Doc {
     let mut parts = Vec::with_capacity(items.len().saturating_mul(2));
@@ -162,8 +178,10 @@ fn text_width(s: &str) -> usize {
 /// Prettier's `breakParent`)? Such a document can never be printed flat.
 fn has_forced_break(doc: &Doc) -> bool {
     match doc {
-        Doc::Line(LineKind::Hard) => true,
+        Doc::Line(LineKind::Hard) | Doc::BreakParent => true,
         Doc::Line(_) | Doc::Text(_) => false,
+        // A line suffix's own content is deferred and must not force the current line to break.
+        Doc::LineSuffix(_) => false,
         Doc::Concat(parts) => parts.iter().any(has_forced_break),
         Doc::Indent(inner) => has_forced_break(inner),
         // An exploded group propagates to ancestors: a multiline collection can't sit inline, so
@@ -221,6 +239,9 @@ fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> b
                     doc: content,
                 });
             }
+            // A line suffix is deferred to the next newline; it does not consume current width.
+            // A break parent is a zero-width marker. Neither affects whether the line fits.
+            Doc::LineSuffix(_) | Doc::BreakParent => {}
             Doc::Line(kind) => match cmd.mode {
                 // A newline is taken here, so everything up to it fit.
                 Mode::Break => return true,
@@ -249,8 +270,21 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
         mode: Mode::Break,
         doc,
     }];
+    // Content deferred by `LineSuffix`, flushed in order just before the next newline (or at EOF).
+    let mut line_suffixes: Vec<Cmd> = Vec::new();
 
-    while let Some(cmd) = cmds.pop() {
+    loop {
+        let cmd = match cmds.pop() {
+            Some(cmd) => cmd,
+            None if !line_suffixes.is_empty() => {
+                // Flush remaining suffixes at the document's end (no trailing newline followed).
+                while let Some(suffix) = line_suffixes.pop() {
+                    cmds.push(suffix);
+                }
+                continue;
+            }
+            None => break,
+        };
         match cmd.doc {
             Doc::Text(s) => {
                 out.push_str(s);
@@ -261,6 +295,8 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                     cmds.push(Cmd { doc: part, ..cmd });
                 }
             }
+            Doc::LineSuffix(inner) => line_suffixes.push(Cmd { doc: inner, ..cmd }),
+            Doc::BreakParent => {}
             Doc::Indent(inner) => cmds.push(Cmd {
                 indent: cmd.indent + opts.indent_width,
                 doc: inner,
@@ -303,6 +339,15 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                     },
                 };
                 if newline {
+                    // Before breaking, emit any deferred line suffixes on this line, then
+                    // reprocess the newline with an empty buffer.
+                    if !line_suffixes.is_empty() {
+                        cmds.push(cmd);
+                        while let Some(suffix) = line_suffixes.pop() {
+                            cmds.push(suffix);
+                        }
+                        continue;
+                    }
                     out.push('\n');
                     for _ in 0..cmd.indent {
                         out.push(' ');
@@ -418,6 +463,34 @@ mod tests {
         ]));
         let outer = group(concat(vec![text("a"), line(), inner]));
         assert_eq!(p(&outer, 80), "a\n(\n    x\n)\n");
+    }
+
+    #[test]
+    fn line_suffix_defers_content_to_the_end_of_the_line() {
+        // The suffix is emitted before the hard line, even though it appears first in the concat.
+        let doc = concat(vec![
+            line_suffix(text(" -- note")),
+            text("code"),
+            hard_line(),
+            text("next"),
+        ]);
+        assert_eq!(p(&doc, 80), "code -- note\nnext\n");
+    }
+
+    #[test]
+    fn line_suffix_flushes_at_end_of_document() {
+        let doc = concat(vec![line_suffix(text(" -- note")), text("code")]);
+        assert_eq!(p(&doc, 80), "code -- note\n");
+    }
+
+    #[test]
+    fn break_parent_forces_its_group_to_break() {
+        let doc = group(concat(vec![
+            text("a"),
+            break_parent(),
+            indent(concat(vec![line(), text("b")])),
+        ]));
+        assert_eq!(p(&doc, 80), "a\n    b\n");
     }
 
     #[test]

@@ -1,22 +1,29 @@
 //! Snowflake SQL formatting rules: lowering the lossless CST into the [`crate::doc`] IR.
 //!
 //! This is the first slice of Phase 3. It reflows the statement/clause skeleton of the `SELECT`
-//! pipeline — statements separated and terminated, each clause on its own line, the select list
-//! expanding one-item-per-line when it does not fit — while normalizing intra-expression
-//! whitespace and upper-casing keywords. Anything it does not yet understand structurally is
-//! rendered inline from its tokens; any subtree containing a comment or an `ERROR` node is emitted
-//! **verbatim** so the formatter never drops or mangles content it cannot model. Round-trip and
-//! idempotency tests guard those guarantees.
+//! pipeline — statements separated and terminated, each clause on its own line, lists expanding
+//! one-item-per-line when they do not fit and honoring a magic trailing comma — while normalizing
+//! intra-expression whitespace and upper-casing keywords.
+//!
+//! ## Comments
+//! Comments are attached to the significant tokens they belong to: a comment on the same line as
+//! the preceding token trails it (line comments via [`crate::doc::line_suffix`]); a comment on its
+//! own line leads the next token. Each comment is emitted exactly once. As a safety net, if any
+//! comment cannot be attached to a token we actually render (e.g. it sits on a synthesized
+//! punctuation token), the whole statement falls back to a **verbatim** copy, so the formatter
+//! never drops or mangles a comment. Round-trip and idempotency tests guard these guarantees.
 
-use snow_fmt_syntax::{SyntaxKind, SyntaxNode};
+use std::collections::HashMap;
+
+use snow_fmt_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use SyntaxKind::*;
 
 use crate::doc::{
-    concat, empty, group, group_expanded, hard_line, indent, join, line, soft_line, space, text,
-    Doc,
+    break_parent, concat, empty, group, group_expanded, hard_line, indent, join, line, line_suffix,
+    soft_line, space, text, Doc,
 };
 
-/// Formatting context threaded through lowering.
+/// Formatting context.
 #[derive(Clone, Copy)]
 pub(crate) struct Ctx {
     /// Upper-case SQL keywords (opinionated default on).
@@ -26,10 +33,9 @@ pub(crate) struct Ctx {
 /// Lower a `SOURCE_FILE` node into a document: each statement formatted, separated by a blank line,
 /// and terminated with a semicolon.
 ///
-/// A statement's own leading trivia attaches *inside* its node (so inter-statement comments ride
-/// along through the verbatim path), but trivia trailing the final statement — including a
-/// comment-only file — lands as direct token children of the root. Those comments are re-emitted
-/// here so nothing is ever dropped.
+/// A statement's own leading/interior comments attach *inside* its node and are placed by the
+/// statement lowering. Trivia trailing the final statement — including a comment-only file — lands
+/// as direct token children of the root; those comments are re-emitted here so nothing is dropped.
 pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
     let mut parts = Vec::new();
     let mut emitted = false;
@@ -56,188 +62,139 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
         if need_break {
             parts.push(hard_line());
         }
-        parts.push(text(token.text().to_string()));
+        parts.push(text(token.text().trim_end().to_string()));
         need_break = true;
     }
 
     concat(parts)
 }
 
+/// Lower one statement. Builds its comment attachment, lowers structurally, and — if any comment
+/// could not be placed onto an emitted token — falls back to an exact verbatim copy.
 fn lower_stmt(stmt: &SyntaxNode, ctx: Ctx) -> Doc {
-    // Comment- or error-bearing subtrees are reproduced exactly: correctness over prettiness.
-    if contains_comment_or_error(stmt) {
-        return verbatim(stmt);
-    }
-    match stmt.kind() {
-        SELECT_STMT => lower_select(stmt, ctx),
-        _ => inline(stmt, ctx),
-    }
-}
-
-/// Lower a `SELECT_STMT`: a `SELECT <list>` header group followed by one clause per line.
-fn lower_select(select: &SyntaxNode, ctx: Ctx) -> Doc {
-    let mut head = vec![text("SELECT")];
-    // DISTINCT / ALL quantifier appears as a direct child token before the list.
-    if let Some(tok) = select
-        .children_with_tokens()
-        .filter_map(|el| el.into_token())
-        .find(|t| matches!(t.kind(), DISTINCT_KW | ALL_KW))
-    {
-        head.push(space());
-        head.push(keyword_text(&tok, ctx));
-    }
-
-    let list = select.children().find(|n| n.kind() == SELECT_LIST);
-    let list_doc = list
-        .as_ref()
-        .map(|list| lower_select_list(list, ctx))
-        .unwrap_or_else(empty);
-    // Magic trailing comma: a trailing comma the author left in the list is read as "keep this
-    // exploded", forcing the header to break regardless of width. We honor the existing comma but
-    // never synthesize a new one, so the token stream is preserved exactly.
-    let magic_comma = list.as_ref().is_some_and(has_trailing_comma);
-
-    let inner = concat(vec![concat(head), indent(concat(vec![line(), list_doc]))]);
-    // A normal header is one group (flat when it fits, else one item per line); a magic comma
-    // forces that group to break.
-    let header = if magic_comma {
-        group_expanded(inner)
-    } else {
-        group(inner)
+    let mut low = Lowerer::new(ctx, Comments::build(stmt));
+    let doc = match stmt.kind() {
+        SELECT_STMT => low.lower_select(stmt),
+        _ => low.lower_node(stmt),
     };
-
-    let mut parts = vec![header];
-    for clause in select.children() {
-        if is_select_clause(clause.kind()) {
-            parts.push(hard_line());
-            parts.push(lower_clause(&clause, ctx));
-        }
-    }
-    concat(parts)
-}
-
-/// Lower a single top-level `SELECT` clause. Most are rendered inline; a few get structural layout.
-fn lower_clause(clause: &SyntaxNode, ctx: Ctx) -> Doc {
-    match clause.kind() {
-        FROM_CLAUSE => lower_from(clause, ctx),
-        ORDER_BY_CLAUSE | GROUP_BY_CLAUSE => lower_keyword_item_list(clause, ctx),
-        _ => inline(clause, ctx),
+    if low.comments.all_placed() {
+        doc
+    } else {
+        verbatim(stmt)
     }
 }
 
-/// `FROM` with each `JOIN` on its own line (aligned under `FROM`); comma-separated tables stay
-/// inline. Layout only — the token stream is untouched.
-fn lower_from(node: &SyntaxNode, ctx: Ctx) -> Doc {
-    let mut low = Lowerer::new(ctx);
-    let mut parts = Vec::new();
-    for child in node.children_with_tokens() {
-        if let Some(token) = child.as_token() {
-            if token.kind().is_trivia() {
+// ---- comment attachment ----
+
+/// A single comment, ready to render.
+struct CommentInfo {
+    text: String,
+    /// A `--`/`//` line comment (must end its line) vs a `/* */` block comment (can sit inline).
+    is_line: bool,
+}
+
+/// Comments of one statement, keyed by the start offset of the significant token they attach to.
+/// Entries are *removed* as they are emitted, so a non-empty map afterwards means something was
+/// left unplaced.
+#[derive(Default)]
+struct Comments {
+    leading: HashMap<u32, Vec<CommentInfo>>,
+    trailing: HashMap<u32, Vec<CommentInfo>>,
+}
+
+impl Comments {
+    /// Walk the statement's tokens in order, assigning each comment to a significant token: trailing
+    /// the previous token when on the same line, otherwise leading the next one.
+    fn build(stmt: &SyntaxNode) -> Self {
+        let mut comments = Comments::default();
+        let mut last_significant: Option<u32> = None;
+        let mut newline_since = true; // statement start behaves like "on its own line"
+        let mut pending_leading: Vec<CommentInfo> = Vec::new();
+
+        for token in stmt
+            .descendants_with_tokens()
+            .filter_map(|el| el.into_token())
+        {
+            let kind = token.kind();
+            if kind == NEWLINE {
+                newline_since = true;
                 continue;
             }
-            parts.push(low.token(token));
-        } else if let Some(node) = child.as_node() {
-            if node.kind() == JOIN {
-                parts.push(hard_line());
-                low.prev = None;
-                low.prev_unary = false;
-            }
-            parts.push(low.lower_node(node));
-        }
-    }
-    concat(parts)
-}
-
-/// A `KEYWORD item, item` clause (`ORDER BY`, `GROUP BY`) whose items wrap one-per-line when they
-/// do not fit. The leading keywords are the tokens before the first item node; valueless forms
-/// like `GROUP BY ALL` (no item nodes) are emitted as-is.
-fn lower_keyword_item_list(node: &SyntaxNode, ctx: Ctx) -> Doc {
-    let mut low = Lowerer::new(ctx);
-    let mut head = Vec::new();
-    let mut items = Vec::new();
-    let mut seen_item = false;
-    for child in node.children_with_tokens() {
-        if let Some(token) = child.as_token() {
-            if token.kind().is_trivia() {
+            if kind == WHITESPACE {
                 continue;
             }
-            if !seen_item {
-                head.push(low.token(token));
+            if kind.is_comment() {
+                let info = CommentInfo {
+                    text: token.text().trim_end().to_string(),
+                    is_line: kind == COMMENT,
+                };
+                match last_significant {
+                    Some(anchor) if !newline_since => {
+                        comments.trailing.entry(anchor).or_default().push(info);
+                    }
+                    _ => pending_leading.push(info),
+                }
+                newline_since = false;
+                continue;
             }
-            // Commas between items are dropped here; the join re-synthesizes them.
-        } else if let Some(node) = child.as_node() {
-            seen_item = true;
-            low.prev = None;
-            low.prev_unary = false;
-            items.push(low.lower_node(node));
+            // A comma is transparent: we synthesize list separators ourselves and never emit the
+            // real comma token, so a comment written after one (`col, -- note`) belongs to the item
+            // before it. Keep the anchor and pending leads pointed at the surrounding real tokens.
+            if kind == COMMA {
+                newline_since = false;
+                continue;
+            }
+            // A significant token: it owns any pending leading comments and becomes the new anchor.
+            let start = offset(&token);
+            if !pending_leading.is_empty() {
+                comments
+                    .leading
+                    .entry(start)
+                    .or_default()
+                    .append(&mut pending_leading);
+            }
+            last_significant = Some(start);
+            newline_since = false;
         }
+
+        // Comments with no following token become trailing of the last significant token (dangling).
+        if !pending_leading.is_empty() {
+            if let Some(anchor) = last_significant {
+                comments
+                    .trailing
+                    .entry(anchor)
+                    .or_default()
+                    .append(&mut pending_leading);
+            }
+        }
+        comments
     }
-    if items.is_empty() {
-        return concat(head);
+
+    fn all_placed(&self) -> bool {
+        self.leading.is_empty() && self.trailing.is_empty()
     }
-    let body = indent(concat(vec![
-        line(),
-        join(concat(vec![text(","), line()]), items),
-    ]));
-    group(concat(vec![concat(head), body]))
 }
 
-fn lower_select_list(list: &SyntaxNode, ctx: Ctx) -> Doc {
-    let items: Vec<Doc> = list
-        .children()
-        .filter(|n| n.kind() == SELECT_ITEM)
-        .map(|item| inline(&item, ctx))
-        .collect();
-    let mut doc = join(concat(vec![text(","), line()]), items);
-    if has_trailing_comma(list) {
-        // Re-emit the author's trailing comma (it is a child token of the list, not of any item).
-        doc = concat(vec![doc, text(",")]);
-    }
-    doc
+fn offset(token: &SyntaxToken) -> u32 {
+    token.text_range().start().into()
 }
 
-/// Whether `list`'s last significant child token is a comma (a tolerated trailing comma).
-fn has_trailing_comma(list: &SyntaxNode) -> bool {
-    list.children_with_tokens()
-        .filter(|el| !el.kind().is_trivia())
-        .last()
-        .is_some_and(|el| el.kind() == COMMA)
-}
+// ---- the lowerer ----
 
-fn is_select_clause(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        FROM_CLAUSE
-            | WHERE_CLAUSE
-            | GROUP_BY_CLAUSE
-            | HAVING_CLAUSE
-            | QUALIFY_CLAUSE
-            | ORDER_BY_CLAUSE
-            | LIMIT_CLAUSE
-            | OFFSET_CLAUSE
-    )
-}
-
-/// Render a node, normalizing spacing and upper-casing keywords. Most constructs are emitted on a
-/// single (groupable) line by walking their tokens; parenthesized comma lists (call arguments,
-/// `VALUES` rows, column lists) are lowered structurally so they can wrap and honor a magic
-/// trailing comma. This is the fallback for any construct without a more specific rule yet.
-fn inline(node: &SyntaxNode, ctx: Ctx) -> Doc {
-    Lowerer::new(ctx).lower_node(node)
-}
-
-/// A cursor that walks a subtree in document order, tracking just enough state (the previous
-/// significant token, and whether it was a unary sign) to decide inter-token spacing as it goes.
+/// A cursor that walks a subtree in document order, tracking the previous significant token (for
+/// spacing) and consuming attached comments as it emits each token.
 struct Lowerer {
     ctx: Ctx,
+    comments: Comments,
     prev: Option<SyntaxKind>,
     prev_unary: bool,
 }
 
 impl Lowerer {
-    fn new(ctx: Ctx) -> Self {
+    fn new(ctx: Ctx, comments: Comments) -> Self {
         Lowerer {
             ctx,
+            comments,
             prev: None,
             prev_unary: false,
         }
@@ -257,12 +214,167 @@ impl Lowerer {
         self.prev = Some(kind);
     }
 
-    fn token(&mut self, token: &snow_fmt_syntax::SyntaxToken) -> Doc {
-        let sep = self.sep_before(token.kind());
-        self.advance(token.kind());
-        concat(vec![sep, keyword_text(token, self.ctx)])
+    /// Reset spacing state so the next token starts a fresh run (used at item/clause boundaries
+    /// where the surrounding structure owns the spacing).
+    fn reset(&mut self) {
+        self.prev = None;
+        self.prev_unary = false;
     }
 
+    /// Emit a significant token together with any comments attached to it.
+    fn token(&mut self, token: &SyntaxToken) -> Doc {
+        let start = offset(token);
+        let leading = self.comments.leading.remove(&start).unwrap_or_default();
+        let trailing = self.comments.trailing.remove(&start).unwrap_or_default();
+
+        let mut parts = Vec::new();
+        let has_leading = !leading.is_empty();
+        for comment in leading {
+            parts.push(text(comment.text));
+            parts.push(hard_line());
+        }
+        // After a leading comment the token begins a fresh line, so it takes no leading space.
+        let sep = if has_leading {
+            empty()
+        } else {
+            self.sep_before(token.kind())
+        };
+        self.advance(token.kind());
+        parts.push(sep);
+        parts.push(keyword_text(token, self.ctx));
+        for comment in trailing {
+            if comment.is_line {
+                // A line comment must end its line: defer it, and force the line to break.
+                parts.push(line_suffix(concat(vec![space(), text(comment.text)])));
+                parts.push(break_parent());
+            } else {
+                parts.push(space());
+                parts.push(text(comment.text));
+            }
+        }
+        concat(parts)
+    }
+
+    /// Lower a `SELECT_STMT`: a `SELECT <list>` header group followed by one clause per line.
+    fn lower_select(&mut self, select: &SyntaxNode) -> Doc {
+        // `SELECT` and any `DISTINCT`/`ALL` quantifier are the statement's leading tokens.
+        let mut head = Vec::new();
+        let mut list = None;
+        let mut clauses = Vec::new();
+        for child in select.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                head.push(self.token(token));
+            } else if let Some(node) = child.into_node() {
+                if node.kind() == SELECT_LIST {
+                    list = Some(node);
+                } else if is_select_clause(node.kind()) {
+                    clauses.push(node);
+                }
+            }
+        }
+
+        let magic_comma = list.as_ref().is_some_and(has_trailing_comma);
+        let list_doc = list
+            .as_ref()
+            .map(|list| self.lower_select_list(list))
+            .unwrap_or_else(empty);
+
+        let inner = concat(vec![concat(head), indent(concat(vec![line(), list_doc]))]);
+        // A normal header is one group (flat when it fits, else one item per line); a magic comma
+        // forces that group to break.
+        let header = if magic_comma {
+            group_expanded(inner)
+        } else {
+            group(inner)
+        };
+
+        let mut parts = vec![header];
+        for clause in clauses {
+            parts.push(hard_line());
+            self.reset(); // a clause keyword starts its own line with no leading space
+            parts.push(self.lower_clause(&clause));
+        }
+        concat(parts)
+    }
+
+    fn lower_select_list(&mut self, list: &SyntaxNode) -> Doc {
+        let items = self.lower_items(list.children().filter(|n| n.kind() == SELECT_ITEM));
+        let mut doc = join(concat(vec![text(","), line()]), items);
+        if has_trailing_comma(list) {
+            // Re-emit the author's trailing comma (a token of the list, not of any item).
+            doc = concat(vec![doc, text(",")]);
+        }
+        doc
+    }
+
+    /// Lower a single top-level `SELECT` clause. Most are inline; a few get structural layout.
+    fn lower_clause(&mut self, clause: &SyntaxNode) -> Doc {
+        match clause.kind() {
+            FROM_CLAUSE => self.lower_from(clause),
+            ORDER_BY_CLAUSE | GROUP_BY_CLAUSE => self.lower_keyword_item_list(clause),
+            _ => self.lower_node(clause),
+        }
+    }
+
+    /// `FROM` with each `JOIN` on its own line (aligned under `FROM`); comma-separated tables stay
+    /// inline. Layout only — the token stream is untouched.
+    fn lower_from(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                if node.kind() == JOIN {
+                    parts.push(hard_line());
+                    self.reset();
+                }
+                parts.push(self.lower_node(node));
+            }
+        }
+        concat(parts)
+    }
+
+    /// A `KEYWORD item, item` clause (`ORDER BY`, `GROUP BY`) whose items wrap one-per-line when
+    /// they do not fit. The leading keywords are the tokens before the first item node; valueless
+    /// forms like `GROUP BY ALL` (no item nodes) are emitted as-is.
+    fn lower_keyword_item_list(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = Vec::new();
+        let mut items = Vec::new();
+        let mut seen_item = false;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if !seen_item {
+                    head.push(self.token(token));
+                }
+                // Commas between items are dropped here; the join re-synthesizes them.
+            } else if let Some(node) = child.as_node() {
+                seen_item = true;
+                self.reset();
+                items.push(self.lower_node(node));
+            }
+        }
+        if items.is_empty() {
+            return concat(head);
+        }
+        let body = indent(concat(vec![
+            line(),
+            join(concat(vec![text(","), line()]), items),
+        ]));
+        group(concat(vec![concat(head), body]))
+    }
+
+    /// Render a node, normalizing spacing and upper-casing keywords. Most constructs are emitted on
+    /// a single (groupable) line by walking their tokens; parenthesized comma lists and `IN (...)`
+    /// are lowered structurally so they can wrap and honor a magic trailing comma.
     fn lower_node(&mut self, node: &SyntaxNode) -> Doc {
         if is_paren_list(node.kind()) {
             return self.lower_paren_list(node);
@@ -285,13 +397,13 @@ impl Lowerer {
     }
 
     /// `( item, item )` with width-driven wrapping and magic-trailing-comma explosion. The items
-    /// are the node's child *nodes*; parentheses and commas are its tokens. Spacing across the
-    /// boundaries is owned here (no space after `(`, the join provides inter-item separators), so
-    /// each item is lowered from a fresh spacing state.
+    /// are the node's child *nodes*; parentheses and commas are its tokens.
     fn lower_paren_list(&mut self, node: &SyntaxNode) -> Doc {
         let open_sep = self.sep_before(L_PAREN);
         let trailing = paren_list_has_trailing_comma(node);
         let items = self.lower_items(node.children());
+        self.prev = Some(R_PAREN);
+        self.prev_unary = false;
         concat(vec![open_sep, bracketed(items, trailing)])
     }
 
@@ -306,7 +418,6 @@ impl Lowerer {
         let mut parts = Vec::new();
         let mut i = 0;
         while i < elems.len() {
-            // The list/subquery: `(` then a node then `)`.
             if elems[i].kind() == L_PAREN {
                 if let Some(inner) = elems.get(i + 1).and_then(|e| e.as_node()) {
                     let open_sep = self.sep_before(L_PAREN);
@@ -318,8 +429,7 @@ impl Lowerer {
                         parts.push(concat(vec![open_sep, bracketed(items, trailing)]));
                     } else {
                         // A subquery or query expression: keep the parentheses, render inline.
-                        self.prev = None;
-                        self.prev_unary = false;
+                        self.reset();
                         let body = self.lower_node(inner);
                         self.prev = Some(R_PAREN);
                         self.prev_unary = false;
@@ -347,8 +457,7 @@ impl Lowerer {
     fn lower_items(&mut self, nodes: impl Iterator<Item = SyntaxNode>) -> Vec<Doc> {
         nodes
             .map(|item| {
-                self.prev = None;
-                self.prev_unary = false;
+                self.reset();
                 self.lower_node(&item)
             })
             .collect()
@@ -376,6 +485,28 @@ fn bracketed(items: Vec<Doc>, trailing: bool) -> Doc {
     }
 }
 
+/// Whether `node`'s last significant child token is a comma (a tolerated trailing comma).
+fn has_trailing_comma(node: &SyntaxNode) -> bool {
+    node.children_with_tokens()
+        .filter(|el| !el.kind().is_trivia())
+        .last()
+        .is_some_and(|el| el.kind() == COMMA)
+}
+
+fn is_select_clause(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        FROM_CLAUSE
+            | WHERE_CLAUSE
+            | GROUP_BY_CLAUSE
+            | HAVING_CLAUSE
+            | QUALIFY_CLAUSE
+            | ORDER_BY_CLAUSE
+            | LIMIT_CLAUSE
+            | OFFSET_CLAUSE
+    )
+}
+
 /// Parenthesized comma lists with a uniform `( items )` shape that we lower structurally.
 fn is_paren_list(kind: SyntaxKind) -> bool {
     matches!(kind, ARG_LIST | VALUES_ROW | COLUMN_LIST)
@@ -392,7 +523,7 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
 }
 
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.
-fn keyword_text(token: &snow_fmt_syntax::SyntaxToken, ctx: Ctx) -> Doc {
+fn keyword_text(token: &SyntaxToken, ctx: Ctx) -> Doc {
     if ctx.uppercase_keywords && token.kind().is_keyword() {
         text(token.text().to_ascii_uppercase())
     } else {
@@ -452,12 +583,4 @@ fn is_value_end(kind: SyntaxKind) -> bool {
 /// Reproduce a node's source text exactly (including its inner trivia/comments).
 fn verbatim(node: &SyntaxNode) -> Doc {
     text(node.text().to_string())
-}
-
-/// Does the subtree contain a comment token or an `ERROR` node?
-fn contains_comment_or_error(node: &SyntaxNode) -> bool {
-    node.descendants_with_tokens().any(|el| {
-        let k = el.kind();
-        k.is_comment() || k == ERROR
-    })
 }
