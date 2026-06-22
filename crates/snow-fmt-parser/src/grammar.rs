@@ -722,7 +722,11 @@ fn table_ref(p: &mut Parser) {
     } else {
         p.error("expected a table reference");
     }
-    // SAMPLE / TABLESAMPLE, MATCH_RECOGNIZE, and PIVOT / UNPIVOT apply to the table before its alias.
+    // Time travel, SAMPLE / TABLESAMPLE, MATCH_RECOGNIZE, and PIVOT / UNPIVOT all attach to the
+    // table before its alias.
+    if at_time_travel(p) {
+        time_travel(p);
+    }
     if p.at(SAMPLE_KW) || p.at(TABLESAMPLE_KW) {
         sample_clause(p);
     }
@@ -734,6 +738,19 @@ fn table_ref(p: &mut Parser) {
     }
     table_alias(p);
     m.complete(p, TABLE_REF);
+}
+
+/// Time-travel: `AT ( ... )` / `BEFORE ( ... )` (`at`/`before` are contextual keywords).
+fn at_time_travel(p: &Parser) -> bool {
+    (p.nth_contextual(0, "at") || p.nth_contextual(0, "before")) && p.nth_at(1, L_PAREN)
+}
+
+/// `<table> {AT|BEFORE} ( TIMESTAMP|OFFSET|STATEMENT => ... )`, captured leniently.
+fn time_travel(p: &mut Parser) {
+    p.bump_any(); // AT / BEFORE
+    if p.at(L_PAREN) {
+        balanced_parens(p);
+    }
 }
 
 /// `<table> {SAMPLE|TABLESAMPLE} [method] ( n [ROWS] ) [REPEATABLE|SEED ( seed )]`. The fraction
@@ -835,6 +852,7 @@ fn table_alias(p: &mut Parser) {
 fn at_alias_blocker(p: &Parser) -> bool {
     (p.nth_contextual(0, "asof") && p.nth_at(1, JOIN_KW))
         || (p.nth_contextual(0, "match_condition") && p.nth_at(1, L_PAREN))
+        || at_time_travel(p)
 }
 
 fn at_join_start(p: &Parser) -> bool {

@@ -55,6 +55,8 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT * FROM t WHERE a IS DISTINCT FROM b",
         "SELECT * FROM q ASOF JOIN t MATCH_CONDITION (q.ts >= t.ts) ON q.sym = t.sym",
         "SELECT * FROM a ASOF JOIN b MATCH_CONDITION (a.t >= b.t)",
+        "SELECT * FROM t AT (TIMESTAMP => '2024-01-01'::timestamp)",
+        "SELECT * FROM orders BEFORE (STATEMENT => 'abc') o",
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {

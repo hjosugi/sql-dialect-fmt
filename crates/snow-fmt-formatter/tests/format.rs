@@ -593,6 +593,14 @@ FROM events;
 }
 
 #[test]
+fn time_travel_at_before_is_kept() {
+    assert_eq!(
+        fmt("select * from orders before (statement => 'abc') o"),
+        "SELECT *\nFROM orders before(statement => 'abc') o;\n"
+    );
+}
+
+#[test]
 fn group_by_all_stays_inline() {
     assert_eq!(
         fmt("select a from t group by all"),
