@@ -163,6 +163,10 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "overwrite" => OVERWRITE_KW,
         "grant" => GRANT_KW,
         "revoke" => REVOKE_KW,
+        "use" => USE_KW,
+        "show" => SHOW_KW,
+        "describe" => DESCRIBE_KW,
+        "truncate" => TRUNCATE_KW,
         _ => return None,
     })
 }
@@ -310,6 +314,10 @@ mod tests {
         ("overwrite", SyntaxKind::OVERWRITE_KW),
         ("grant", SyntaxKind::GRANT_KW),
         ("revoke", SyntaxKind::REVOKE_KW),
+        ("use", SyntaxKind::USE_KW),
+        ("show", SyntaxKind::SHOW_KW),
+        ("describe", SyntaxKind::DESCRIBE_KW),
+        ("truncate", SyntaxKind::TRUNCATE_KW),
     ];
 
     #[test]

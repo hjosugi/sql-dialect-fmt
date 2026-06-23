@@ -96,6 +96,7 @@
 - 🚧 ボディ無し `CREATE`（`SCHEMA`/`DATABASE`/`WAREHOUSE`/`SEQUENCE`/`STAGE`/`FILE FORMAT`/`ROLE`…）は `create_other` で寛容パース→インライン整形。`AS <body>`（`CREATE TASK … AS <dml>` 等）を検出したら素通し（verbatim）にして1行へ潰さない。fixture `case_032`、parser でクリーンパース／body-verbatim を検証 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_other`/`at_create_body`
 - ⏳ 🔎 `STREAM`, `TASK`, `DYNAMIC TABLE`（新しめ。構文要確認）
 - 🚧 `GRANT`/`REVOKE`（`ALTER` と同様に寛容なトークン列パース→新ノード `GRANT_STMT`/`REVOKE_STMT`、インライン整形＝カンマ/空白正規化・キーワード大文字化・修飾名/列リスト保持。新キーワード `GRANT`/`REVOKE`。fixture `case_031` で golden/べき等/ラウンドトリップ、parser で clean-parse/ノード種別を検証） … パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grant_stmt`/`revoke_stmt`
+- ✅ セッション/introspection 文 `USE`/`SHOW`/`DESCRIBE`(`DESC`)/`TRUNCATE`（`lenient_stmt` 共通ヘルパで寛容パース→新ノード `USE_STMT`/`SHOW_STMT`/`DESCRIBE_STMT`/`TRUNCATE_STMT`、インライン整形。新キーワード `USE`/`SHOW`/`DESCRIBE`/`TRUNCATE`。**バグ修正**: `USE ROLE r` が3文に分割され `;` が挿入されていた非ロスレス挙動を解消。`ORDER BY … DESC` は従来どおり）。fixture `case_034`、parser で回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `lenient_stmt`
 - ⏳ マスキング/行アクセスポリシー, タグ
 
 ## Phase 8 — 手続き・関数・埋め込み言語 🚧 ＜第2の差別化点＞

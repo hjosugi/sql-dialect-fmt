@@ -101,9 +101,10 @@ pub const EASY_CASES: &[GoldenCase] = &[
     golden_case!("case_031_grant_revoke_privileges"),
     golden_case!("case_032_create_object_kinds"),
     golden_case!("case_033_call_procedure"),
+    golden_case!("case_034_use_show_describe_truncate"),
 ];
 
-pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 40;
+pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 41;
 
 #[cfg(test)]
 mod tests {

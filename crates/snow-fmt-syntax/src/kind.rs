@@ -202,6 +202,10 @@ pub enum SyntaxKind {
     OVERWRITE_KW,
     GRANT_KW,
     REVOKE_KW,
+    USE_KW,
+    SHOW_KW,
+    DESCRIBE_KW,
+    TRUNCATE_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -285,6 +289,10 @@ pub enum SyntaxKind {
     GRANT_STMT,
     REVOKE_STMT,
     CALL_STMT,
+    USE_STMT,
+    SHOW_STMT,
+    DESCRIBE_STMT,
+    TRUNCATE_STMT,
     COLUMN_DEF_LIST,
     COLUMN_DEF,
     // Phase 4: Snowflake query extensions

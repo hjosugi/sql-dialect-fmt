@@ -7,6 +7,7 @@
 //!
 //! Every rule is total: on unexpected input it records a diagnostic and recovers, never panics.
 
+use snow_fmt_syntax::SyntaxKind;
 use snow_fmt_syntax::SyntaxKind::*;
 
 use crate::parser::{CompletedMarker, ContextualKeyword, Parser};
@@ -72,6 +73,11 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(ALTER_KW)
         || p.at(GRANT_KW)
         || p.at(REVOKE_KW)
+        || p.at(USE_KW)
+        || p.at(SHOW_KW)
+        || p.at(DESCRIBE_KW)
+        || p.at(DESC_KW)
+        || p.at(TRUNCATE_KW)
         || p.at(CALL_KW)
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
@@ -97,9 +103,17 @@ fn statement(p: &mut Parser) {
     } else if p.at(ALTER_KW) {
         alter_stmt(p);
     } else if p.at(GRANT_KW) {
-        grant_stmt(p);
+        lenient_stmt(p, GRANT_STMT);
     } else if p.at(REVOKE_KW) {
-        revoke_stmt(p);
+        lenient_stmt(p, REVOKE_STMT);
+    } else if p.at(USE_KW) {
+        lenient_stmt(p, USE_STMT);
+    } else if p.at(SHOW_KW) {
+        lenient_stmt(p, SHOW_STMT);
+    } else if p.at(DESCRIBE_KW) || p.at(DESC_KW) {
+        lenient_stmt(p, DESCRIBE_STMT);
+    } else if p.at(TRUNCATE_KW) {
+        lenient_stmt(p, TRUNCATE_STMT);
     } else if p.at(CALL_KW) {
         call_stmt(p);
     } else if p.at(SET_KW) {
@@ -594,26 +608,17 @@ fn alter_stmt(p: &mut Parser) {
     m.complete(p, ALTER_STMT);
 }
 
-/// `GRANT … ON … TO …` (privileges, roles, ownership, future grants). Like `ALTER`, the surface is
-/// large and evolving, so parse it leniently as a flat token run: round-trips losslessly and gets
-/// inline spacing normalization rather than erroring the file.
-fn grant_stmt(p: &mut Parser) {
+/// Parse the leading keyword and the rest of the statement as a flat token run, completing it as
+/// `node`. Used for statements whose surface is large/evolving (GRANT, REVOKE) or simple enough that
+/// inline token rendering is all the formatter needs (USE, SHOW, DESCRIBE, TRUNCATE): the result
+/// round-trips losslessly and gets inline spacing normalization rather than erroring the file.
+fn lenient_stmt(p: &mut Parser, node: SyntaxKind) {
     let m = p.start();
-    p.bump(GRANT_KW);
+    p.bump_any(); // the leading statement keyword
     while !p.at(SEMICOLON) && !p.at_eof() {
         p.bump_any();
     }
-    m.complete(p, GRANT_STMT);
-}
-
-/// `REVOKE … ON … FROM …`, the inverse of [`grant_stmt`]; parsed leniently as a flat token run.
-fn revoke_stmt(p: &mut Parser) {
-    let m = p.start();
-    p.bump(REVOKE_KW);
-    while !p.at(SEMICOLON) && !p.at_eof() {
-        p.bump_any();
-    }
-    m.complete(p, REVOKE_STMT);
+    m.complete(p, node);
 }
 
 /// `CALL proc(args)` — invoke a stored procedure. The invocation is an ordinary call expression, so

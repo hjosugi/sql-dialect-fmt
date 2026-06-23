@@ -91,9 +91,29 @@ fn clean_sql_has_no_errors() {
         "REVOKE USAGE ON WAREHOUSE wh FROM ROLE r",
         "CALL refresh_all()",
         "CALL db.sch.load_data('2026-01-01', 42, TRUE)",
+        "USE ROLE sysadmin",
+        "USE WAREHOUSE compute_wh",
+        "USE SCHEMA db.analytics",
+        "SHOW TABLES IN SCHEMA db.s",
+        "DESCRIBE TABLE db.s.t",
+        "DESC USER u",
+        "TRUNCATE TABLE db.s.t",
+        // `DESC` as a sort direction must still parse inside ORDER BY, not as a DESCRIBE statement.
+        "SELECT a FROM t ORDER BY a DESC, b ASC",
     ] {
         assert_parse_clean(s);
     }
+}
+
+#[test]
+fn use_role_is_one_statement_not_split() {
+    // Regression: `USE ROLE r` (no semicolons) once parsed as three bare-identifier statements,
+    // which the formatter then split with inserted semicolons. It must be a single USE_STMT.
+    let p = parse("USE ROLE sysadmin");
+    assert!(p.errors().is_empty());
+    let stmts: Vec<_> = p.syntax().children().collect();
+    assert_eq!(stmts.len(), 1, "USE ROLE must be a single statement");
+    assert_eq!(stmts[0].kind(), SyntaxKind::USE_STMT);
 }
 
 #[test]
