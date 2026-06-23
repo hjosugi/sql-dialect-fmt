@@ -577,6 +577,39 @@ fn asof_join_and_match_condition_are_kept() {
 }
 
 #[test]
+fn match_recognize_lays_out_one_clause_per_line() {
+    let expected = "\
+SELECT *
+FROM t MATCH_RECOGNIZE (
+    PARTITION BY a
+    ORDER BY b
+    MEASURES match_number() AS mn, first(price) AS fp
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (strt down+ up+)
+    DEFINE down AS price < prev(price), up AS price > prev(price)
+);
+";
+    assert_eq!(
+        fmt("select * from t match_recognize(partition by a order by b \
+             measures match_number() as mn, first(price) as fp one row per match \
+             after match skip past last row pattern(strt down+ up+) \
+             define down as price < prev(price), up as price > prev(price))"),
+        expected
+    );
+}
+
+#[test]
+fn keywords_used_as_function_names_are_callable() {
+    // FIRST/LAST/LEFT are reserved words elsewhere but here name functions: keep them lower-case
+    // and hugging their parens, like any other call.
+    assert_eq!(
+        fmt("select first(price), last(price), left(s, 2) from t"),
+        "SELECT first(price), last(price), left(s, 2)\nFROM t;\n"
+    );
+}
+
+#[test]
 fn multi_table_insert_first_puts_each_branch_on_its_own_line() {
     let expected = "\
 INSERT FIRST

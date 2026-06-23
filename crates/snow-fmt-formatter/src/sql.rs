@@ -466,6 +466,55 @@ impl Lowerer {
         bracketed(empty(), defs, trailing)
     }
 
+    /// `MATCH_RECOGNIZE ( ... )` with each body clause (PARTITION BY / ORDER BY / MEASURES /
+    /// PER MATCH / AFTER MATCH SKIP / PATTERN / SUBSET / DEFINE) on its own indented line.
+    fn lower_match_recognize(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = Vec::new();
+        let mut clauses = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                // The header is the `MATCH_RECOGNIZE` word; the parens are synthesized below.
+                if token.kind().is_trivia() || matches!(token.kind(), L_PAREN | R_PAREN) {
+                    continue;
+                }
+                head.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                self.reset();
+                clauses.push(concat(vec![hard_line(), self.lower_node(node)]));
+            }
+        }
+        self.resume_after(R_PAREN);
+        concat(vec![
+            concat(head),
+            space(),
+            text("("),
+            indent(concat(clauses)),
+            hard_line(),
+            text(")"),
+        ])
+    }
+
+    /// `PATTERN ( <row pattern> )`: the keyword up-cased, the pattern body emitted verbatim so its
+    /// regex-like quantifiers (`A+`, `B*`, `(C | D){1,3}`) are never re-spaced.
+    fn lower_pattern_clause(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token)); // PATTERN
+            } else if let Some(node) = child.as_node() {
+                // `node.text()` can carry the leading inter-token space on a reparse; trim it so the
+                // single explicit space stays idempotent.
+                let body = node.text().to_string().trim().to_string();
+                parts.push(concat(vec![space(), text(body)]));
+                self.resume_after(R_PAREN);
+            }
+        }
+        concat(parts)
+    }
+
     /// Lower a single top-level `SELECT` clause. Most are inline; a few get structural layout.
     fn lower_clause(&mut self, clause: &SyntaxNode) -> Doc {
         match clause.kind() {
@@ -545,6 +594,8 @@ impl Lowerer {
             COPY_STMT => self.lower_copy(node),
             COPY_LOCATION => self.lower_copy_location(node),
             COLUMN_DEF_LIST => concat(vec![space(), self.lower_column_def_list(node)]),
+            MATCH_RECOGNIZE => self.lower_match_recognize(node),
+            PATTERN_CLAUSE => self.lower_pattern_clause(node),
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
             SET_CLAUSE | VALUES_CLAUSE => self.lower_keyword_item_list(node),
             _ => self.lower_children(node),

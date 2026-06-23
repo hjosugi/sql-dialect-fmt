@@ -35,6 +35,27 @@ pub(crate) enum ContextualKeyword {
     Grouping,
     /// `GROUPING SETS (...)` — second word.
     Sets,
+    // ---- MATCH_RECOGNIZE body vocabulary ----
+    /// `MEASURES <expr> AS <alias> [, ...]`.
+    Measures,
+    /// `PATTERN ( <row pattern> )`.
+    Pattern,
+    /// `DEFINE <symbol> AS <predicate> [, ...]`.
+    Define,
+    /// `SUBSET <name> = ( <symbol>, ... )`.
+    Subset,
+    /// `... PER MATCH`, `AFTER MATCH SKIP`.
+    Match,
+    /// `ONE ROW PER MATCH`.
+    One,
+    /// `AFTER MATCH SKIP ...`.
+    Skip,
+    /// `AFTER MATCH SKIP PAST LAST ROW`.
+    Past,
+    /// `AFTER MATCH SKIP TO NEXT ROW`.
+    Next,
+    /// `AFTER MATCH SKIP TO [FIRST|LAST] <symbol>`.
+    To,
 }
 
 impl ContextualKeyword {
@@ -48,6 +69,16 @@ impl ContextualKeyword {
             ContextualKeyword::MatchRecognize => "match_recognize",
             ContextualKeyword::Grouping => "grouping",
             ContextualKeyword::Sets => "sets",
+            ContextualKeyword::Measures => "measures",
+            ContextualKeyword::Pattern => "pattern",
+            ContextualKeyword::Define => "define",
+            ContextualKeyword::Subset => "subset",
+            ContextualKeyword::Match => "match",
+            ContextualKeyword::One => "one",
+            ContextualKeyword::Skip => "skip",
+            ContextualKeyword::Past => "past",
+            ContextualKeyword::Next => "next",
+            ContextualKeyword::To => "to",
         }
     }
 }
@@ -117,6 +148,12 @@ impl<'a> Parser<'a> {
     /// identifier)? Used to recognize a named-argument label before `=>`.
     pub(crate) fn at_ident_like(&self) -> bool {
         matches!(self.nth(0), SyntaxKind::IDENT | SyntaxKind::QUOTED_IDENT)
+    }
+
+    /// Is the current token a (reserved-spelled) keyword word? Used to recognize a keyword used as a
+    /// function name (`first(x)`, `last(x)`), the complement of [`Self::at_name`].
+    pub(crate) fn at_keyword(&self) -> bool {
+        self.nth(0) == SyntaxKind::IDENT && keyword_kind(self.input.text(self.pos)).is_some()
     }
 
     /// Is the token `n` ahead a given [`ContextualKeyword`]: a bare `IDENT` whose text matches

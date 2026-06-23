@@ -287,6 +287,15 @@ pub enum SyntaxKind {
     PIVOT_CLAUSE,
     NAMED_ARG,
     MATCH_RECOGNIZE,
+    // MATCH_RECOGNIZE body sub-clauses
+    MEASURES_CLAUSE,
+    ROW_MATCH_CLAUSE,
+    AFTER_MATCH_CLAUSE,
+    PATTERN_CLAUSE,
+    PATTERN_BODY,
+    SUBSET_CLAUSE,
+    DEFINE_CLAUSE,
+    DEFINE_ITEM,
     // Phase 8 / scripting-adjacent statements
     SET_STMT,
     EXECUTE_STMT,
