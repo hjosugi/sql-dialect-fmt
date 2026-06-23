@@ -110,9 +110,9 @@
 - ✅ Hover 基盤（Snowflake 型、`CREATE PROCEDURE` の signature/returns/language、`CREATE TASK` の compute/schedule/when、procedure/task property 説明） … [crates/snow-fmt-hover/](crates/snow-fmt-hover/)
 - ✅ Tree-sitter grammar baseline（Neovim/Zed/GitHub 向け token grammar、highlight/locals/injections queries、Rust wrapper、内蔵 easy fixture 全 SQL + LF/CRLF/CR/mixed 改行で cargo test 統合） … [tree-sitter-snowflake/](tree-sitter-snowflake/) / [crates/snow-fmt-tree-sitter/](crates/snow-fmt-tree-sitter/)
 - ✅ CST → セマンティックトークン（highlighter から LSP legend へ、UTF-16 桁・複数行トークン分割・デルタ符号化） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/) `semantic_tokens`
-- ✅ **LSP サーバ `snow-fmt-lsp`**（stdio・`lsp-server`/`lsp-types`、同期。`formatting`＝全文整形、`semanticTokens/full`、`publishDiagnostics`＝パースエラー、`hover`＝キーワード/型/シンボル説明（`snow-fmt-hover` 配線）、`foldingRange`＝文単位。Full 同期・初期化/シャットダウン。純粋関数はユニットテスト、サーバは stdio エンドツーエンド検証） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/)
+- ✅ **LSP サーバ `snow-fmt-lsp`**（stdio・`lsp-server`/`lsp-types`、同期。`formatting`＝全文整形、`semanticTokens/full`、`publishDiagnostics`＝パースエラー、`hover`＝キーワード/型/シンボル説明（`snow-fmt-hover` 配線）、`foldingRange`＝文単位。**インクリメンタル同期**（範囲編集を splice）・初期化/シャットダウン。純粋関数はユニットテスト、サーバは stdio エンドツーエンド検証） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/)
+- ✅ LSP のインクリメンタル更新（`apply_change`＝範囲 splice／全文置換、`TextDocumentSyncKind::INCREMENTAL`） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/) `apply_change`
 - ⏳ TextMate 文法（素のエディタ向けベースライン）
-- ⏳ LSP のインクリメンタル更新（現状は Full 同期）
 - ⏳ Tree-sitter 文法の構造化（statement/expression ノード、context-aware injections、folds/indents/hover 連携）
 
 ## Phase 10 — 仕上げ・周辺 🚧

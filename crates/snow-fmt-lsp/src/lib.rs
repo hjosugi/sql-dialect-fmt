@@ -184,6 +184,26 @@ pub fn folding_ranges(text: &str) -> Vec<FoldingRange> {
         .collect()
 }
 
+/// Apply one `textDocument/didChange` content change to `text`, returning the new document.
+///
+/// Supports incremental sync: a `Some(range)` splices `new_text` over the byte span the range
+/// covers; a `None` range is a whole-document replacement (the editor sent the full text). The
+/// range is treated as ordered and clamped to the document, so a malformed event can't panic.
+pub fn apply_change(text: &str, range: Option<Range>, new_text: &str) -> String {
+    let Some(range) = range else {
+        return new_text.to_string();
+    };
+    let index = LineIndex::new(text);
+    let a = index.offset(range.start);
+    let b = index.offset(range.end);
+    let (start, end) = (a.min(b), a.max(b));
+    let mut out = String::with_capacity(text.len() - (end - start) + new_text.len());
+    out.push_str(&text[..start]);
+    out.push_str(new_text);
+    out.push_str(&text[end..]);
+    out
+}
+
 /// The delta-encoded semantic tokens for `textDocument/semanticTokens/full`. Multi-line tokens
 /// (block comments, dollar-quoted strings) are split into one token per line, as the LSP encoding
 /// requires each token to stay on a single line.
@@ -291,6 +311,19 @@ mod tests {
             HoverContents::Markup(m) => assert!(m.value.to_lowercase().contains("varchar")),
             _ => panic!("expected markup"),
         }
+    }
+
+    #[test]
+    fn apply_change_splices_an_incremental_edit() {
+        // Replace "world" (line 1, cols 0..5) with "snow".
+        let text = "hello\nworld\n";
+        let range = Range::new(Position::new(1, 0), Position::new(1, 5));
+        assert_eq!(apply_change(text, Some(range), "snow"), "hello\nsnow\n");
+    }
+
+    #[test]
+    fn apply_change_with_no_range_replaces_whole_document() {
+        assert_eq!(apply_change("old", None, "new text"), "new text");
     }
 
     #[test]

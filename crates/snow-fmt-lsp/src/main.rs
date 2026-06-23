@@ -4,7 +4,8 @@
 //! functions in [`snow_fmt_lsp`]: whole-document **formatting**, **semantic tokens** (from the
 //! lossless highlighter), **diagnostics** (the parser's recovered errors, published on every
 //! open/change), **hover** (keyword/type/symbol docs), and **folding ranges** (per statement).
-//! Everything is synchronous — no async runtime — matching the rest of the workspace.
+//! Documents are kept in sync incrementally (range edits are spliced as they arrive). Everything is
+//! synchronous — no async runtime — matching the rest of the workspace.
 
 // `lsp_types::Uri` wraps a parsed URI whose hash/eq are value-stable; the lint can't see that, so
 // using it as a `HashMap` key is sound here.
@@ -31,7 +32,7 @@ use lsp_types::{
 };
 use snow_fmt_formatter::FormatOptions;
 use snow_fmt_lsp::{
-    diagnostics, folding_ranges, format_edits, hover, semantic_tokens, TOKEN_TYPES,
+    apply_change, diagnostics, folding_ranges, format_edits, hover, semantic_tokens, TOKEN_TYPES,
 };
 
 type Docs = HashMap<Uri, String>;
@@ -49,7 +50,9 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 
 fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
-        text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+        text_document_sync: Some(TextDocumentSyncCapability::Kind(
+            TextDocumentSyncKind::INCREMENTAL,
+        )),
         document_formatting_provider: Some(OneOf::Left(true)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
@@ -162,10 +165,13 @@ fn handle_notification(
             let params: DidChangeTextDocumentParams =
                 notification.extract(DidChangeTextDocument::METHOD)?;
             let uri = params.text_document.uri;
-            // Full-sync: the last change event carries the entire new document text.
-            if let Some(change) = params.content_changes.into_iter().last() {
-                docs.insert(uri.clone(), change.text);
+            // Incremental sync: apply each change in order, splicing range edits and honoring
+            // whole-document replacements (a change with no range).
+            let mut text = docs.remove(&uri).unwrap_or_default();
+            for change in params.content_changes {
+                text = apply_change(&text, change.range, &change.text);
             }
+            docs.insert(uri.clone(), text);
             publish_diagnostics(connection, docs, &uri)?;
         }
         DidCloseTextDocument::METHOD => {
