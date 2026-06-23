@@ -10,29 +10,29 @@ WHERE payload:name ILIKE 'nagaimo%'
 ---
 
 (source_file
-  (keyword)
-  (identifier)
-  (operator)
-  (identifier)
-  (punctuation)
-  (number)
-  (punctuation)
-  (operator)
-  (type)
-  (keyword)
-  (stage_reference)
-  (keyword)
-  (identifier)
-  (operator)
-  (identifier)
-  (keyword)
-  (string)
-  (operator)
-  (keyword)
-  (operator)
-  (keyword)
-  (variable)
-  (punctuation))
+  (statement
+    (keyword)
+    (identifier)
+    (operator)
+    (identifier)
+    (punctuation)
+    (number)
+    (punctuation)
+    (operator)
+    (type)
+    (keyword)
+    (stage_reference)
+    (keyword)
+    (identifier)
+    (operator)
+    (identifier)
+    (keyword)
+    (string)
+    (operator)
+    (keyword)
+    (operator)
+    (keyword)
+    (variable)))
 
 ==================
 Embedded body
@@ -48,15 +48,32 @@ $$;
 ---
 
 (source_file
-  (keyword)
-  (keyword)
-  (identifier)
-  (punctuation)
-  (punctuation)
-  (keyword)
-  (type)
-  (keyword)
-  (keyword)
-  (keyword)
-  (dollar_string)
-  (punctuation))
+  (statement
+    (keyword)
+    (keyword)
+    (identifier)
+    (punctuation)
+    (punctuation)
+    (keyword)
+    (type)
+    (keyword)
+    (keyword)
+    (keyword)
+    (dollar_string)))
+
+==================
+Multiple statements
+==================
+
+SELECT 1;
+SELECT 2;
+
+---
+
+(source_file
+  (statement
+    (keyword)
+    (number))
+  (statement
+    (keyword)
+    (number)))

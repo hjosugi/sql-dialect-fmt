@@ -1,0 +1,94 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Snowflake SQL",
+  "scopeName": "source.sql.snowflake",
+  "fileTypes": [
+    "sql"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#operators"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-dash.sql",
+          "match": "--.*$"
+        },
+        {
+          "name": "comment.block.sql",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.sql",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sql",
+              "match": "''|\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.dollar.sql",
+          "begin": "\\$\\$",
+          "end": "\\$\\$"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.sql",
+      "match": "\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b"
+    },
+    "types": {
+      "name": "support.type.sql",
+      "match": "(?i)\\b(array|bigint|binary|boolean|char|date|datetime|dec|decimal|double|float|geography|geometry|int|integer|map|number|numeric|object|real|string|text|time|timestamp|timestamp_ltz|timestamp_ntz|timestamp_tz|variant|varchar|vector)\\b"
+    },
+    "keywords": {
+      "name": "keyword.other.sql",
+      "match": "(?i)\\b(after|all|alter|and|any|as|asc|begin|between|by|call|called|caller|case|cast|connect|copy|create|cross|current|declare|delete|desc|distinct|drop|else|end|except|execute|exists|false|fetch|first|flatten|following|for|from|full|function|grants|group|handler|having|if|ilike|immediate|imports|in|inner|input|insert|intersect|into|is|java|javascript|join|language|last|lateral|left|let|like|limit|matched|merge|minus|natural|not|null|nulls|offset|on|or|order|out|outer|output|over|overwrite|owner|packages|partition|pivot|preceding|prior|procedure|python|qualify|range|recursive|regexp|replace|return|returns|right|rlike|row|rows|runtime_version|sample|scala|schedule|secure|select|set|sql|start|strict|table|tablesample|task|temp|temporary|then|top|transient|true|try_cast|unbounded|union|unpivot|update|using|values|view|volatile|warehouse|when|where|window|with|within)\\b"
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.parameter.sql",
+          "match": "[:$][A-Za-z_][A-Za-z0-9_]*"
+        },
+        {
+          "name": "variable.parameter.positional.sql",
+          "match": "\\$\\d+|\\?"
+        }
+      ]
+    },
+    "operators": {
+      "name": "keyword.operator.sql",
+      "match": "::|->>|<=|>=|!=|<>|\\|\\||[-+*/%=<>]"
+    }
+  }
+}

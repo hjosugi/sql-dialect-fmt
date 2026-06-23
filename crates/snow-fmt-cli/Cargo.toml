@@ -1,10 +1,10 @@
 [package]
 name = "snow-fmt-cli"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
-description = "Command-line entry point for snow-fmt."
+description = "snow-fmt: an opinionated Snowflake SQL formatter (command-line)."
 
 [[bin]]
 name = "snow-fmt"
@@ -12,6 +12,4 @@ path = "src/main.rs"
 
 [dependencies]
 snow-fmt-encoding = { path = "../snow-fmt-encoding" }
-
-[dev-dependencies]
-snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures" }
+snow-fmt-formatter = { path = "../snow-fmt-formatter" }

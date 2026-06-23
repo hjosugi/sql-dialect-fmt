@@ -29,6 +29,10 @@ pub const LOCALS_QUERY: &str = include_str!("../../../tree-sitter-snowflake/quer
 pub const INJECTIONS_QUERY: &str =
     include_str!("../../../tree-sitter-snowflake/queries/injections.scm");
 
+/// Folding query: collapses each `statement` node (and block comments), mirroring the LSP server's
+/// `textDocument/foldingRange`.
+pub const FOLDS_QUERY: &str = include_str!("../../../tree-sitter-snowflake/queries/folds.scm");
+
 /// Construct an owned [`Language`] from the grammar function.
 pub fn language() -> Language {
     LANGUAGE.into()

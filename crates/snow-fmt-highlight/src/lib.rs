@@ -87,7 +87,10 @@ pub fn classify(kind: SyntaxKind, text: &str) -> HighlightKind {
         };
     }
 
-    if kind.is_keyword() || (kind == SyntaxKind::IDENT && keyword_kind(text).is_some()) {
+    if kind.is_keyword()
+        || kind == SyntaxKind::CONTEXTUAL_KEYWORD
+        || (kind == SyntaxKind::IDENT && keyword_kind(text).is_some())
+    {
         return HighlightKind::Keyword;
     }
     if kind == SyntaxKind::IDENT && is_builtin_type(text) {
@@ -178,6 +181,51 @@ fn is_operator(kind: SyntaxKind) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Pull the alternation words out of a `(?i)\b(a|b|c)\b` grammar pattern.
+    fn alternation(pattern: &str) -> Vec<String> {
+        let inner = pattern
+            .trim_start_matches("(?i)")
+            .trim_start_matches("\\b(")
+            .trim_end_matches("\\b")
+            .trim_end_matches(')');
+        inner.split('|').map(str::to_string).collect()
+    }
+
+    /// The committed TextMate grammar must not list any word the highlighter classifies
+    /// differently — otherwise an editor using the grammar and one using the LSP/CST would
+    /// disagree. We tie every keyword/type word in the grammar back to [`classify`].
+    #[test]
+    fn textmate_grammar_matches_the_highlighter() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../editors/textmate/snowflake.tmLanguage.json"
+        );
+        let grammar: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read grammar"))
+                .expect("parse grammar");
+        let repo = &grammar["repository"];
+
+        let keywords = alternation(repo["keywords"]["match"].as_str().unwrap());
+        assert!(keywords.len() > 100, "keyword set looks truncated");
+        for word in &keywords {
+            assert_eq!(
+                classify(SyntaxKind::IDENT, word),
+                HighlightKind::Keyword,
+                "grammar lists `{word}` as a keyword but the highlighter disagrees"
+            );
+        }
+
+        let types = alternation(repo["types"]["match"].as_str().unwrap());
+        assert!(types.len() > 20, "type set looks truncated");
+        for word in &types {
+            assert_eq!(
+                classify(SyntaxKind::IDENT, word),
+                HighlightKind::Type,
+                "grammar lists `{word}` as a type but the highlighter disagrees"
+            );
+        }
+    }
 
     #[test]
     fn classifies_core_snowflake_tokens() {

@@ -35,6 +35,7 @@ pub(crate) fn build_tree(all: &[Token<'_>], events: Vec<Event>) -> GreenNode {
                 }
                 builder.finish_node();
             }
+            Event::Tombstone => {} // an abandoned wrapper: nothing to emit
             Event::Advance { kind } => {
                 // Emit leading trivia, then the meaningful token tagged with the event's kind.
                 while idx < all.len() && all[idx].kind.is_trivia() {

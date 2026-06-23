@@ -14,6 +14,81 @@ use crate::ParseError;
 
 const INITIAL_FUEL: u32 = 256;
 
+/// Snowflake's *contextual keywords*: words that act as keywords only in a specific syntactic
+/// position and otherwise remain ordinary identifiers. They are never lexed as keywords and never
+/// reserved, so the grammar recognizes them by text via [`Parser::nth_contextual`]. Listing them in
+/// one enum keeps the set discoverable and the match texts typo-proof (a misspelling is a compile
+/// error rather than a silently-never-matching string).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContextualKeyword {
+    /// `<table> AT (...)` — time travel.
+    At,
+    /// `<table> BEFORE (...)` — time travel.
+    Before,
+    /// `ASOF JOIN` — the join-type word.
+    Asof,
+    /// `ASOF JOIN ... MATCH_CONDITION (...)`.
+    MatchCondition,
+    /// `<table> MATCH_RECOGNIZE (...)`.
+    MatchRecognize,
+    /// `GROUP BY GROUPING SETS (...)` — first word.
+    Grouping,
+    /// `GROUPING SETS (...)` — second word.
+    Sets,
+    // ---- MATCH_RECOGNIZE body vocabulary ----
+    /// `MEASURES <expr> AS <alias> [, ...]`.
+    Measures,
+    /// `PATTERN ( <row pattern> )`.
+    Pattern,
+    /// `DEFINE <symbol> AS <predicate> [, ...]`.
+    Define,
+    /// `SUBSET <name> = ( <symbol>, ... )`.
+    Subset,
+    /// `... PER MATCH`, `AFTER MATCH SKIP`.
+    Match,
+    /// `ONE ROW PER MATCH`.
+    One,
+    /// `AFTER MATCH SKIP ...`.
+    Skip,
+    /// `AFTER MATCH SKIP PAST LAST ROW`.
+    Past,
+    /// `AFTER MATCH SKIP TO NEXT ROW`.
+    Next,
+    /// `AFTER MATCH SKIP TO [FIRST|LAST] <symbol>`.
+    To,
+    /// `CONNECT BY NOCYCLE ...`.
+    NoCycle,
+    /// `<table> CHANGES ( INFORMATION => ... )` — change-tracking queries.
+    Changes,
+}
+
+impl ContextualKeyword {
+    /// The lowercase source text this word matches case-insensitively.
+    fn text(self) -> &'static str {
+        match self {
+            ContextualKeyword::At => "at",
+            ContextualKeyword::Before => "before",
+            ContextualKeyword::Asof => "asof",
+            ContextualKeyword::MatchCondition => "match_condition",
+            ContextualKeyword::MatchRecognize => "match_recognize",
+            ContextualKeyword::Grouping => "grouping",
+            ContextualKeyword::Sets => "sets",
+            ContextualKeyword::Measures => "measures",
+            ContextualKeyword::Pattern => "pattern",
+            ContextualKeyword::Define => "define",
+            ContextualKeyword::Subset => "subset",
+            ContextualKeyword::Match => "match",
+            ContextualKeyword::One => "one",
+            ContextualKeyword::Skip => "skip",
+            ContextualKeyword::Past => "past",
+            ContextualKeyword::Next => "next",
+            ContextualKeyword::To => "to",
+            ContextualKeyword::NoCycle => "nocycle",
+            ContextualKeyword::Changes => "changes",
+        }
+    }
+}
+
 pub(crate) struct Parser<'a> {
     input: &'a Input<'a>,
     pos: usize,
@@ -75,6 +150,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Is the current token identifier-like (a bare `IDENT`, keyword or not, or a quoted
+    /// identifier)? Used to recognize a named-argument label before `=>`.
+    pub(crate) fn at_ident_like(&self) -> bool {
+        matches!(self.nth(0), SyntaxKind::IDENT | SyntaxKind::QUOTED_IDENT)
+    }
+
+    /// Is the current token a (reserved-spelled) keyword word? Used to recognize a keyword used as a
+    /// function name (`first(x)`, `last(x)`), the complement of [`Self::at_name`].
+    pub(crate) fn at_keyword(&self) -> bool {
+        self.nth(0) == SyntaxKind::IDENT && keyword_kind(self.input.text(self.pos)).is_some()
+    }
+
+    /// Is the token `n` ahead a given [`ContextualKeyword`]: a bare `IDENT` whose text matches
+    /// case-insensitively? Used for non-reserved words like `GROUPING`/`SETS` that must not become
+    /// real keywords (they double as the `GROUPING(col)` function and ordinary identifiers).
+    pub(crate) fn nth_contextual(&self, n: usize, kw: ContextualKeyword) -> bool {
+        self.nth(n) == SyntaxKind::IDENT
+            && self
+                .input
+                .text(self.pos + n)
+                .eq_ignore_ascii_case(kw.text())
+    }
+
     /// Like [`Self::at`], but `n` tokens ahead — used for the handful of two-token decisions
     /// (`NOT IN`, `NOT LIKE`, `( SELECT`, ...).
     pub(crate) fn nth_at(&self, n: usize, kind: SyntaxKind) -> bool {
@@ -109,6 +207,14 @@ impl<'a> Parser<'a> {
     /// Consume the current token, tagging keywords with their keyword kind.
     pub(crate) fn bump_any(&mut self) {
         let kind = self.current_remapped();
+        self.advance(kind);
+    }
+
+    /// Consume the current token, tagging it with `kind` regardless of its keyword-ness. Used for
+    /// positions where a keyword-spelled word is really a plain identifier (e.g. a case-sensitive
+    /// semi-structured path key like `payload:order`), so it is not later up-cased as a keyword.
+    pub(crate) fn bump_as(&mut self, kind: SyntaxKind) {
+        debug_assert!(!self.at_eof(), "bump_as past end of input");
         self.advance(kind);
     }
 
@@ -183,6 +289,14 @@ impl Marker {
         p.events[self.index] = Event::Open { kind };
         p.events.push(Event::Close);
         CompletedMarker { index: self.index }
+    }
+
+    /// Discard this (speculative) wrapper: its `Open` becomes a no-op and any nodes parsed inside it
+    /// stay attached to the parent. Used when a wrapper is started before knowing whether it is
+    /// needed (e.g. a flow-operator chain that turns out to be a single statement).
+    pub(crate) fn abandon(mut self, p: &mut Parser) {
+        self.completed = true;
+        p.events[self.index] = Event::Tombstone;
     }
 }
 

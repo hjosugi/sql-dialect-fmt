@@ -13,3 +13,4 @@ snow-fmt-syntax = { path = "../snow-fmt-syntax" }
 [dev-dependencies]
 snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures" }
 snow-fmt-test-support = { path = "../snow-fmt-test-support" }
+serde_json = "1"

@@ -154,6 +154,15 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "input" => INPUT_KW,
         "output" => OUTPUT_KW,
         "out" => OUT_KW,
+        "matched" => MATCHED_KW,
+        "drop" => DROP_KW,
+        "alter" => ALTER_KW,
+        "within" => WITHIN_KW,
+        "for" => FOR_KW,
+        "immediate" => IMMEDIATE_KW,
+        "overwrite" => OVERWRITE_KW,
+        "grant" => GRANT_KW,
+        "revoke" => REVOKE_KW,
         _ => return None,
     })
 }
@@ -292,6 +301,15 @@ mod tests {
         ("input", SyntaxKind::INPUT_KW),
         ("output", SyntaxKind::OUTPUT_KW),
         ("out", SyntaxKind::OUT_KW),
+        ("matched", SyntaxKind::MATCHED_KW),
+        ("drop", SyntaxKind::DROP_KW),
+        ("alter", SyntaxKind::ALTER_KW),
+        ("within", SyntaxKind::WITHIN_KW),
+        ("for", SyntaxKind::FOR_KW),
+        ("immediate", SyntaxKind::IMMEDIATE_KW),
+        ("overwrite", SyntaxKind::OVERWRITE_KW),
+        ("grant", SyntaxKind::GRANT_KW),
+        ("revoke", SyntaxKind::REVOKE_KW),
     ];
 
     #[test]

@@ -15,4 +15,7 @@ pub(crate) enum Event {
     /// Consume the next meaningful (non-trivia) token, tagging it with `kind` (which may be a
     /// keyword kind remapped from a raw `IDENT`).
     Advance { kind: SyntaxKind },
+    /// An abandoned `Open`: the builder skips it, leaving any children attached to the parent. Used
+    /// for speculative wrappers that turn out not to be needed (see [`crate::parser::Marker::abandon`]).
+    Tombstone,
 }

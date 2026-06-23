@@ -193,6 +193,15 @@ pub enum SyntaxKind {
     INPUT_KW,
     OUTPUT_KW,
     OUT_KW,
+    MATCHED_KW,
+    DROP_KW,
+    ALTER_KW,
+    WITHIN_KW,
+    FOR_KW,
+    IMMEDIATE_KW,
+    OVERWRITE_KW,
+    GRANT_KW,
+    REVOKE_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -200,6 +209,12 @@ pub enum SyntaxKind {
     SOURCE_FILE,
     ERROR,
     EOF,
+    /// A *soft* (contextual) keyword token: a word that the grammar recognized as a keyword in a
+    /// specific position (e.g. `ASOF`, `MATCH_RECOGNIZE`, `AT`/`BEFORE`, `GROUPING SETS`) but that
+    /// is **not** reserved — elsewhere it is an ordinary identifier. Tagged via `bump_as`, it sits
+    /// outside the keyword range (so it never reserves the word) yet lets the formatter upper-case
+    /// it and the highlighter colour it like a keyword. See `parser::ContextualKeyword`.
+    CONTEXTUAL_KEYWORD,
     // statements
     SELECT_STMT,
     EXPR_STMT,
@@ -255,6 +270,52 @@ pub enum SyntaxKind {
     JSON_ACCESS,
     VALUES_CLAUSE,
     VALUES_ROW,
+    // Phase 6: DML statements
+    INSERT_STMT,
+    UPDATE_STMT,
+    DELETE_STMT,
+    MERGE_STMT,
+    SET_CLAUSE,
+    ASSIGNMENT,
+    MERGE_WHEN,
+    // Phase 7: DDL statements
+    CREATE_STMT,
+    DROP_STMT,
+    ALTER_STMT,
+    GRANT_STMT,
+    REVOKE_STMT,
+    COLUMN_DEF_LIST,
+    COLUMN_DEF,
+    // Phase 4: Snowflake query extensions
+    WITHIN_GROUP,
+    PIVOT_CLAUSE,
+    NAMED_ARG,
+    MATCH_RECOGNIZE,
+    // MATCH_RECOGNIZE body sub-clauses
+    MEASURES_CLAUSE,
+    ROW_MATCH_CLAUSE,
+    AFTER_MATCH_CLAUSE,
+    PATTERN_CLAUSE,
+    PATTERN_BODY,
+    SUBSET_CLAUSE,
+    DEFINE_CLAUSE,
+    DEFINE_ITEM,
+    // Hierarchical queries
+    START_WITH_CLAUSE,
+    CONNECT_BY_CLAUSE,
+    // Flow / pipe operator: a chain of statements joined by `->>`
+    FLOW_STMT,
+    // Phase 8 / scripting-adjacent statements
+    SET_STMT,
+    EXECUTE_STMT,
+    GROUPING_SETS,
+    // Phase 6: COPY INTO
+    COPY_STMT,
+    COPY_LOCATION,
+    COPY_OPTION,
+    // Phase 6: multi-table INSERT
+    INTO_CLAUSE,
+    INSERT_WHEN,
 
     #[doc(hidden)]
     __LAST,
