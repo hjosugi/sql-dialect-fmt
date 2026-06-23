@@ -1,9 +1,10 @@
 //! `snow-fmt-lsp` — a Language Server for Snowflake SQL.
 //!
-//! Speaks LSP over stdio (via `lsp-server`) and offers three features, each backed by the pure
+//! Speaks LSP over stdio (via `lsp-server`) and offers five features, each backed by the pure
 //! functions in [`snow_fmt_lsp`]: whole-document **formatting**, **semantic tokens** (from the
-//! lossless highlighter), and **diagnostics** (the parser's recovered errors, published on every
-//! open/change). Everything is synchronous — no async runtime — matching the rest of the workspace.
+//! lossless highlighter), **diagnostics** (the parser's recovered errors, published on every
+//! open/change), **hover** (keyword/type/symbol docs), and **folding ranges** (per statement).
+//! Everything is synchronous — no async runtime — matching the rest of the workspace.
 
 // `lsp_types::Uri` wraps a parsed URI whose hash/eq are value-stable; the lint can't see that, so
 // using it as a `HashMap` key is sound here.
@@ -17,16 +18,21 @@ use lsp_types::notification::{
     DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification as _,
     PublishDiagnostics,
 };
-use lsp_types::request::{Formatting, Request as _, SemanticTokensFullRequest};
+use lsp_types::request::{
+    FoldingRangeRequest, Formatting, HoverRequest, Request as _, SemanticTokensFullRequest,
+};
 use lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DocumentFormattingParams, OneOf, PublishDiagnosticsParams, SemanticTokens,
-    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
-    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
+    DocumentFormattingParams, FoldingRange, FoldingRangeParams, Hover, HoverParams,
+    HoverProviderCapability, OneOf, PublishDiagnosticsParams, SemanticTokens, SemanticTokensLegend,
+    SemanticTokensOptions, SemanticTokensParams, SemanticTokensServerCapabilities,
+    ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
+    WorkDoneProgressOptions,
 };
 use snow_fmt_formatter::FormatOptions;
-use snow_fmt_lsp::{diagnostics, format_edits, semantic_tokens, TOKEN_TYPES};
+use snow_fmt_lsp::{
+    diagnostics, folding_ranges, format_edits, hover, semantic_tokens, TOKEN_TYPES,
+};
 
 type Docs = HashMap<Uri, String>;
 
@@ -45,6 +51,8 @@ fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
         document_formatting_provider: Some(OneOf::Left(true)),
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
+        folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
         semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
             SemanticTokensOptions {
                 legend: SemanticTokensLegend {
@@ -90,6 +98,14 @@ fn handle_request(request: Request, docs: &Docs) -> Response {
             Ok((id, params)) => ok(id, semantic_tokens_full(params, docs)),
             Err(response) => response,
         },
+        HoverRequest::METHOD => match cast::<HoverRequest>(request) {
+            Ok((id, params)) => ok(id, hover_request(params, docs)),
+            Err(response) => response,
+        },
+        FoldingRangeRequest::METHOD => match cast::<FoldingRangeRequest>(request) {
+            Ok((id, params)) => ok(id, folding_request(params, docs)),
+            Err(response) => response,
+        },
         _ => Response::new_err(
             request.id,
             lsp_server::ErrorCode::MethodNotFound as i32,
@@ -116,6 +132,17 @@ fn semantic_tokens_full(params: SemanticTokensParams, docs: &Docs) -> Option<Sem
         result_id: None,
         data: semantic_tokens(text),
     })
+}
+
+fn hover_request(params: HoverParams, docs: &Docs) -> Option<Hover> {
+    let position = params.text_document_position_params;
+    let text = docs.get(&position.text_document.uri)?;
+    hover(text, position.position)
+}
+
+fn folding_request(params: FoldingRangeParams, docs: &Docs) -> Option<Vec<FoldingRange>> {
+    let text = docs.get(&params.text_document.uri)?;
+    Some(folding_ranges(text))
 }
 
 fn handle_notification(

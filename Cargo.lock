@@ -449,7 +449,9 @@ dependencies = [
  "serde_json",
  "snow-fmt-formatter",
  "snow-fmt-highlight",
+ "snow-fmt-hover",
  "snow-fmt-parser",
+ "snow-fmt-syntax",
 ]
 
 [[package]]

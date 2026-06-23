@@ -20,4 +20,6 @@ serde = "1"
 serde_json = "1"
 snow-fmt-formatter = { path = "../snow-fmt-formatter" }
 snow-fmt-highlight = { path = "../snow-fmt-highlight" }
+snow-fmt-hover = { path = "../snow-fmt-hover" }
 snow-fmt-parser = { path = "../snow-fmt-parser" }
+snow-fmt-syntax = { path = "../snow-fmt-syntax", features = ["rowan"] }

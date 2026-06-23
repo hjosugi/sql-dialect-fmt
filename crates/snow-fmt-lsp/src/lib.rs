@@ -7,7 +7,8 @@
 //! Positions follow the LSP convention: zero-based lines and **UTF-16** column offsets.
 
 use lsp_types::{
-    Diagnostic, DiagnosticSeverity, Position, Range, SemanticToken, SemanticTokenType, TextEdit,
+    Diagnostic, DiagnosticSeverity, FoldingRange, FoldingRangeKind, Hover, HoverContents,
+    MarkupContent, MarkupKind, Position, Range, SemanticToken, SemanticTokenType, TextEdit,
 };
 use snow_fmt_formatter::{format, FormatOptions};
 use snow_fmt_highlight::HighlightKind;
@@ -81,6 +82,26 @@ impl<'a> LineIndex<'a> {
     pub fn end(&self) -> Position {
         self.position(self.text.len())
     }
+
+    /// The byte offset of an LSP [`Position`] (the inverse of [`Self::position`]). Out-of-range
+    /// lines/columns clamp to the line or document end.
+    pub fn offset(&self, position: Position) -> usize {
+        let line = position.line as usize;
+        let Some(&line_start) = self.line_starts.get(line) else {
+            return self.text.len();
+        };
+        let mut remaining = position.character as usize; // UTF-16 units to consume
+        let mut offset = line_start;
+        for ch in self.text[line_start..].chars() {
+            let width = ch.len_utf16();
+            if remaining < width || ch == '\n' {
+                break;
+            }
+            remaining -= width;
+            offset += ch.len_utf8();
+        }
+        offset
+    }
 }
 
 /// The edits to apply for `textDocument/formatting`: a single whole-document replacement, or an
@@ -111,6 +132,54 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
             source: Some("snow-fmt".to_string()),
             message: err.message.clone(),
             ..Default::default()
+        })
+        .collect()
+}
+
+/// Hover information for `textDocument/hover`: the keyword/type/symbol description at `position`,
+/// rendered as Markdown with an optional docs link, scoped to the hovered token's range.
+pub fn hover(text: &str, position: Position) -> Option<Hover> {
+    let index = LineIndex::new(text);
+    let info = snow_fmt_hover::hover_at(text, index.offset(position))?;
+    let mut value = format!("**{}**\n\n{}", info.title, info.body);
+    if let Some(url) = info.docs_url {
+        value.push_str(&format!("\n\n[Snowflake docs]({url})"));
+    }
+    Some(Hover {
+        contents: HoverContents::Markup(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value,
+        }),
+        range: Some(Range::new(
+            index.position(info.range.start),
+            index.position(info.range.end),
+        )),
+    })
+}
+
+/// Folding ranges for `textDocument/foldingRange`: one region per multi-line top-level statement,
+/// so an editor can collapse each statement in a script. The CST's root children are the statements.
+pub fn folding_ranges(text: &str) -> Vec<FoldingRange> {
+    let index = LineIndex::new(text);
+    let root = snow_fmt_parser::parse(text).syntax();
+    root.children()
+        .filter_map(|stmt| {
+            // Use the span of the statement's significant tokens, so a leading/trailing blank line
+            // (attached as trivia) doesn't inflate a single-line statement into a foldable region.
+            let mut tokens = stmt
+                .descendants_with_tokens()
+                .filter_map(|el| el.into_token())
+                .filter(|t| !t.kind().is_trivia());
+            let first = tokens.next()?;
+            let last = tokens.last().unwrap_or_else(|| first.clone());
+            let start = index.position(first.text_range().start().into()).line;
+            let end = index.position(last.text_range().end().into()).line;
+            (end > start).then_some(FoldingRange {
+                start_line: start,
+                end_line: end,
+                kind: Some(FoldingRangeKind::Region),
+                ..FoldingRange::default()
+            })
         })
         .collect()
 }
@@ -195,6 +264,41 @@ mod tests {
         let diags = diagnostics("select from where");
         assert!(!diags.is_empty());
         assert_eq!(diags[0].severity, Some(DiagnosticSeverity::ERROR));
+    }
+
+    #[test]
+    fn offset_is_the_inverse_of_position() {
+        let text = "SELECT a\nFROM 芋;\n";
+        let index = LineIndex::new(text);
+        for offset in [
+            0usize,
+            7,
+            text.find("FROM").unwrap(),
+            text.find(';').unwrap(),
+        ] {
+            assert_eq!(index.offset(index.position(offset)), offset);
+        }
+    }
+
+    #[test]
+    fn hover_describes_a_type() {
+        // Hover over the `varchar` cast target should return a Snowflake type description.
+        let src = "select x::varchar from t";
+        let col = src.find("varchar").unwrap() as u32;
+        let hover = hover(src, Position::new(0, col)).expect("hover");
+        assert!(hover.range.is_some());
+        match hover.contents {
+            HoverContents::Markup(m) => assert!(m.value.to_lowercase().contains("varchar")),
+            _ => panic!("expected markup"),
+        }
+    }
+
+    #[test]
+    fn folding_ranges_cover_multiline_statements() {
+        let ranges = folding_ranges("select a,\nb\nfrom t;\n\nselect 1;");
+        assert_eq!(ranges.len(), 1); // only the first (multi-line) statement folds
+        assert_eq!(ranges[0].start_line, 0);
+        assert_eq!(ranges[0].end_line, 2);
     }
 
     #[test]
