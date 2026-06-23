@@ -200,6 +200,8 @@ pub enum SyntaxKind {
     FOR_KW,
     IMMEDIATE_KW,
     OVERWRITE_KW,
+    GRANT_KW,
+    REVOKE_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -280,6 +282,8 @@ pub enum SyntaxKind {
     CREATE_STMT,
     DROP_STMT,
     ALTER_STMT,
+    GRANT_STMT,
+    REVOKE_STMT,
     COLUMN_DEF_LIST,
     COLUMN_DEF,
     // Phase 4: Snowflake query extensions

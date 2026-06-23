@@ -94,7 +94,8 @@
 - 🚧 `CREATE [OR REPLACE] TABLE`（`AS SELECT`(CTAS)・列定義 `( ... )` を寛容パース＋整形済み。残: `CLONE`, 制約の構造化, `CLUSTER BY` 等オプションの構造化）, `DROP`（`IF EXISTS`/`CASCADE`）, `ALTER`（寛容にトークン列としてパース→インライン整形）… パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_stmt`/`drop_stmt`/`alter_stmt` / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create`。新ノード `CREATE_STMT`/`DROP_STMT`/`ALTER_STMT`/`COLUMN_DEF_LIST`/`COLUMN_DEF`、新キーワード `DROP`/`ALTER`
 - 🚧 `CREATE [OR REPLACE] [SECURE] [MATERIALIZED] VIEW [(cols)] [options] AS <query>` をパース＋整形（修飾子・オプションは寛容にトークン保持）。残: `SEQUENCE`, `FILE FORMAT`, `STAGE`, `SCHEMA`/`DATABASE`/`WAREHOUSE`
 - ⏳ 🔎 `STREAM`, `TASK`, `DYNAMIC TABLE`（新しめ。構文要確認）
-- ⏳ マスキング/行アクセスポリシー, タグ, `GRANT`/`REVOKE`
+- 🚧 `GRANT`/`REVOKE`（`ALTER` と同様に寛容なトークン列パース→新ノード `GRANT_STMT`/`REVOKE_STMT`、インライン整形＝カンマ/空白正規化・キーワード大文字化・修飾名/列リスト保持。新キーワード `GRANT`/`REVOKE`。fixture `case_031` で golden/べき等/ラウンドトリップ、parser で clean-parse/ノード種別を検証） … パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grant_stmt`/`revoke_stmt`
+- ⏳ マスキング/行アクセスポリシー, タグ
 
 ## Phase 8 — 手続き・関数・埋め込み言語 🚧 ＜第2の差別化点＞
 - 🚧 `CREATE PROCEDURE`/`FUNCTION`（**骨格**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持、ボディは区切りトークン `$$ … $$` / `'…'` を **verbatim** 保持。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create`。**コーパス clean 0→20件** に。残: UDTF の `TABLE(...)` 戻り、区切りなし scripting ボディ（現状はエラー→素通しで誤分割を防止）

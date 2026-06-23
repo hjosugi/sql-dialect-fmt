@@ -43,6 +43,8 @@ fn lossless_roundtrip_valid_and_broken() {
         "COPY INTO @mart.stage/out/ FROM (SELECT * FROM t) FILE_FORMAT = (TYPE = CSV) PARTITION BY (dt)",
         "DROP TABLE IF EXISTS db.s.t CASCADE",
         "ALTER TABLE t ADD COLUMN c INT",
+        "GRANT SELECT, INSERT ON TABLE db.s.t TO ROLE analyst",
+        "REVOKE USAGE ON WAREHOUSE wh FROM ROLE r",
         "SELECT listagg(x, ',') WITHIN GROUP (ORDER BY x DESC) FROM t",
         "SELECT * FROM t PIVOT (sum(amount) FOR month IN ('jan', 'feb')) AS p",
         "SELECT * FROM sales UNPIVOT (amount FOR quarter IN (q1, q2))",
@@ -82,8 +84,30 @@ fn clean_sql_has_no_errors() {
         "SELECT f.value FROM t, LATERAL FLATTEN(input => t.items) f",
         "SELECT * FROM TABLE(FLATTEN(input => parse_json(x), outer => TRUE))",
         "SELECT f(a => 1, b => 2) FROM t",
+        "GRANT SELECT, INSERT ON TABLE db.s.t TO ROLE analyst",
+        "GRANT SELECT (c1, c2) ON VIEW v TO ROLE reader",
+        "GRANT OWNERSHIP ON TABLE t TO ROLE admin COPY CURRENT GRANTS",
+        "REVOKE USAGE ON WAREHOUSE wh FROM ROLE r",
     ] {
         assert_parse_clean(s);
+    }
+}
+
+#[test]
+fn grant_and_revoke_parse_into_dedicated_nodes() {
+    for (sql, kind) in [
+        ("GRANT SELECT ON TABLE t TO ROLE r", SyntaxKind::GRANT_STMT),
+        (
+            "REVOKE SELECT ON TABLE t FROM ROLE r",
+            SyntaxKind::REVOKE_STMT,
+        ),
+    ] {
+        let p = parse(sql);
+        assert!(p.errors().is_empty(), "{sql} should parse cleanly");
+        assert!(
+            p.syntax().children().any(|n| n.kind() == kind),
+            "{sql} should produce a {kind:?}"
+        );
     }
 }
 

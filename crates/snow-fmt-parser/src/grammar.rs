@@ -70,6 +70,8 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(CREATE_KW)
         || p.at(DROP_KW)
         || p.at(ALTER_KW)
+        || p.at(GRANT_KW)
+        || p.at(REVOKE_KW)
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
         || p.at(COPY_KW)
@@ -93,6 +95,10 @@ fn statement(p: &mut Parser) {
         drop_stmt(p);
     } else if p.at(ALTER_KW) {
         alter_stmt(p);
+    } else if p.at(GRANT_KW) {
+        grant_stmt(p);
+    } else if p.at(REVOKE_KW) {
+        revoke_stmt(p);
     } else if p.at(SET_KW) {
         set_stmt(p);
     } else if p.at(EXECUTE_KW) {
@@ -546,6 +552,28 @@ fn alter_stmt(p: &mut Parser) {
         p.bump_any();
     }
     m.complete(p, ALTER_STMT);
+}
+
+/// `GRANT … ON … TO …` (privileges, roles, ownership, future grants). Like `ALTER`, the surface is
+/// large and evolving, so parse it leniently as a flat token run: round-trips losslessly and gets
+/// inline spacing normalization rather than erroring the file.
+fn grant_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(GRANT_KW);
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, GRANT_STMT);
+}
+
+/// `REVOKE … ON … FROM …`, the inverse of [`grant_stmt`]; parsed leniently as a flat token run.
+fn revoke_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(REVOKE_KW);
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, REVOKE_STMT);
 }
 
 // ---- queries ----

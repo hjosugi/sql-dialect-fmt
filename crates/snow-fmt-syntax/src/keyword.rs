@@ -161,6 +161,8 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "for" => FOR_KW,
         "immediate" => IMMEDIATE_KW,
         "overwrite" => OVERWRITE_KW,
+        "grant" => GRANT_KW,
+        "revoke" => REVOKE_KW,
         _ => return None,
     })
 }
@@ -306,6 +308,8 @@ mod tests {
         ("for", SyntaxKind::FOR_KW),
         ("immediate", SyntaxKind::IMMEDIATE_KW),
         ("overwrite", SyntaxKind::OVERWRITE_KW),
+        ("grant", SyntaxKind::GRANT_KW),
+        ("revoke", SyntaxKind::REVOKE_KW),
     ];
 
     #[test]
