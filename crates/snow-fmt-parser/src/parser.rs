@@ -58,6 +58,8 @@ pub(crate) enum ContextualKeyword {
     To,
     /// `CONNECT BY NOCYCLE ...`.
     NoCycle,
+    /// `<table> CHANGES ( INFORMATION => ... )` — change-tracking queries.
+    Changes,
 }
 
 impl ContextualKeyword {
@@ -82,6 +84,7 @@ impl ContextualKeyword {
             ContextualKeyword::Next => "next",
             ContextualKeyword::To => "to",
             ContextualKeyword::NoCycle => "nocycle",
+            ContextualKeyword::Changes => "changes",
         }
     }
 }

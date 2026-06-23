@@ -599,6 +599,14 @@ fn match_recognize_lays_out_one_clause_per_line() {
 }
 
 #[test]
+fn changes_clause_attaches_to_its_table() {
+    assert_eq!(
+        fmt("select * from t changes(information => default) at(timestamp => 'x')"),
+        "SELECT *\nFROM t CHANGES (information => default) AT (timestamp => 'x');\n"
+    );
+}
+
+#[test]
 fn keywords_used_as_function_names_are_callable() {
     // FIRST/LAST/LEFT are reserved words elsewhere but here name functions: keep them lower-case
     // and hugging their parens, like any other call.

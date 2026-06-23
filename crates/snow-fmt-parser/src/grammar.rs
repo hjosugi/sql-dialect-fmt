@@ -730,10 +730,21 @@ fn table_ref(p: &mut Parser) {
     } else {
         p.error("expected a table reference");
     }
-    // Time travel, SAMPLE / TABLESAMPLE, MATCH_RECOGNIZE, and PIVOT / UNPIVOT all attach to the
-    // table before its alias.
+    // Change-tracking, time travel, SAMPLE / TABLESAMPLE, MATCH_RECOGNIZE, and PIVOT / UNPIVOT all
+    // attach to the table before its alias.
+    if p.nth_contextual(0, ContextualKeyword::Changes) {
+        // `CHANGES ( INFORMATION => ... )` then AT|BEFORE (below) and an optional END ( ... ).
+        p.bump_as(CONTEXTUAL_KEYWORD); // CHANGES
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        }
+    }
     if at_time_travel(p) {
         time_travel(p);
+    }
+    if p.at(END_KW) && p.nth_at(1, L_PAREN) {
+        p.bump(END_KW); // CHANGES ... END ( TIMESTAMP => ... )
+        balanced_parens(p);
     }
     if p.at(SAMPLE_KW) || p.at(TABLESAMPLE_KW) {
         sample_clause(p);
