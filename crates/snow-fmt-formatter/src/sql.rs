@@ -915,6 +915,8 @@ fn is_select_clause(kind: SyntaxKind) -> bool {
             | ORDER_BY_CLAUSE
             | LIMIT_CLAUSE
             | OFFSET_CLAUSE
+            | START_WITH_CLAUSE
+            | CONNECT_BY_CLAUSE
     )
 }
 

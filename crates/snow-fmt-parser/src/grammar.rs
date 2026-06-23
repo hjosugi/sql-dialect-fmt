@@ -616,6 +616,14 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.at(WHERE_KW) {
         where_clause(p);
     }
+    // Hierarchical queries: `START WITH` / `CONNECT BY` in either order.
+    while p.at(START_KW) || p.at(CONNECT_KW) {
+        if p.at(START_KW) {
+            start_with_clause(p);
+        } else {
+            connect_by_clause(p);
+        }
+    }
     if p.at(GROUP_KW) {
         group_by_clause(p);
     }
@@ -1071,6 +1079,28 @@ fn where_clause(p: &mut Parser) {
     m.complete(p, WHERE_CLAUSE);
 }
 
+/// `START WITH <predicate>` — the seed of a hierarchical (`CONNECT BY`) query.
+fn start_with_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(START_KW);
+    p.expect(WITH_KW);
+    expr(p);
+    m.complete(p, START_WITH_CLAUSE);
+}
+
+/// `CONNECT BY [NOCYCLE] <predicate>` (the predicate uses the `PRIOR` prefix to refer to the parent
+/// row).
+fn connect_by_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(CONNECT_KW);
+    p.expect(BY_KW);
+    if p.nth_contextual(0, ContextualKeyword::NoCycle) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // NOCYCLE
+    }
+    expr(p);
+    m.complete(p, CONNECT_BY_CLAUSE);
+}
+
 fn group_by_clause(p: &mut Parser) {
     let m = p.start();
     p.bump(GROUP_KW);
@@ -1396,6 +1426,13 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
         let m = p.start();
         p.bump(NOT_KW);
         expr_bp(p, BP_PREFIX_NOT);
+        return Some(m.complete(p, PREFIX_EXPR));
+    }
+    if p.at(PRIOR_KW) {
+        // `CONNECT BY PRIOR <col> = <col>`: PRIOR is a tight unary prefix on a value.
+        let m = p.start();
+        p.bump(PRIOR_KW);
+        expr_bp(p, BP_PREFIX_NEG);
         return Some(m.complete(p, PREFIX_EXPR));
     }
     if p.at(MINUS) || p.at(PLUS) {

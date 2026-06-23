@@ -296,6 +296,9 @@ pub enum SyntaxKind {
     SUBSET_CLAUSE,
     DEFINE_CLAUSE,
     DEFINE_ITEM,
+    // Hierarchical queries
+    START_WITH_CLAUSE,
+    CONNECT_BY_CLAUSE,
     // Phase 8 / scripting-adjacent statements
     SET_STMT,
     EXECUTE_STMT,

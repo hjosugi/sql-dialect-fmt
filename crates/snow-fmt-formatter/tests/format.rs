@@ -203,6 +203,20 @@ fn in_list_stays_inline_without_a_trailing_comma() {
 }
 
 #[test]
+fn hierarchical_query_puts_start_with_and_connect_by_on_their_own_lines() {
+    insta::assert_snapshot!(
+        fmt("select id, name from emp start with manager_id is null \
+             connect by prior id = manager_id"),
+        @"
+    SELECT id, name
+    FROM emp
+    START WITH manager_id IS NULL
+    CONNECT BY PRIOR id = manager_id;
+    "
+    );
+}
+
+#[test]
 fn in_subquery_stays_inline() {
     assert_eq!(
         fmt("select * from t where x in (select id from s)"),

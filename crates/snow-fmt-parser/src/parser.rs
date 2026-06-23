@@ -56,6 +56,8 @@ pub(crate) enum ContextualKeyword {
     Next,
     /// `AFTER MATCH SKIP TO [FIRST|LAST] <symbol>`.
     To,
+    /// `CONNECT BY NOCYCLE ...`.
+    NoCycle,
 }
 
 impl ContextualKeyword {
@@ -79,6 +81,7 @@ impl ContextualKeyword {
             ContextualKeyword::Past => "past",
             ContextualKeyword::Next => "next",
             ContextualKeyword::To => "to",
+            ContextualKeyword::NoCycle => "nocycle",
         }
     }
 }
