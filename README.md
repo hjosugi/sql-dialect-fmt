@@ -51,6 +51,7 @@ SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・DDL（CREATE TABLE/VIEW/CT
 | `snow-fmt-highlight` | トークン分類（シンタックスハイライト） |
 | `snow-fmt-hover` | 型・手続き・タスクの hover テキスト |
 | `snow-fmt-tree-sitter` | 同梱 Tree-sitter grammar の Rust バインディング |
+| `snow-fmt-lsp` | Language Server（formatting / semanticTokens / 診断、stdio） |
 | `snow-fmt-cli` | CLI エントリポイント |
 
 ## ライセンス

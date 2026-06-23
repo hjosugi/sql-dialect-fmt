@@ -105,14 +105,14 @@
   - ⏳ Python: 整形方針を決定（外部 ruff か、当面は無加工パススルー）
   - ⏳ ネストした SQL（`LANGUAGE SQL`）: 自分自身で再帰整形
 
-## Phase 9 — ハイライト + LSP ⏳
+## Phase 9 — ハイライト + LSP 🚧
 - ✅ Lexical highlight 基盤（keyword/type/string/comment/operator/punctuation/range、内蔵 easy fixture 全 SQL でロスレス検証） … [crates/snow-fmt-highlight/](crates/snow-fmt-highlight/)
 - ✅ Hover 基盤（Snowflake 型、`CREATE PROCEDURE` の signature/returns/language、`CREATE TASK` の compute/schedule/when、procedure/task property 説明） … [crates/snow-fmt-hover/](crates/snow-fmt-hover/)
 - ✅ Tree-sitter grammar baseline（Neovim/Zed/GitHub 向け token grammar、highlight/locals/injections queries、Rust wrapper、内蔵 easy fixture 全 SQL + LF/CRLF/CR/mixed 改行で cargo test 統合） … [tree-sitter-snowflake/](tree-sitter-snowflake/) / [crates/snow-fmt-tree-sitter/](crates/snow-fmt-tree-sitter/)
-- ⏳ CST → セマンティックトークン
-- ⏳ LSP サーバ（`textDocument/formatting`, `semanticTokens`, 診断）
+- ✅ CST → セマンティックトークン（highlighter から LSP legend へ、UTF-16 桁・複数行トークン分割・デルタ符号化） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/) `semantic_tokens`
+- ✅ **LSP サーバ `snow-fmt-lsp`**（stdio・`lsp-server`/`lsp-types`、同期。`textDocument/formatting`＝全文整形、`semanticTokens/full`、`publishDiagnostics`＝パースエラー。Full 同期・初期化/シャットダウン。純粋関数はユニットテスト、サーバは stdio エンドツーエンド検証） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/)
 - ⏳ TextMate 文法（素のエディタ向けベースライン）
-- ⏳ LSP のインクリメンタル更新
+- ⏳ LSP のインクリメンタル更新（現状は Full 同期）
 - ⏳ Tree-sitter 文法の構造化（statement/expression ノード、context-aware injections、folds/indents/hover 連携）
 
 ## Phase 10 — 仕上げ・周辺 🚧
