@@ -9,6 +9,21 @@
       "required": false,
       "types": [
         {
+          "type": "statement",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "statement",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
           "type": "dollar_string",
           "named": true
         },
@@ -54,6 +69,10 @@
         }
       ]
     }
+  },
+  {
+    "type": ";",
+    "named": false
   },
   {
     "type": "comment",

@@ -7,6 +7,14 @@ lossless Rust CST parser remains the formatter source of truth. The Tree-sitter
 grammar gives editors a robust baseline for highlighting, selection, and hover
 plumbing without rejecting newer Snowflake syntax.
 
+Over that flat token stream the grammar adds one structural layer: each
+top-level statement (a run of tokens up to its `;`) is grouped into a
+`statement` node. That is enough for statement-level folding (`queries/folds.scm`,
+mirroring the LSP server's `textDocument/foldingRange`) and navigation, while
+staying tolerant of unfamiliar syntax — it does not commit to a full expression
+grammar. Expression nodes, indents, and context-aware injections remain future
+work.
+
 ## Development
 
 ```sh

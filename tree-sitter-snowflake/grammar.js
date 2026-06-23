@@ -193,7 +193,16 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   rules: {
-    source_file: $ => repeat($._token),
+    source_file: $ => repeat($.statement),
+
+    // A top-level statement: a run of tokens up to (and including) its `;` terminator. The last
+    // statement in a script may omit the terminator, and a bare `;` is an empty statement. This is
+    // the first structural layer over the flat token stream — enough for statement-level folds and
+    // navigation without committing to a full expression grammar.
+    statement: $ => choice(
+      prec.right(seq(repeat1($._token), optional(';'))),
+      ';',
+    ),
 
     _token: $ => choice(
       $.stage_reference,
@@ -291,7 +300,6 @@ module.exports = grammar({
       '}',
       ',',
       '.',
-      ';',
     )),
   },
 });

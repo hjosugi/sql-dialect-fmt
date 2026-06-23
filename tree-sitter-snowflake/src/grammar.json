@@ -7,8 +7,45 @@
       "type": "REPEAT",
       "content": {
         "type": "SYMBOL",
-        "name": "_token"
+        "name": "statement"
       }
+    },
+    "statement": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "PREC_RIGHT",
+          "value": 0,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "REPEAT1",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_token"
+                }
+              },
+              {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": ";"
+                  },
+                  {
+                    "type": "BLANK"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ";"
+        }
+      ]
     },
     "_token": {
       "type": "CHOICE",
@@ -1242,10 +1279,6 @@
           {
             "type": "STRING",
             "value": "."
-          },
-          {
-            "type": "STRING",
-            "value": ";"
           }
         ]
       }

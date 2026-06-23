@@ -183,6 +183,28 @@ fn assert_parse_ok_named(name: &str, sql: &str) {
         "{name} contains Tree-sitter errors: {}",
         root.to_sexp()
     );
+    // The structural layer: every top-level named child is a `statement` (or a free-standing
+    // `comment`, which the grammar attaches to the root as an extra).
+    for child in root.named_children(&mut root.walk()) {
+        assert!(
+            matches!(child.kind(), "statement" | "comment"),
+            "{name} has an unexpected top-level node `{}`: {}",
+            child.kind(),
+            root.to_sexp()
+        );
+    }
+}
+
+#[test]
+fn statements_split_on_semicolons() {
+    let tree = parse("SELECT 1;\nSELECT 2;\nSELECT 3");
+    let root = tree.root_node();
+    assert_eq!(
+        root.named_child_count(),
+        3,
+        "expected three statements: {}",
+        root.to_sexp()
+    );
 }
 
 fn highlight_captures(sql: &str) -> Vec<(String, String)> {
@@ -228,6 +250,7 @@ fn highlight_and_support_queries_compile() {
     Query::new(&language, snow_fmt_tree_sitter::LOCALS_QUERY).expect("locals query compiles");
     Query::new(&language, snow_fmt_tree_sitter::INJECTIONS_QUERY)
         .expect("injections query compiles");
+    Query::new(&language, snow_fmt_tree_sitter::FOLDS_QUERY).expect("folds query compiles");
 
     let names = highlights.capture_names();
     for required in [
