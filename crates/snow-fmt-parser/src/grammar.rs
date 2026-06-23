@@ -29,12 +29,34 @@ pub(crate) fn source_file(p: &mut Parser) {
         if p.at(SEMICOLON) {
             p.bump(SEMICOLON); // statement separator / empty statement
         } else if at_stmt_start(p) {
-            statement(p);
+            statement_or_flow(p);
         } else {
             p.err_and_bump("expected a statement");
         }
     }
     m.complete(p, SOURCE_FILE);
+}
+
+/// Parse a statement, then — if it is followed by the flow operator `->>` — the rest of the chain,
+/// wrapping the whole pipeline in a [`FLOW_STMT`]. A lone statement abandons the wrapper. Flow
+/// chains carry no semicolons between steps; a later step references an earlier one via `$n` in its
+/// FROM clause. See <https://docs.snowflake.com/en/sql-reference/operators-flow>.
+fn statement_or_flow(p: &mut Parser) {
+    let m = p.start();
+    statement(p);
+    if p.at(FLOW_PIPE) {
+        while p.eat(FLOW_PIPE) {
+            if at_stmt_start(p) {
+                statement(p);
+            } else {
+                p.error("expected a statement after '->>'");
+                break;
+            }
+        }
+        m.complete(p, FLOW_STMT);
+    } else {
+        m.abandon(p);
+    }
 }
 
 fn at_stmt_start(p: &Parser) -> bool {
@@ -722,6 +744,11 @@ fn table_ref(p: &mut Parser) {
         } else {
             p.error("expected '(' after table function");
         }
+    } else if p.at(VARIABLE) {
+        // Flow-operator back-reference: `FROM $1` points at a previous statement in the chain.
+        let r = p.start();
+        p.bump(VARIABLE);
+        r.complete(p, NAME_REF);
     } else if p.at_name() {
         name_ref(p);
         if p.at(L_PAREN) {

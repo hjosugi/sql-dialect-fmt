@@ -599,6 +599,22 @@ fn match_recognize_lays_out_one_clause_per_line() {
 }
 
 #[test]
+fn flow_operator_chains_statements_one_step_per_line() {
+    insta::assert_snapshot!(
+        fmt("select a, b from t ->> select a from $1 where b > 0 ->> select count(*) from $1"),
+        @"
+    SELECT a, b
+    FROM t
+    ->> SELECT a
+    FROM $1
+    WHERE b > 0
+    ->> SELECT count(*)
+    FROM $1;
+    "
+    );
+}
+
+#[test]
 fn changes_clause_attaches_to_its_table() {
     assert_eq!(
         fmt("select * from t changes(information => default) at(timestamp => 'x')"),

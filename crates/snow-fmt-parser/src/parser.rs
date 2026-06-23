@@ -290,6 +290,14 @@ impl Marker {
         p.events.push(Event::Close);
         CompletedMarker { index: self.index }
     }
+
+    /// Discard this (speculative) wrapper: its `Open` becomes a no-op and any nodes parsed inside it
+    /// stay attached to the parent. Used when a wrapper is started before knowing whether it is
+    /// needed (e.g. a flow-operator chain that turns out to be a single statement).
+    pub(crate) fn abandon(mut self, p: &mut Parser) {
+        self.completed = true;
+        p.events[self.index] = Event::Tombstone;
+    }
 }
 
 impl Drop for Marker {

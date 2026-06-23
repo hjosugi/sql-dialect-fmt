@@ -77,12 +77,13 @@
 - ✅ `SAMPLE`/`TABLESAMPLE`（`[method] (n [ROWS]) [REPEATABLE/SEED(...)]` を `table_ref` 後置で寛容保持）, `MATCH_RECOGNIZE`（✅ 本体を構造化: PARTITION/ORDER/MEASURES/PER MATCH/AFTER MATCH SKIP/PATTERN/SUBSET/DEFINE を1句1行・contextual 大文字化・`PATTERN(...)` は verbatim）, ✅ `CONNECT BY`/`START WITH`（`PRIOR` 前置・`NOCYCLE`、各句1行）。`PIVOT` の `IN (val AS alias, ...)` も対応
 - 🚧 `ASOF JOIN`（✅ `a ASOF JOIN b MATCH_CONDITION (...) [ON ...]`）, Time Travel `AT`/`BEFORE`（✅ `t AT (TIMESTAMP|OFFSET|STATEMENT => ...)`、`table_ref` 後置・寛容保持）。contextual keyword `asof`/`match_condition`/`at`/`before` のエイリアス誤食いを `at_alias_blocker` で回避 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `join`/`time_travel`/`at_alias_blocker`。✅ `CHANGES ( INFORMATION => … ) {AT|BEFORE}(…) [END(…)]`（`table_ref` 後置）
 
-## Phase 5 — フロー/パイプ構文 `->>` ⏳ 🔎
+## Phase 5 — フロー/パイプ構文 `->>` ✅
 *目的: 既存ツールがほぼ未対応の差別化点。*
 - ✅ Lexer は Snowflake 公式 `->>` と互換 `|>` の両方を単一トークン化
-- ⏳ 🔎 flow operator の文脈（任意の SQL statement chain、`FROM $n` 参照、制限事項）を公式ドキュメントで継続確認
-- ⏳ 整形規則（`->>` ステップを1行ずつ、インデント揃え）
-- ⏳ パイプ／非パイプ混在の扱い
+- ✅ flow operator の文脈を公式ドキュメントで確認（任意の SQL statement chain、ステップ間にセミコロンなし、`FROM $n` で前ステップ参照） … <https://docs.snowflake.com/en/sql-reference/operators-flow>
+- ✅ 文チェーンを `FLOW_STMT` ノードでパース（投機的 wrapper を `Marker::abandon`/`Tombstone` で単文時に破棄）、`FROM $1` を table source として許可 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `statement_or_flow`/`table_ref`
+- ✅ 整形規則（各ステップを通常整形し、`->>` を継続行の先頭に。ステップ間にセミコロンを入れない） … [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_flow`
+- 🔧 残: SHOW 始まりのチェーン（`SHOW` 文未対応のため現状は素通し）、パイプ／非パイプ混在の網羅
 
 ## Phase 6 — DML ✅
 - ✅ `INSERT`（単一 `INSERT [OVERWRITE] INTO t [(cols)] VALUES/<query>`、多テーブル `INSERT [OVERWRITE] {ALL|FIRST} (WHEN cond THEN INTO …)+ [ELSE INTO …] <query>` をパース＋構造的整形。新ノード `INTO_CLAUSE`/`INSERT_WHEN`、新キーワード `OVERWRITE`）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `multi_table_insert`

@@ -299,6 +299,8 @@ pub enum SyntaxKind {
     // Hierarchical queries
     START_WITH_CLAUSE,
     CONNECT_BY_CLAUSE,
+    // Flow / pipe operator: a chain of statements joined by `->>`
+    FLOW_STMT,
     // Phase 8 / scripting-adjacent statements
     SET_STMT,
     EXECUTE_STMT,

@@ -515,6 +515,25 @@ impl Lowerer {
         concat(parts)
     }
 
+    /// A flow-operator pipeline `<stmt> ->> <stmt> ->> ...`: each statement formatted normally, the
+    /// `->>` operator leading each continuation line. No semicolons are inserted between steps.
+    fn lower_flow(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind() == FLOW_PIPE {
+                    parts.push(hard_line());
+                    parts.push(text("->>"));
+                    parts.push(space());
+                }
+            } else if let Some(node) = child.as_node() {
+                self.reset();
+                parts.push(self.lower_query(node));
+            }
+        }
+        concat(parts)
+    }
+
     /// Lower a single top-level `SELECT` clause. Most are inline; a few get structural layout.
     fn lower_clause(&mut self, clause: &SyntaxNode) -> Doc {
         match clause.kind() {
@@ -596,6 +615,7 @@ impl Lowerer {
             COLUMN_DEF_LIST => concat(vec![space(), self.lower_column_def_list(node)]),
             MATCH_RECOGNIZE => self.lower_match_recognize(node),
             PATTERN_CLAUSE => self.lower_pattern_clause(node),
+            FLOW_STMT => self.lower_flow(node),
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
             SET_CLAUSE | VALUES_CLAUSE => self.lower_keyword_item_list(node),
             _ => self.lower_children(node),
