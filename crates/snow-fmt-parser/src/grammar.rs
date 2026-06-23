@@ -72,6 +72,7 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(ALTER_KW)
         || p.at(GRANT_KW)
         || p.at(REVOKE_KW)
+        || p.at(CALL_KW)
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
         || p.at(COPY_KW)
@@ -99,6 +100,8 @@ fn statement(p: &mut Parser) {
         grant_stmt(p);
     } else if p.at(REVOKE_KW) {
         revoke_stmt(p);
+    } else if p.at(CALL_KW) {
+        call_stmt(p);
     } else if p.at(SET_KW) {
         set_stmt(p);
     } else if p.at(EXECUTE_KW) {
@@ -611,6 +614,19 @@ fn revoke_stmt(p: &mut Parser) {
         p.bump_any();
     }
     m.complete(p, REVOKE_STMT);
+}
+
+/// `CALL proc(args)` — invoke a stored procedure. The invocation is an ordinary call expression, so
+/// its argument list is formatted like any other (one-per-line when it overflows). A trailing tail
+/// (e.g. `INTO :result`) is kept leniently as tokens so it round-trips.
+fn call_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(CALL_KW);
+    expr(p); // the procedure-call expression: name(args)
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, CALL_STMT);
 }
 
 // ---- queries ----

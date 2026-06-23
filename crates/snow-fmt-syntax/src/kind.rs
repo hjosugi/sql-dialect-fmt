@@ -284,6 +284,7 @@ pub enum SyntaxKind {
     ALTER_STMT,
     GRANT_STMT,
     REVOKE_STMT,
+    CALL_STMT,
     COLUMN_DEF_LIST,
     COLUMN_DEF,
     // Phase 4: Snowflake query extensions
