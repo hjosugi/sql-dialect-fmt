@@ -99,9 +99,10 @@ pub const EASY_CASES: &[GoldenCase] = &[
     golden_case!("case_029_cursor_exception_nested_blocks"),
     golden_case!("case_030_mega_formatter_scenario"),
     golden_case!("case_031_grant_revoke_privileges"),
+    golden_case!("case_032_create_object_kinds"),
 ];
 
-pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 38;
+pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 39;
 
 #[cfg(test)]
 mod tests {

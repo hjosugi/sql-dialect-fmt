@@ -296,12 +296,15 @@ fn create_stmt(p: &mut Parser) {
         p.bump(OR_KW);
         p.expect(REPLACE_KW);
     }
-    // Modifiers before the object kind (SECURE / TEMPORARY / TRANSIENT / MATERIALIZED / ...).
+    // Modifiers before the object kind (SECURE / TEMPORARY / TRANSIENT / MATERIALIZED / ...). Stop
+    // at a query/body `AS` so `create_other` can leave body-bearing creates (e.g. CREATE TASK)
+    // verbatim instead of swallowing the body into this flat run.
     while !p.at(TABLE_KW)
         && !p.at(VIEW_KW)
         && !p.at(PROCEDURE_KW)
         && !p.at(FUNCTION_KW)
         && !p.at(SEMICOLON)
+        && !at_create_body(p)
         && !p.at_eof()
     {
         p.bump_any();
@@ -313,9 +316,43 @@ fn create_stmt(p: &mut Parser) {
     } else if p.at(PROCEDURE_KW) || p.at(FUNCTION_KW) {
         create_routine(p);
     } else {
-        p.error("expected TABLE, VIEW, PROCEDURE, or FUNCTION");
+        create_other(p);
     }
     m.complete(p, CREATE_STMT);
+}
+
+/// Object kinds without a query body — `CREATE SCHEMA/DATABASE/WAREHOUSE/SEQUENCE/STAGE/FILE
+/// FORMAT/ROLE/…` — parsed leniently as a flat token run so they round-trip and get inline spacing
+/// (like [`alter_stmt`]). If the statement carries an `AS <body>` (e.g. `CREATE TASK … AS <dml>`),
+/// bail to an error so it passes through verbatim rather than being flattened into one line — the
+/// formatter cannot lay out a body it has not parsed structurally.
+fn create_other(p: &mut Parser) {
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        if at_create_body(p) {
+            p.error("CREATE ... AS <body> is not yet formatted; left verbatim");
+            while !p.at(SEMICOLON) && !p.at_eof() {
+                p.bump_any();
+            }
+            return;
+        }
+        p.bump_any();
+    }
+}
+
+/// At an `AS` that introduces a statement/query body (a task's DML, a dynamic-table query, a
+/// procedural block) rather than an inline option like `CREATE DATABASE d AS REPLICA OF …`.
+fn at_create_body(p: &Parser) -> bool {
+    p.at(AS_KW)
+        && (p.nth_at(1, SELECT_KW)
+            || p.nth_at(1, WITH_KW)
+            || p.nth_at(1, VALUES_KW)
+            || p.nth_at(1, INSERT_KW)
+            || p.nth_at(1, UPDATE_KW)
+            || p.nth_at(1, DELETE_KW)
+            || p.nth_at(1, MERGE_KW)
+            || p.nth_at(1, CALL_KW)
+            || p.nth_at(1, BEGIN_KW)
+            || p.nth_at(1, L_PAREN))
 }
 
 /// `CREATE ... PROCEDURE/FUNCTION name (params) RETURNS ... <options> AS <body>`.

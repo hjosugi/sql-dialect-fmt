@@ -112,6 +112,39 @@ fn grant_and_revoke_parse_into_dedicated_nodes() {
 }
 
 #[test]
+fn create_object_kinds_without_a_body_parse_cleanly() {
+    // Object kinds with no query body parse leniently into a CREATE_STMT and format inline.
+    for s in [
+        "CREATE SCHEMA IF NOT EXISTS analytics",
+        "CREATE OR REPLACE DATABASE d CLONE src",
+        "CREATE WAREHOUSE wh WITH WAREHOUSE_SIZE = XSMALL",
+        "CREATE SEQUENCE seq START = 1 INCREMENT = 1",
+        "CREATE STAGE st URL = 's3://b/p'",
+        "CREATE OR REPLACE FILE FORMAT ff TYPE = JSON",
+    ] {
+        let p = parse(s);
+        assert!(p.errors().is_empty(), "{s} should parse cleanly");
+        assert!(
+            p.syntax()
+                .children()
+                .any(|n| n.kind() == SyntaxKind::CREATE_STMT),
+            "{s} should produce a CREATE_STMT"
+        );
+    }
+}
+
+#[test]
+fn create_with_query_body_is_left_verbatim() {
+    // A body-bearing CREATE (e.g. a task's DML) is deliberately left to error so the formatter
+    // passes it through verbatim instead of flattening the body onto one line.
+    let p = parse("CREATE TASK t WAREHOUSE = wh AS\nINSERT INTO log\nSELECT 1");
+    assert!(
+        !p.errors().is_empty(),
+        "CREATE TASK ... AS <dml> should not parse cleanly (kept verbatim)"
+    );
+}
+
+#[test]
 fn select_has_expected_clauses() {
     let p = parse("SELECT a, b FROM t WHERE a > 1");
     assert!(p.errors().is_empty());
