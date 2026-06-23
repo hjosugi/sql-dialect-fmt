@@ -98,11 +98,36 @@ fn clean_sql_has_no_errors() {
         "DESCRIBE TABLE db.s.t",
         "DESC USER u",
         "TRUNCATE TABLE db.s.t",
+        "COMMENT ON TABLE db.s.t IS 'facts'",
+        "COMMENT ON COLUMN db.s.t.c IS 'a column'",
         // `DESC` as a sort direction must still parse inside ORDER BY, not as a DESCRIBE statement.
         "SELECT a FROM t ORDER BY a DESC, b ASC",
+        // `comment` stays an ordinary identifier when not the head of a COMMENT ON statement.
+        "SELECT comment, id FROM t WHERE comment IS NOT NULL",
     ] {
         assert_parse_clean(s);
     }
+}
+
+#[test]
+fn comment_keyword_does_not_shadow_the_comment_identifier() {
+    // `COMMENT ON ...` is a statement, but `comment` elsewhere is a plain identifier (a very common
+    // column name) — the contextual keyword must only fire before `ON`.
+    let stmt = parse("COMMENT ON TABLE t IS 'x'");
+    assert!(stmt.errors().is_empty());
+    assert!(stmt
+        .syntax()
+        .children()
+        .any(|n| n.kind() == SyntaxKind::COMMENT_STMT));
+
+    let col = parse("SELECT comment FROM t");
+    assert!(col.errors().is_empty());
+    assert!(
+        !col.syntax()
+            .descendants()
+            .any(|n| n.kind() == SyntaxKind::COMMENT_STMT),
+        "`comment` as a column must not parse as a COMMENT_STMT"
+    );
 }
 
 #[test]

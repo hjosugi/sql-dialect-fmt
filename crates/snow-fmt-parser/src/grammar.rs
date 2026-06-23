@@ -78,6 +78,7 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(DESCRIBE_KW)
         || p.at(DESC_KW)
         || p.at(TRUNCATE_KW)
+        || at_comment_stmt(p)
         || p.at(CALL_KW)
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
@@ -114,6 +115,8 @@ fn statement(p: &mut Parser) {
         lenient_stmt(p, DESCRIBE_STMT);
     } else if p.at(TRUNCATE_KW) {
         lenient_stmt(p, TRUNCATE_STMT);
+    } else if at_comment_stmt(p) {
+        comment_stmt(p);
     } else if p.at(CALL_KW) {
         call_stmt(p);
     } else if p.at(SET_KW) {
@@ -619,6 +622,23 @@ fn lenient_stmt(p: &mut Parser, node: SyntaxKind) {
         p.bump_any();
     }
     m.complete(p, node);
+}
+
+/// At a `COMMENT ON …` statement. `comment` is a contextual keyword recognized only before `ON`, so
+/// the very common `comment` column/identifier is never mistaken for this statement.
+fn at_comment_stmt(p: &Parser) -> bool {
+    p.nth_contextual(0, ContextualKeyword::Comment) && p.nth_at(1, ON_KW)
+}
+
+/// `COMMENT ON <object> IS '<text>'` (or `COMMENT IF EXISTS …`). Parsed leniently as a flat token
+/// run after up-casing the contextual `COMMENT`, so it round-trips and formats inline.
+fn comment_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // COMMENT
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, COMMENT_STMT);
 }
 
 /// `CALL proc(args)` — invoke a stored procedure. The invocation is an ordinary call expression, so

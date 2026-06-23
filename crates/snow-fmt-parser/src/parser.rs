@@ -60,6 +60,9 @@ pub(crate) enum ContextualKeyword {
     NoCycle,
     /// `<table> CHANGES ( INFORMATION => ... )` — change-tracking queries.
     Changes,
+    /// `COMMENT ON <object> IS '...'` — recognized only before `ON` so it never shadows the very
+    /// common `comment` column/identifier.
+    Comment,
 }
 
 impl ContextualKeyword {
@@ -85,6 +88,7 @@ impl ContextualKeyword {
             ContextualKeyword::To => "to",
             ContextualKeyword::NoCycle => "nocycle",
             ContextualKeyword::Changes => "changes",
+            ContextualKeyword::Comment => "comment",
         }
     }
 }

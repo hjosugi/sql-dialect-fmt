@@ -293,6 +293,7 @@ pub enum SyntaxKind {
     SHOW_STMT,
     DESCRIBE_STMT,
     TRUNCATE_STMT,
+    COMMENT_STMT,
     COLUMN_DEF_LIST,
     COLUMN_DEF,
     // Phase 4: Snowflake query extensions
