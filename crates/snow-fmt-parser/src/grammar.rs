@@ -78,6 +78,9 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(DESCRIBE_KW)
         || p.at(DESC_KW)
         || p.at(TRUNCATE_KW)
+        || p.at(COMMIT_KW)
+        || p.at(ROLLBACK_KW)
+        || p.at(UNDROP_KW)
         || at_comment_stmt(p)
         || p.at(CALL_KW)
         || p.at(SET_KW)
@@ -115,6 +118,10 @@ fn statement(p: &mut Parser) {
         lenient_stmt(p, DESCRIBE_STMT);
     } else if p.at(TRUNCATE_KW) {
         lenient_stmt(p, TRUNCATE_STMT);
+    } else if p.at(COMMIT_KW) || p.at(ROLLBACK_KW) {
+        lenient_stmt(p, TRANSACTION_STMT);
+    } else if p.at(UNDROP_KW) {
+        lenient_stmt(p, UNDROP_STMT);
     } else if at_comment_stmt(p) {
         comment_stmt(p);
     } else if p.at(CALL_KW) {

@@ -100,12 +100,35 @@ fn clean_sql_has_no_errors() {
         "TRUNCATE TABLE db.s.t",
         "COMMENT ON TABLE db.s.t IS 'facts'",
         "COMMENT ON COLUMN db.s.t.c IS 'a column'",
+        "COMMIT",
+        "COMMIT WORK",
+        "ROLLBACK",
+        "ROLLBACK TO SAVEPOINT sp1",
+        "UNDROP TABLE db.s.t",
+        "UNDROP SCHEMA db.s",
         // `DESC` as a sort direction must still parse inside ORDER BY, not as a DESCRIBE statement.
         "SELECT a FROM t ORDER BY a DESC, b ASC",
         // `comment` stays an ordinary identifier when not the head of a COMMENT ON statement.
         "SELECT comment, id FROM t WHERE comment IS NOT NULL",
     ] {
         assert_parse_clean(s);
+    }
+}
+
+#[test]
+fn transaction_and_undrop_with_operands_are_single_statements() {
+    // Regression: `COMMIT WORK`, `ROLLBACK TO SAVEPOINT s`, and `UNDROP SCHEMA s` once parsed as
+    // several bare-identifier statements, which the formatter split apart with inserted semicolons.
+    for (sql, kind) in [
+        ("COMMIT WORK", SyntaxKind::TRANSACTION_STMT),
+        ("ROLLBACK TO SAVEPOINT sp1", SyntaxKind::TRANSACTION_STMT),
+        ("UNDROP SCHEMA db.s", SyntaxKind::UNDROP_STMT),
+    ] {
+        let p = parse(sql);
+        assert!(p.errors().is_empty(), "{sql} should parse cleanly");
+        let stmts: Vec<_> = p.syntax().children().collect();
+        assert_eq!(stmts.len(), 1, "{sql} must be a single statement");
+        assert_eq!(stmts[0].kind(), kind);
     }
 }
 
