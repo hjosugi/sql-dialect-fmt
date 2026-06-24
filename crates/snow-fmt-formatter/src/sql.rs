@@ -440,6 +440,187 @@ impl Lowerer {
         )
     }
 
+    // ---- Snowflake Scripting (Phase 8) ----
+
+    /// A `STMT_LIST` (a block / branch / loop / handler body): each statement on its own line with a
+    /// synthesized terminating `;`, the whole indented one level. Returns the indented body only —
+    /// the caller emits the surrounding keyword lines (`BEGIN`/`END`, `THEN`, `DO`, …).
+    fn lower_block_body(&mut self, list: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for stmt in list.children() {
+            parts.push(hard_line());
+            self.reset();
+            parts.push(self.lower_node(&stmt));
+            parts.push(text(";"));
+        }
+        indent(concat(parts))
+    }
+
+    /// `[DECLARE …] BEGIN <body> [EXCEPTION …] END [label]` — keyword lines flush, bodies indented.
+    fn lower_block(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        let mut started = false;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                match token.kind() {
+                    BEGIN_KW => {
+                        if started {
+                            parts.push(hard_line());
+                        }
+                        self.reset();
+                        parts.push(self.token(token));
+                        started = true;
+                    }
+                    END_KW => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.token(token));
+                    }
+                    _ => parts.push(self.token(token)),
+                }
+            } else if let Some(node) = child.as_node() {
+                match node.kind() {
+                    DECLARE_SECTION => {
+                        parts.push(self.lower_declare_section(node));
+                        started = true;
+                    }
+                    STMT_LIST => parts.push(self.lower_block_body(node)),
+                    EXCEPTION_SECTION => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.lower_exception_section(node));
+                    }
+                    _ => parts.push(self.lower_node(node)), // END label
+                }
+            }
+        }
+        concat(parts)
+    }
+
+    /// `DECLARE` then each declaration on its own indented line with a synthesized `;`.
+    fn lower_declare_section(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = empty();
+        let mut body = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if token.kind() == DECLARE_KW {
+                    self.reset();
+                    head = self.token(token);
+                }
+            } else if let Some(node) = child.as_node() {
+                body.push(hard_line());
+                self.reset();
+                body.push(self.lower_node(node));
+                body.push(text(";"));
+            }
+        }
+        concat(vec![head, indent(concat(body))])
+    }
+
+    /// `IF <cond> THEN … [ELSEIF … THEN …] [ELSE …] END IF` — branch keywords flush, bodies indented.
+    fn lower_if(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        self.reset();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                match token.kind() {
+                    ELSEIF_KW | ELSE_KW | END_KW => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.token(token));
+                    }
+                    _ => parts.push(self.token(token)), // IF / THEN / the IF after END
+                }
+            } else if let Some(node) = child.as_node() {
+                if node.kind() == STMT_LIST {
+                    parts.push(self.lower_block_body(node));
+                } else {
+                    parts.push(self.lower_node(node)); // condition
+                }
+            }
+        }
+        concat(parts)
+    }
+
+    /// `FOR/WHILE … DO … END`, `LOOP … END LOOP`, `REPEAT … UNTIL … END REPEAT` — body indented.
+    fn lower_loop(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        self.reset();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                match token.kind() {
+                    END_KW | UNTIL_KW => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.token(token));
+                    }
+                    _ => parts.push(self.token(token)),
+                }
+            } else if let Some(node) = child.as_node() {
+                if node.kind() == STMT_LIST {
+                    parts.push(self.lower_block_body(node));
+                } else {
+                    parts.push(self.lower_node(node)); // UNTIL condition
+                }
+            }
+        }
+        concat(parts)
+    }
+
+    /// `EXCEPTION` then each `WHEN … THEN <body>` handler indented.
+    fn lower_exception_section(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = empty();
+        let mut body = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if token.kind() == EXCEPTION_KW {
+                    self.reset();
+                    head = self.token(token);
+                }
+            } else if let Some(node) = child.as_node() {
+                body.push(hard_line());
+                self.reset();
+                body.push(self.lower_exception_when(node));
+            }
+        }
+        concat(vec![head, indent(concat(body))])
+    }
+
+    /// `WHEN <exc> THEN <body>` — the `WHEN … THEN` line then the handler body indented.
+    fn lower_exception_when(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                if node.kind() == STMT_LIST {
+                    parts.push(self.lower_block_body(node));
+                } else {
+                    parts.push(self.lower_node(node));
+                }
+            }
+        }
+        concat(parts)
+    }
+
     /// A COPY target/source location, emitted verbatim (preserving `@stage/path`, whose `/` operator
     /// spacing would mangle) with the leading-trivia space trimmed for idempotency.
     fn lower_copy_location(&mut self, node: &SyntaxNode) -> Doc {
@@ -616,6 +797,12 @@ impl Lowerer {
             MATCH_RECOGNIZE => self.lower_match_recognize(node),
             PATTERN_CLAUSE => self.lower_pattern_clause(node),
             FLOW_STMT => self.lower_flow(node),
+            // Snowflake Scripting (Phase 8).
+            BLOCK_STMT => self.lower_block(node),
+            IF_STMT => self.lower_if(node),
+            LOOP_STMT => self.lower_loop(node),
+            DECLARE_SECTION => self.lower_declare_section(node),
+            EXCEPTION_SECTION => self.lower_exception_section(node),
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
             SET_CLAUSE | VALUES_CLAUSE => self.lower_keyword_item_list(node),
             _ => self.lower_children(node),

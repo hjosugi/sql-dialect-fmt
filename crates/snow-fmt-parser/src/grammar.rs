@@ -78,6 +78,7 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(DESCRIBE_KW)
         || p.at(DESC_KW)
         || p.at(TRUNCATE_KW)
+        || at_block_start(p)
         || p.at(COMMIT_KW)
         || p.at(ROLLBACK_KW)
         || at_begin_transaction(p)
@@ -119,6 +120,8 @@ fn statement(p: &mut Parser) {
         lenient_stmt(p, DESCRIBE_STMT);
     } else if p.at(TRUNCATE_KW) {
         lenient_stmt(p, TRUNCATE_STMT);
+    } else if at_block_start(p) {
+        block_stmt(p);
     } else if p.at(COMMIT_KW) || p.at(ROLLBACK_KW) || at_begin_transaction(p) {
         lenient_stmt(p, TRANSACTION_STMT);
     } else if p.at(UNDROP_KW) {
@@ -672,6 +675,258 @@ fn call_stmt(p: &mut Parser) {
         p.bump_any();
     }
     m.complete(p, CALL_STMT);
+}
+
+// ---- Snowflake Scripting blocks (Phase 8) ----
+
+/// A scripting block starts at `DECLARE`, or at a `BEGIN` that is not a transaction start.
+fn at_block_start(p: &Parser) -> bool {
+    p.at(DECLARE_KW) || (p.at(BEGIN_KW) && !at_begin_transaction(p))
+}
+
+/// `[DECLARE <decls>] BEGIN <body> [EXCEPTION <handlers>] END [<label>]` — a Snowflake Scripting
+/// block. The body and handler bodies are statement sequences (`STMT_LIST`); control-flow statements
+/// (IF / loops) are structured and everything else is kept as a lenient inline statement, so the
+/// block round-trips losslessly even where a construct is not modeled in detail.
+fn block_stmt(p: &mut Parser) {
+    let m = p.start();
+    if p.at(DECLARE_KW) {
+        declare_section(p);
+    }
+    p.expect(BEGIN_KW);
+    stmt_list(p, |p| p.at(END_KW) || p.at(EXCEPTION_KW));
+    if p.at(EXCEPTION_KW) {
+        exception_section(p);
+    }
+    p.expect(END_KW);
+    if p.at_name() {
+        name_ref(p); // optional label after END
+    }
+    m.complete(p, BLOCK_STMT);
+}
+
+/// `DECLARE <decl>; <decl>; …` — each declaration kept leniently as a token run up to its `;` (a
+/// cursor/resultset declaration's inner query has no top-level `;`, so this is safe).
+fn declare_section(p: &mut Parser) {
+    let m = p.start();
+    p.bump(DECLARE_KW);
+    while !p.at(BEGIN_KW) && !p.at_eof() {
+        if p.eat(SEMICOLON) {
+            continue;
+        }
+        declare_item(p);
+        p.eat(SEMICOLON);
+    }
+    m.complete(p, DECLARE_SECTION);
+}
+
+fn declare_item(p: &mut Parser) {
+    let m = p.start();
+    while !p.at(SEMICOLON) && !p.at(BEGIN_KW) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, DECLARE_ITEM);
+}
+
+/// A sequence of scripting statements, each terminated by `;`, until `is_end` holds. Wrapped in a
+/// `STMT_LIST` so the formatter can indent the whole body as one unit.
+fn stmt_list(p: &mut Parser, is_end: impl Fn(&Parser) -> bool) {
+    let m = p.start();
+    while !is_end(p) && !p.at_eof() {
+        if p.eat(SEMICOLON) {
+            continue; // a stray/empty `;`
+        }
+        block_statement(p);
+        p.eat(SEMICOLON);
+    }
+    m.complete(p, STMT_LIST);
+}
+
+/// One statement inside a scripting block: a structured control-flow construct, a nested block, or a
+/// lenient inline statement (LET / RETURN / assignment / a SQL statement / anything else up to `;`).
+fn block_statement(p: &mut Parser) {
+    if p.at(IF_KW) {
+        if_stmt(p);
+    } else if p.at(FOR_KW) || p.at(WHILE_KW) || p.at(LOOP_KW) || p.at(REPEAT_KW) {
+        loop_stmt(p);
+    } else if at_block_start(p) {
+        block_stmt(p); // nested DECLARE…/BEGIN…END
+    } else if p.at(CASE_KW) {
+        // CASE statement: kept as one balanced token run (rendered inline) — not yet pretty-printed.
+        balanced_construct(p, SCRIPT_STMT);
+    } else if p.at(LET_KW) {
+        simple_script_stmt(p, LET_STMT);
+    } else if p.at(RETURN_KW) {
+        simple_script_stmt(p, RETURN_STMT);
+    } else if at_sql_statement_start(p) {
+        statement(p);
+    } else if p.at_name() && p.nth_at(1, ASSIGN) {
+        simple_script_stmt(p, ASSIGN_STMT);
+    } else {
+        simple_script_stmt(p, SCRIPT_STMT);
+    }
+}
+
+/// The SQL statements that the top-level [`statement`] dispatcher handles well, recognized so a
+/// scripting block can delegate to it (and get full structural formatting of nested SQL).
+fn at_sql_statement_start(p: &Parser) -> bool {
+    p.at(WITH_KW)
+        || p.at(SELECT_KW)
+        || p.at(VALUES_KW)
+        || p.at(INSERT_KW)
+        || p.at(UPDATE_KW)
+        || p.at(DELETE_KW)
+        || p.at(MERGE_KW)
+        || p.at(CREATE_KW)
+        || p.at(DROP_KW)
+        || p.at(ALTER_KW)
+        || p.at(GRANT_KW)
+        || p.at(REVOKE_KW)
+        || p.at(USE_KW)
+        || p.at(SHOW_KW)
+        || p.at(DESCRIBE_KW)
+        || p.at(DESC_KW)
+        || p.at(TRUNCATE_KW)
+        || p.at(COMMIT_KW)
+        || p.at(ROLLBACK_KW)
+        || p.at(UNDROP_KW)
+        || at_comment_stmt(p)
+        || p.at(CALL_KW)
+        || p.at(SET_KW)
+        || p.at(EXECUTE_KW)
+        || p.at(COPY_KW)
+        || at_begin_transaction(p)
+}
+
+/// A lenient scripting statement: consume tokens up to (but not including) the terminating `;`. Every
+/// Snowflake Scripting statement ends with `;`, so this captures the whole statement — including an
+/// expression `CASE … END` on the right of a `LET`/assignment — without mis-splitting.
+fn simple_script_stmt(p: &mut Parser, node: SyntaxKind) {
+    let m = p.start();
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, node);
+}
+
+/// `IF <cond> THEN <body> [ELSEIF <cond> THEN <body>]… [ELSE <body>] END IF`.
+fn if_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(IF_KW);
+    expr(p); // condition (parenthesized or bare)
+    p.expect(THEN_KW);
+    stmt_list(p, |p| p.at(ELSEIF_KW) || p.at(ELSE_KW) || p.at(END_KW));
+    while p.at(ELSEIF_KW) {
+        p.bump(ELSEIF_KW);
+        expr(p);
+        p.expect(THEN_KW);
+        stmt_list(p, |p| p.at(ELSEIF_KW) || p.at(ELSE_KW) || p.at(END_KW));
+    }
+    if p.eat(ELSE_KW) {
+        stmt_list(p, |p| p.at(END_KW));
+    }
+    p.expect(END_KW);
+    p.expect(IF_KW);
+    m.complete(p, IF_STMT);
+}
+
+/// `FOR …/WHILE … DO <body> END FOR/WHILE`, `LOOP <body> END LOOP`, and
+/// `REPEAT <body> UNTIL <cond> END REPEAT` — unified as one loop node.
+fn loop_stmt(p: &mut Parser) {
+    let m = p.start();
+    if p.at(FOR_KW) || p.at(WHILE_KW) {
+        p.bump_any(); // FOR / WHILE
+        while !p.at(DO_KW) && !p.at(SEMICOLON) && !p.at(END_KW) && !p.at_eof() {
+            p.bump_any(); // loop header (counter/range or cursor; condition)
+        }
+        p.expect(DO_KW);
+        stmt_list(p, |p| p.at(END_KW));
+    } else if p.at(LOOP_KW) {
+        p.bump(LOOP_KW);
+        stmt_list(p, |p| p.at(END_KW));
+    } else {
+        p.bump(REPEAT_KW);
+        stmt_list(p, |p| p.at(UNTIL_KW) || p.at(END_KW));
+        if p.eat(UNTIL_KW) {
+            expr(p); // loop condition
+            while !p.at(END_KW) && !p.at(SEMICOLON) && !p.at_eof() {
+                p.bump_any();
+            }
+        }
+    }
+    p.expect(END_KW);
+    // The matching trailer keyword: END FOR / WHILE / LOOP / REPEAT.
+    if p.at(FOR_KW) || p.at(WHILE_KW) || p.at(LOOP_KW) || p.at(REPEAT_KW) {
+        p.bump_any();
+    }
+    m.complete(p, LOOP_STMT);
+}
+
+/// `EXCEPTION WHEN <exc> [OR <exc>]… THEN <body> …` inside a block.
+fn exception_section(p: &mut Parser) {
+    let m = p.start();
+    p.bump(EXCEPTION_KW);
+    while p.at(WHEN_KW) {
+        exception_when(p);
+    }
+    m.complete(p, EXCEPTION_SECTION);
+}
+
+fn exception_when(p: &mut Parser) {
+    let m = p.start();
+    p.bump(WHEN_KW);
+    while !p.at(THEN_KW) && !p.at(WHEN_KW) && !p.at(END_KW) && !p.at_eof() {
+        p.bump_any(); // exception name(s) / OTHER
+    }
+    p.expect(THEN_KW);
+    stmt_list(p, |p| p.at(WHEN_KW) || p.at(END_KW));
+    m.complete(p, EXCEPTION_WHEN);
+}
+
+/// Consume a construct that opens with a block keyword (e.g. a `CASE` statement) up to its matching
+/// `END [trailer]`, tracking nesting so an inner construct's `END` does not close it early. Each
+/// opener (`IF`/`CASE`/`FOR`/`WHILE`/`LOOP`/`REPEAT`/`BEGIN`) is balanced by exactly one `END`.
+fn balanced_construct(p: &mut Parser, node: SyntaxKind) {
+    let m = p.start();
+    let mut depth: u32 = 0;
+    while !p.at_eof() {
+        if is_block_opener(p) {
+            depth += 1;
+            p.bump_any();
+        } else if p.at(END_KW) {
+            p.bump_any();
+            // Consume the optional trailer keyword so it is not re-read as an opener.
+            if is_construct_trailer(p) {
+                p.bump_any();
+            }
+            depth -= 1;
+            if depth == 0 {
+                break;
+            }
+        } else {
+            p.bump_any();
+        }
+    }
+    m.complete(p, node);
+}
+
+fn is_block_opener(p: &Parser) -> bool {
+    p.at(IF_KW)
+        || p.at(CASE_KW)
+        || p.at(FOR_KW)
+        || p.at(WHILE_KW)
+        || p.at(LOOP_KW)
+        || p.at(REPEAT_KW)
+        || p.at(BEGIN_KW)
+}
+
+fn is_construct_trailer(p: &Parser) -> bool {
+    p.at(IF_KW)
+        || p.at(CASE_KW)
+        || p.at(FOR_KW)
+        || p.at(WHILE_KW)
+        || p.at(LOOP_KW)
+        || p.at(REPEAT_KW)
 }
 
 // ---- queries ----

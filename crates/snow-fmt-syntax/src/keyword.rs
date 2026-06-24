@@ -170,6 +170,15 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "commit" => COMMIT_KW,
         "rollback" => ROLLBACK_KW,
         "undrop" => UNDROP_KW,
+        "elseif" => ELSEIF_KW,
+        "while" => WHILE_KW,
+        "loop" => LOOP_KW,
+        "repeat" => REPEAT_KW,
+        "until" => UNTIL_KW,
+        "do" => DO_KW,
+        "exception" => EXCEPTION_KW,
+        "cursor" => CURSOR_KW,
+        "resultset" => RESULTSET_KW,
         _ => return None,
     })
 }
@@ -324,6 +333,15 @@ mod tests {
         ("commit", SyntaxKind::COMMIT_KW),
         ("rollback", SyntaxKind::ROLLBACK_KW),
         ("undrop", SyntaxKind::UNDROP_KW),
+        ("elseif", SyntaxKind::ELSEIF_KW),
+        ("while", SyntaxKind::WHILE_KW),
+        ("loop", SyntaxKind::LOOP_KW),
+        ("repeat", SyntaxKind::REPEAT_KW),
+        ("until", SyntaxKind::UNTIL_KW),
+        ("do", SyntaxKind::DO_KW),
+        ("exception", SyntaxKind::EXCEPTION_KW),
+        ("cursor", SyntaxKind::CURSOR_KW),
+        ("resultset", SyntaxKind::RESULTSET_KW),
     ];
 
     #[test]

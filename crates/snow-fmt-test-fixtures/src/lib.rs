@@ -105,9 +105,11 @@ pub const EASY_CASES: &[GoldenCase] = &[
     golden_case!("case_035_comment_on_object"),
     golden_case!("case_036_transaction_undrop"),
     golden_case!("case_037_begin_transaction"),
+    golden_case!("case_038_scripting_block_if"),
+    golden_case!("case_039_scripting_loop_exception"),
 ];
 
-pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 44;
+pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 46;
 
 #[cfg(test)]
 mod tests {

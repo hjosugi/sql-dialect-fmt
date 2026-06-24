@@ -60,11 +60,58 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT * FROM a ASOF JOIN b MATCH_CONDITION (a.t >= b.t)",
         "SELECT * FROM t AT (TIMESTAMP => '2024-01-01'::timestamp)",
         "SELECT * FROM orders BEFORE (STATEMENT => 'abc') o",
+        "BEGIN\nLET x := 1;\nRETURN x;\nEND",
+        "DECLARE\nv INT DEFAULT 0;\nBEGIN\nIF (v > 0) THEN\nRETURN 1;\nELSE\nRETURN 0;\nEND IF;\nEND",
+        "BEGIN\nFOR i IN 1 TO 3 DO\nINSERT INTO t VALUES (i);\nEND FOR;\nEND",
+        "BEGIN\nIF (x > 0) THEN\nRETURN 1;\nEND", // malformed: missing END IF — must still round-trip
         "SELECT )( garbage @ # FROM", // deliberately broken
     ];
     for s in inputs {
         assert_parse_roundtrip(s);
     }
+}
+
+#[test]
+fn scripting_blocks_parse_into_structured_nodes() {
+    let p = parse("DECLARE\nv INT DEFAULT 0;\nBEGIN\nIF (v > 0) THEN\nv := 1;\nEND IF;\nEND");
+    assert!(p.errors().is_empty(), "{:?}", p.errors());
+    let block = p
+        .syntax()
+        .children()
+        .find(|n| n.kind() == SyntaxKind::BLOCK_STMT)
+        .expect("a BLOCK_STMT");
+    let kinds: Vec<SyntaxKind> = block.descendants().map(|n| n.kind()).collect();
+    assert!(kinds.contains(&SyntaxKind::DECLARE_SECTION));
+    assert!(kinds.contains(&SyntaxKind::IF_STMT));
+    assert!(kinds.contains(&SyntaxKind::STMT_LIST));
+}
+
+#[test]
+fn let_with_case_expression_is_not_split_at_inner_end() {
+    // A `LET`/assignment whose right-hand side is a `CASE … END` expression must be one statement —
+    // consume-to-`;` must not stop at the expression's inner `END`.
+    let p =
+        parse("BEGIN\nLET label := (CASE WHEN x > 0 THEN 'p' ELSE 'n' END);\nRETURN label;\nEND");
+    assert!(p.errors().is_empty(), "{:?}", p.errors());
+    let block = p
+        .syntax()
+        .children()
+        .find(|n| n.kind() == SyntaxKind::BLOCK_STMT)
+        .expect("a BLOCK_STMT");
+    let stmt_list = block
+        .descendants()
+        .find(|n| n.kind() == SyntaxKind::STMT_LIST)
+        .expect("a STMT_LIST");
+    // Exactly two statements in the body: the LET and the RETURN.
+    assert_eq!(stmt_list.children().count(), 2);
+}
+
+#[test]
+fn malformed_block_errors_so_formatter_keeps_it_verbatim() {
+    // A block missing its `END IF` must not parse cleanly; the error makes the formatter fall back to
+    // a verbatim copy rather than emitting a corrupted block.
+    let p = parse("BEGIN\nIF (x > 0) THEN\nRETURN 1;\nEND");
+    assert!(!p.errors().is_empty());
 }
 
 #[test]
