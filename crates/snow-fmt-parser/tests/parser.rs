@@ -104,6 +104,9 @@ fn clean_sql_has_no_errors() {
         "COMMIT WORK",
         "ROLLBACK",
         "ROLLBACK TO SAVEPOINT sp1",
+        "BEGIN TRANSACTION",
+        "BEGIN WORK",
+        "BEGIN TRANSACTION NAME my_txn",
         "UNDROP TABLE db.s.t",
         "UNDROP SCHEMA db.s",
         // `DESC` as a sort direction must still parse inside ORDER BY, not as a DESCRIBE statement.
@@ -130,6 +133,30 @@ fn transaction_and_undrop_with_operands_are_single_statements() {
         assert_eq!(stmts.len(), 1, "{sql} must be a single statement");
         assert_eq!(stmts[0].kind(), kind);
     }
+}
+
+#[test]
+fn begin_transaction_parses_but_scripting_block_stays_verbatim() {
+    // `BEGIN TRANSACTION` / `BEGIN;` is a transaction statement and parses cleanly.
+    let txn = parse("BEGIN TRANSACTION");
+    assert!(txn.errors().is_empty());
+    assert!(txn
+        .syntax()
+        .children()
+        .any(|n| n.kind() == SyntaxKind::TRANSACTION_STMT));
+
+    // A Snowflake Scripting block (`BEGIN <stmt>; … END`) must NOT be captured as a transaction —
+    // it has no dedicated grammar yet, so it should error (and the formatter keeps it verbatim)
+    // rather than splitting its `;`-separated body apart.
+    let block = parse("BEGIN\nINSERT INTO t VALUES (1);\nINSERT INTO t VALUES (2);\nEND");
+    let begins_a_txn = block
+        .syntax()
+        .descendants()
+        .any(|n| n.kind() == SyntaxKind::TRANSACTION_STMT);
+    assert!(
+        !begins_a_txn,
+        "a scripting BEGIN ... END block must not parse as a transaction statement"
+    );
 }
 
 #[test]

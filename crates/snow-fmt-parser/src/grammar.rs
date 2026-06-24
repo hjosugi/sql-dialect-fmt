@@ -80,6 +80,7 @@ fn at_stmt_start(p: &Parser) -> bool {
         || p.at(TRUNCATE_KW)
         || p.at(COMMIT_KW)
         || p.at(ROLLBACK_KW)
+        || at_begin_transaction(p)
         || p.at(UNDROP_KW)
         || at_comment_stmt(p)
         || p.at(CALL_KW)
@@ -118,7 +119,7 @@ fn statement(p: &mut Parser) {
         lenient_stmt(p, DESCRIBE_STMT);
     } else if p.at(TRUNCATE_KW) {
         lenient_stmt(p, TRUNCATE_STMT);
-    } else if p.at(COMMIT_KW) || p.at(ROLLBACK_KW) {
+    } else if p.at(COMMIT_KW) || p.at(ROLLBACK_KW) || at_begin_transaction(p) {
         lenient_stmt(p, TRANSACTION_STMT);
     } else if p.at(UNDROP_KW) {
         lenient_stmt(p, UNDROP_STMT);
@@ -635,6 +636,18 @@ fn lenient_stmt(p: &mut Parser, node: SyntaxKind) {
 /// the very common `comment` column/identifier is never mistaken for this statement.
 fn at_comment_stmt(p: &Parser) -> bool {
     p.nth_contextual(0, ContextualKeyword::Comment) && p.nth_at(1, ON_KW)
+}
+
+/// At a transaction-starting `BEGIN` (`BEGIN;`, `BEGIN TRANSACTION …`, `BEGIN WORK`) — as opposed to
+/// a Snowflake Scripting block (`BEGIN <stmt>; … END`). Only the transaction form is recognized (so
+/// it formats inline); a scripting block is left to pass through verbatim, its inner `;`-separated
+/// statements never mis-split. `BEGIN NAME …` is intentionally not matched (rarer, and `name` is a
+/// common identifier).
+fn at_begin_transaction(p: &Parser) -> bool {
+    p.at(BEGIN_KW)
+        && (p.nth_at(1, SEMICOLON)
+            || p.nth_contextual(1, ContextualKeyword::Transaction)
+            || p.nth_contextual(1, ContextualKeyword::Work))
 }
 
 /// `COMMENT ON <object> IS '<text>'` (or `COMMENT IF EXISTS …`). Parsed leniently as a flat token

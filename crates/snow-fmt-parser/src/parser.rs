@@ -63,6 +63,10 @@ pub(crate) enum ContextualKeyword {
     /// `COMMENT ON <object> IS '...'` — recognized only before `ON` so it never shadows the very
     /// common `comment` column/identifier.
     Comment,
+    /// `BEGIN TRANSACTION` — distinguishes a transaction start from a Snowflake Scripting block.
+    Transaction,
+    /// `BEGIN WORK` — the SQL-standard spelling of a transaction start.
+    Work,
 }
 
 impl ContextualKeyword {
@@ -89,6 +93,8 @@ impl ContextualKeyword {
             ContextualKeyword::NoCycle => "nocycle",
             ContextualKeyword::Changes => "changes",
             ContextualKeyword::Comment => "comment",
+            ContextualKeyword::Transaction => "transaction",
+            ContextualKeyword::Work => "work",
         }
     }
 }

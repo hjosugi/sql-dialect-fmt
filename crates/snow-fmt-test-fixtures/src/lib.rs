@@ -104,9 +104,10 @@ pub const EASY_CASES: &[GoldenCase] = &[
     golden_case!("case_034_use_show_describe_truncate"),
     golden_case!("case_035_comment_on_object"),
     golden_case!("case_036_transaction_undrop"),
+    golden_case!("case_037_begin_transaction"),
 ];
 
-pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 43;
+pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 44;
 
 #[cfg(test)]
 mod tests {
