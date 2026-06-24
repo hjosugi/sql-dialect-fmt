@@ -98,12 +98,14 @@
 - 🚧 `GRANT`/`REVOKE`（`ALTER` と同様に寛容なトークン列パース→新ノード `GRANT_STMT`/`REVOKE_STMT`、インライン整形＝カンマ/空白正規化・キーワード大文字化・修飾名/列リスト保持。新キーワード `GRANT`/`REVOKE`。fixture `case_031` で golden/べき等/ラウンドトリップ、parser で clean-parse/ノード種別を検証） … パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grant_stmt`/`revoke_stmt`
 - ✅ セッション/introspection 文 `USE`/`SHOW`/`DESCRIBE`(`DESC`)/`TRUNCATE`（`lenient_stmt` 共通ヘルパで寛容パース→新ノード `USE_STMT`/`SHOW_STMT`/`DESCRIBE_STMT`/`TRUNCATE_STMT`、インライン整形。新キーワード `USE`/`SHOW`/`DESCRIBE`/`TRUNCATE`。**バグ修正**: `USE ROLE r` が3文に分割され `;` が挿入されていた非ロスレス挙動を解消。`ORDER BY … DESC` は従来どおり）。fixture `case_034`、parser で回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `lenient_stmt`
 - ✅ `COMMENT ON <object> IS '…'`（オブジェクト注釈。`comment` は `ON` の直前でのみ効く**コンテキストキーワード**にして、頻出する `comment` 列名を誤ってキーワード化しない。`COMMENT_STMT` ノード、`CONTEXTUAL_KEYWORD` 化で大文字化）。fixture `case_035`、parser で衝突回避を回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `comment_stmt`
+- ✅ `UNDROP <object> <name>`（`UNDROP_STMT`、寛容インライン）。**バグ修正**: `UNDROP SCHEMA s` の複数文分割を解消。fixture `case_036`
 - ⏳ マスキング/行アクセスポリシー, タグ
 
 ## Phase 8 — 手続き・関数・埋め込み言語 🚧 ＜第2の差別化点＞
 - 🚧 `CREATE PROCEDURE`/`FUNCTION`（**骨格**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持、ボディは区切りトークン `$$ … $$` / `'…'` を **verbatim** 保持。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create`。**コーパス clean 0→20件** に。残: UDTF の `TABLE(...)` 戻り、区切りなし scripting ボディ（現状はエラー→素通しで誤分割を防止）
 - ✅ セッション `SET <var> = <expr>` / `SET (a, b) = (...)`、`EXECUTE IMMEDIATE <string|$$…$$|:var> [USING (...)]`（`SET_STMT`/`EXECUTE_STMT` ノード、新キーワード `IMMEDIATE`。式に `DOLLAR_STRING` を許可）。**コーパス clean 20→22件** … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `set_stmt`/`execute_stmt`
 - ✅ `CALL proc(args)`（プロシージャ呼び出し。`CALL_STMT` ノード、呼び出しは通常の call 式として整形＝引数オーバーフロー時は1引数1行、`INTO :var` 等の末尾は寛容保持）。fixture `case_033` … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `call_stmt`
+- ✅ トランザクション制御 `COMMIT`/`ROLLBACK`（`COMMIT WORK`/`ROLLBACK TO SAVEPOINT …` 含む。`TRANSACTION_STMT`）。**バグ修正**: `COMMIT WORK`/`ROLLBACK TO SAVEPOINT …` が複数文に分割され `;` 挿入されていた非ロスレス挙動を解消。fixture `case_036`。`BEGIN` はスクリプトブロックと曖昧なため当面 verbatim 維持
 - ⏳ Snowflake Scripting（`DECLARE`/`BEGIN`/`EXCEPTION`/`END`, `LET`, `:=`, `FOR`/`WHILE`/`REPEAT`/`LOOP`, `IF`/`CASE`, カーソル, `RESULTSET`, `RETURN`）— ボディ内部の整形（現状は verbatim 保持）
 - ⏳ delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
   - ⏳ **JavaScript**: Biome の `biome_js_formatter` を組み込み

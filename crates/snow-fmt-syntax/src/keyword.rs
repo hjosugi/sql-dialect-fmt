@@ -167,6 +167,9 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
         "show" => SHOW_KW,
         "describe" => DESCRIBE_KW,
         "truncate" => TRUNCATE_KW,
+        "commit" => COMMIT_KW,
+        "rollback" => ROLLBACK_KW,
+        "undrop" => UNDROP_KW,
         _ => return None,
     })
 }
@@ -318,6 +321,9 @@ mod tests {
         ("show", SyntaxKind::SHOW_KW),
         ("describe", SyntaxKind::DESCRIBE_KW),
         ("truncate", SyntaxKind::TRUNCATE_KW),
+        ("commit", SyntaxKind::COMMIT_KW),
+        ("rollback", SyntaxKind::ROLLBACK_KW),
+        ("undrop", SyntaxKind::UNDROP_KW),
     ];
 
     #[test]

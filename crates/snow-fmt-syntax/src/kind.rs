@@ -206,6 +206,9 @@ pub enum SyntaxKind {
     SHOW_KW,
     DESCRIBE_KW,
     TRUNCATE_KW,
+    COMMIT_KW,
+    ROLLBACK_KW,
+    UNDROP_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -294,6 +297,8 @@ pub enum SyntaxKind {
     DESCRIBE_STMT,
     TRUNCATE_STMT,
     COMMENT_STMT,
+    TRANSACTION_STMT,
+    UNDROP_STMT,
     COLUMN_DEF_LIST,
     COLUMN_DEF,
     // Phase 4: Snowflake query extensions
