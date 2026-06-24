@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version tag to create (e.g. v0.1.0)"
+        required: true
+        default: v0.1.0
 
 permissions:
   contents: write
@@ -15,20 +21,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve version
+        id: version
+        run: echo "version=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_OUTPUT"
       - name: Build release binary
         run: cargo build --release -p snow-fmt-cli
       - name: Package binary
         run: |
-          asset="snow-fmt-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz"
+          asset="snow-fmt-${{ steps.version.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz"
           tar -czf "$asset" -C target/release snow-fmt
           sha256sum "$asset" > "$asset.sha256"
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
+          v="${{ steps.version.outputs.version }}"
+          # When dispatched, the tag does not exist yet; --target creates it at this commit.
+          # When triggered by a tag push, the tag already exists and --target is ignored.
+          gh release create "$v" \
             --repo "${{ github.repository }}" \
-            --title "${{ github.ref_name }}" \
+            --target "${{ github.sha }}" \
+            --title "$v" \
             --generate-notes \
-            "snow-fmt-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz" \
-            "snow-fmt-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz.sha256"
+            "snow-fmt-$v-x86_64-unknown-linux-gnu.tar.gz" \
+            "snow-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256"
