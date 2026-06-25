@@ -121,11 +121,9 @@ fn formatting(params: DocumentFormattingParams, docs: &Docs) -> Vec<lsp_types::T
     let Some(text) = docs.get(&params.text_document.uri) else {
         return Vec::new();
     };
-    let options = FormatOptions {
-        // Honor the editor's indent width; keep the other opinionated defaults.
-        indent_width: (params.options.tab_size as usize).max(1),
-        ..FormatOptions::default()
-    };
+    // Honor the editor's indent width; keep the other opinionated defaults.
+    let options =
+        FormatOptions::default().with_indent_width((params.options.tab_size as usize).max(1));
     format_edits(text, &options)
 }
 

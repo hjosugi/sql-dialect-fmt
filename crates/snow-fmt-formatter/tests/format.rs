@@ -70,13 +70,7 @@ fn distinct_is_part_of_the_header() {
 #[test]
 fn long_select_list_breaks_one_item_per_line() {
     let src = "select alpha, bravo, charlie, delta, echo, foxtrot, golf, hotel from t";
-    let out = format(
-        src,
-        &FormatOptions {
-            line_width: 40,
-            ..FormatOptions::default()
-        },
-    );
+    let out = format(src, &FormatOptions::default().with_line_width(40));
     insta::assert_snapshot!(out, @"
     SELECT
         alpha,
@@ -228,10 +222,7 @@ fn in_subquery_stays_inline() {
 fn order_by_items_wrap_when_they_do_not_fit() {
     let out = format(
         "select * from t order by alpha, bravo desc, charlie nulls last",
-        &FormatOptions {
-            line_width: 30,
-            ..FormatOptions::default()
-        },
+        &FormatOptions::default().with_line_width(30),
     );
     insta::assert_snapshot!(out, @"
     SELECT *
@@ -255,10 +246,7 @@ fn short_case_stays_on_one_line() {
 fn long_case_breaks_one_arm_per_line() {
     let out = format(
         "select case when a > 10 then 'big' when a > 0 then 'small' else 'zero' end as label from t",
-        &FormatOptions {
-            line_width: 40,
-            ..FormatOptions::default()
-        },
+        &FormatOptions::default().with_line_width(40),
     );
     insta::assert_snapshot!(out, @"
     SELECT
@@ -406,10 +394,7 @@ fn create_table_as_select_is_a_ctas() {
 fn create_table_column_defs_wrap_one_per_line() {
     let out = format(
         "create table t (id int, name varchar(100) not null)",
-        &FormatOptions {
-            line_width: 30,
-            ..FormatOptions::default()
-        },
+        &FormatOptions::default().with_line_width(30),
     );
     insta::assert_snapshot!(out, @"
     CREATE TABLE t (

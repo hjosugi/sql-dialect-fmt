@@ -260,10 +260,7 @@ fn revoke_grant_option_for_with_cascade() {
 fn keyword_casing_can_be_disabled() {
     // With casing off, every keyword (reserved and contextual) keeps its source spelling — including
     // the synthesized `AS` and the contextual `TO`/`ROLE`/object-kind words.
-    let opts = FormatOptions {
-        uppercase_keywords: false,
-        ..FormatOptions::default()
-    };
+    let opts = FormatOptions::default().with_uppercase_keywords(false);
     assert_eq!(
         format("grant select on table t to role r", &opts),
         "grant select\n    on table t\n    to role r;\n",

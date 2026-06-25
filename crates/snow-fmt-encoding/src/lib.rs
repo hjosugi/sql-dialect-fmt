@@ -4,20 +4,48 @@
 //! This crate keeps that boundary explicit: known Unicode encodings are decoded
 //! losslessly, while unknown or malformed byte streams remain opaque so tools do
 //! not accidentally rewrite data they do not understand.
+//!
+//! The entry point is [`DecodedText::decode`], which sniffs a BOM, decodes when it can, and
+//! otherwise keeps the original bytes intact. Edit the recovered text with [`DecodedText::map_text`]
+//! and round-trip back to bytes with [`DecodedText::encode`]; the original encoding (and any BOM) is
+//! preserved end to end.
+//!
+//! ```
+//! use snow_fmt_encoding::{DecodedText, TextEncoding};
+//! let decoded = DecodedText::decode("select 1\n".as_bytes());
+//! assert_eq!(decoded.encoding(), TextEncoding::Utf8);
+//! let upper = decoded.map_text(|t| t.to_uppercase());
+//! assert_eq!(upper.encode(), b"SELECT 1\n");
+//! ```
 
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
 const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 
+/// A text encoding that [`DecodedText`] can recognize and round-trip.
+///
+/// `#[non_exhaustive]`: more encodings may be added in future releases, so match with a wildcard
+/// arm.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum TextEncoding {
+    /// UTF-8 with no byte-order mark.
     Utf8,
+    /// UTF-8 prefixed with a byte-order mark, which is preserved on re-encoding.
     Utf8Bom,
+    /// Little-endian UTF-16 (identified by its byte-order mark).
     Utf16Le,
+    /// Big-endian UTF-16 (identified by its byte-order mark).
     Utf16Be,
+    /// Bytes that could not be decoded as text and are passed through verbatim.
     OpaqueBytes,
 }
 
+/// The result of decoding a byte stream: either recovered text in a known [`TextEncoding`], or the
+/// original bytes preserved verbatim because they could not be decoded.
+///
+/// Construct one with [`DecodedText::decode`]; it never loses data and [`DecodedText::encode`]
+/// reproduces the input.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecodedText {
     kind: DecodedKind,
@@ -35,14 +63,25 @@ enum DecodedKind {
     },
 }
 
+/// Why a byte stream was kept opaque instead of being decoded as text.
+///
+/// `#[non_exhaustive]`: more failure reasons may be added in future releases, so match with a
+/// wildcard arm.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum OpaqueReason {
+    /// The bytes were not valid UTF-8.
     InvalidUtf8,
+    /// A UTF-16 stream had an odd number of bytes, so it could not be split into 16-bit units.
     OddLengthUtf16,
+    /// The 16-bit units did not form valid UTF-16 (for example an unpaired surrogate).
     InvalidUtf16,
 }
 
 impl DecodedText {
+    /// Decode `bytes`, sniffing a leading byte-order mark to pick the encoding. Valid UTF-8 or
+    /// UTF-16 is recovered as text; anything that fails to decode is preserved verbatim with an
+    /// [`OpaqueReason`]. Never fails and never loses data.
     pub fn decode(bytes: &[u8]) -> Self {
         if bytes.starts_with(UTF8_BOM) {
             return decode_utf8(&bytes[UTF8_BOM.len()..], TextEncoding::Utf8Bom, bytes);
@@ -56,6 +95,8 @@ impl DecodedText {
         decode_utf8(bytes, TextEncoding::Utf8, bytes)
     }
 
+    /// The encoding this text was decoded as, or [`TextEncoding::OpaqueBytes`] when the input could
+    /// not be decoded.
     pub fn encoding(&self) -> TextEncoding {
         match &self.kind {
             DecodedKind::Text { encoding, .. } => *encoding,
@@ -63,6 +104,7 @@ impl DecodedText {
         }
     }
 
+    /// The decoded text, or `None` when the input was kept opaque (see [`Self::opaque_reason`]).
     pub fn as_str(&self) -> Option<&str> {
         match &self.kind {
             DecodedKind::Text { text, .. } => Some(text),
@@ -70,6 +112,7 @@ impl DecodedText {
         }
     }
 
+    /// Why the input was kept opaque, or `None` when it decoded as text.
     pub fn opaque_reason(&self) -> Option<OpaqueReason> {
         match &self.kind {
             DecodedKind::Text { .. } => None,
@@ -77,6 +120,8 @@ impl DecodedText {
         }
     }
 
+    /// Re-encode back to bytes in the original encoding (re-adding any BOM). For opaque input this
+    /// returns the preserved original bytes, so decode-then-encode is always a faithful round-trip.
     pub fn encode(&self) -> Vec<u8> {
         match &self.kind {
             DecodedKind::Text { encoding, text } => encode_text(*encoding, text),
@@ -84,6 +129,8 @@ impl DecodedText {
         }
     }
 
+    /// Apply `edit` to the decoded text, keeping the original encoding. Opaque input is returned
+    /// unchanged, so transformations never run on bytes that could not be understood as text.
     pub fn map_text(&self, edit: impl FnOnce(&str) -> String) -> Self {
         match &self.kind {
             DecodedKind::Text { encoding, text } => DecodedText {
