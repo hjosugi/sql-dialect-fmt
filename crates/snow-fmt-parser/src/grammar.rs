@@ -331,7 +331,16 @@ fn create_stmt(p: &mut Parser) {
     // at the object-kind word so the right sub-rule sees it; also stop at a query/body `AS` and the
     // statement end so a malformed prefix can never run away.
     while !at_object_kind(p) && !p.at(SEMICOLON) && !at_create_body(p) && !p.at_eof() {
-        p.bump_any();
+        // Contextual modifier words (`MATERIALIZED`, `LOCAL`, `GLOBAL`) precede the object kind;
+        // up-case them like keywords. Reserved modifiers (SECURE/TEMP/TRANSIENT/…) up-case already.
+        if p.nth_contextual(0, ContextualKeyword::Materialized)
+            || p.nth_contextual(0, ContextualKeyword::Local)
+            || p.nth_contextual(0, ContextualKeyword::Global)
+        {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+        } else {
+            p.bump_any();
+        }
     }
     if p.at(VIEW_KW) {
         create_view(p);
@@ -932,9 +941,10 @@ fn create_view(p: &mut Parser) {
     if p.at(L_PAREN) {
         column_list(p);
     }
-    // Tolerate view options (COMMENT = '...', masking policies, ...) up to the defining query.
+    // Tolerate view options (COMMENT = '...', masking policies, ...) up to the defining query,
+    // up-casing recognized DDL words so they format like keywords.
     while !p.at(AS_KW) && !p.at(SELECT_KW) && !p.at(WITH_KW) && !p.at(SEMICOLON) && !p.at_eof() {
-        p.bump_any();
+        bump_ddl_word(p);
     }
     p.eat(AS_KW);
     if p.at(SELECT_KW) || p.at(WITH_KW) || p.at(VALUES_KW) || p.at(L_PAREN) {
@@ -949,9 +959,17 @@ fn create_table(p: &mut Parser) {
     if p.at(L_PAREN) {
         column_def_list(p);
     }
-    // Tolerate table options (CLUSTER BY (...), COMMENT = '...', ...) up to an optional CTAS query.
+    // `CREATE TABLE <name> CLONE <source> [<time-travel>]` — no column list, no CTAS.
+    if p.nth_contextual(0, ContextualKeyword::Clone) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // CLONE
+        if p.at_name() {
+            name_ref(p);
+        }
+    }
+    // Tolerate table options (CLUSTER BY (...), COMMENT = '...', ...) up to an optional CTAS query,
+    // up-casing the recognized DDL words so they format like keywords.
     while !p.at(AS_KW) && !p.at(SEMICOLON) && !p.at_eof() {
-        p.bump_any();
+        bump_ddl_word(p);
     }
     if p.eat(AS_KW) {
         query_expr(p);
@@ -976,8 +994,26 @@ fn column_def_list(p: &mut Parser) {
 
 /// A column definition or table constraint, captured leniently as `name type constraints...` up to
 /// the next top-level comma or the closing paren (balanced inner parens for `NUMBER(10,2)` etc.).
+///
+/// The structure stays a flat token run (robust against the vast inline-constraint surface), but the
+/// recognized constraint words (`NOT NULL`, `DEFAULT`, `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`,
+/// `REFERENCES`, `CONSTRAINT`, `CHECK`, `COLLATE`, `COMMENT`) are tagged so they up-case like
+/// keywords. They remain contextual, so a column literally named `default`/`comment`/`key` still
+/// round-trips (it is only ever up-cased, never reparsed differently).
 fn column_def(p: &mut Parser) {
     let m = p.start();
+    // An out-of-line constraint begins with CONSTRAINT / PRIMARY / UNIQUE / FOREIGN / CHECK. A plain
+    // column begins with its name (an identifier — possibly a word that merely *looks* like a DDL
+    // option, e.g. a column named `comment`), so that leading token is taken verbatim, never
+    // up-cased, before the constraint words that follow it are tagged.
+    let starts_with_constraint = p.nth_contextual(0, ContextualKeyword::Constraint)
+        || p.nth_contextual(0, ContextualKeyword::Primary)
+        || p.nth_contextual(0, ContextualKeyword::Unique)
+        || p.nth_contextual(0, ContextualKeyword::Foreign)
+        || p.nth_contextual(0, ContextualKeyword::Check);
+    if !starts_with_constraint && !p.at(COMMA) && !p.at(R_PAREN) && !p.at_eof() {
+        p.bump_any(); // the column name (verbatim, even if it spells a contextual word)
+    }
     let mut depth = 0u32;
     while !p.at_eof() {
         if depth == 0 && (p.at(COMMA) || p.at(R_PAREN)) {
@@ -985,12 +1021,47 @@ fn column_def(p: &mut Parser) {
         }
         if p.at(L_PAREN) {
             depth += 1;
+            p.bump_any();
         } else if p.at(R_PAREN) {
             depth -= 1;
+            p.bump_any();
+        } else {
+            bump_ddl_word(p);
         }
-        p.bump_any();
     }
     m.complete(p, COLUMN_DEF);
+}
+
+/// Consume one token in a lenient DDL run, tagging a recognized constraint/option word as a
+/// contextual keyword (so the formatter up-cases it) and everything else verbatim. Real reserved
+/// keywords (`NOT`, `NULL`, `BY`, `IN`, …) already up-case via [`Parser::bump_any`].
+fn bump_ddl_word(p: &mut Parser) {
+    if p.at_keyword() {
+        p.bump_any(); // a reserved keyword bumps as itself (already up-cased)
+    } else if is_ddl_contextual_word(p) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // a contextual DDL word is tagged for up-casing
+    } else {
+        p.bump_any();
+    }
+}
+
+/// Whether the current token is a recognized (non-reserved) DDL constraint/option word.
+fn is_ddl_contextual_word(p: &Parser) -> bool {
+    p.nth_contextual(0, ContextualKeyword::Default)
+        || p.nth_contextual(0, ContextualKeyword::Primary)
+        || p.nth_contextual(0, ContextualKeyword::Key)
+        || p.nth_contextual(0, ContextualKeyword::Unique)
+        || p.nth_contextual(0, ContextualKeyword::Foreign)
+        || p.nth_contextual(0, ContextualKeyword::References)
+        || p.nth_contextual(0, ContextualKeyword::Constraint)
+        || p.nth_contextual(0, ContextualKeyword::Check)
+        || p.nth_contextual(0, ContextualKeyword::Collate)
+        || p.nth_contextual(0, ContextualKeyword::Comment)
+        || p.nth_contextual(0, ContextualKeyword::Cluster)
+        || p.nth_contextual(0, ContextualKeyword::Clone)
+        || p.nth_contextual(0, ContextualKeyword::Cascade)
+        || p.nth_contextual(0, ContextualKeyword::Restrict)
+        || p.nth_contextual(0, ContextualKeyword::Materialized)
 }
 
 fn drop_stmt(p: &mut Parser) {
@@ -1004,9 +1075,9 @@ fn drop_stmt(p: &mut Parser) {
     if p.at_name() {
         name_ref(p);
     }
-    // Tolerate trailing options (CASCADE / RESTRICT / ...).
+    // Tolerate trailing options (CASCADE / RESTRICT / ...), up-casing the recognized DDL words.
     while !p.at(SEMICOLON) && !p.at_eof() {
-        p.bump_any();
+        bump_ddl_word(p);
     }
     m.complete(p, DROP_STMT);
 }

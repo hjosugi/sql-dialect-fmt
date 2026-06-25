@@ -110,6 +110,35 @@ pub(crate) enum ContextualKeyword {
     Option,
     /// `GRANT ALL PRIVILEGES …`.
     Privileges,
+    // ---- DDL vocabulary (CREATE TABLE / VIEW, DROP). All double as ordinary identifiers, so they
+    // stay contextual: tagged for up-casing/highlighting only where the grammar expects them.
+    // (`Default`, `Cascade`, and `Restrict` are declared above and reused for DDL too.) ----
+    /// `MATERIALIZED VIEW`.
+    Materialized,
+    /// `LOCAL TEMP[ORARY]` table/view modifier.
+    Local,
+    /// `GLOBAL TEMP[ORARY]` table/view modifier.
+    Global,
+    /// `CLUSTER BY ( ... )`.
+    Cluster,
+    /// `CREATE TABLE <name> CLONE <source>`.
+    Clone,
+    /// A `PRIMARY KEY` constraint (also the first word of the two).
+    Primary,
+    /// The `KEY` of `PRIMARY KEY` / `FOREIGN KEY`.
+    Key,
+    /// A `UNIQUE` constraint.
+    Unique,
+    /// A `FOREIGN KEY` constraint.
+    Foreign,
+    /// `FOREIGN KEY ( ... ) REFERENCES <table> ( ... )`.
+    References,
+    /// `CONSTRAINT <name> ...` — names an out-of-line constraint.
+    Constraint,
+    /// A `CHECK ( <expr> )` constraint.
+    Check,
+    /// A column `COLLATE '<spec>'`.
+    Collate,
 }
 
 impl ContextualKeyword {
@@ -157,6 +186,19 @@ impl ContextualKeyword {
             ContextualKeyword::Restrict => "restrict",
             ContextualKeyword::Option => "option",
             ContextualKeyword::Privileges => "privileges",
+            ContextualKeyword::Materialized => "materialized",
+            ContextualKeyword::Local => "local",
+            ContextualKeyword::Global => "global",
+            ContextualKeyword::Cluster => "cluster",
+            ContextualKeyword::Clone => "clone",
+            ContextualKeyword::Primary => "primary",
+            ContextualKeyword::Key => "key",
+            ContextualKeyword::Unique => "unique",
+            ContextualKeyword::Foreign => "foreign",
+            ContextualKeyword::References => "references",
+            ContextualKeyword::Constraint => "constraint",
+            ContextualKeyword::Check => "check",
+            ContextualKeyword::Collate => "collate",
         }
     }
 }
