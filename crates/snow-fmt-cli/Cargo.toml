@@ -16,5 +16,11 @@ name = "snow-fmt"
 path = "src/main.rs"
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
 snow-fmt-encoding = { path = "../snow-fmt-encoding", version = "0.1.0" }
 snow-fmt-formatter = { path = "../snow-fmt-formatter", version = "0.1.0" }
+snow-fmt-parser = { path = "../snow-fmt-parser", version = "0.1.0" }
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
