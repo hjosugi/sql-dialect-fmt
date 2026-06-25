@@ -551,6 +551,36 @@ fn unterminated_others() {
 }
 
 #[test]
+fn lex_error_span_covers_the_offending_token() {
+    // An unterminated string runs from its opening quote to end of input: the error span must
+    // cover that whole token, not a single character.
+    let src = "ab 'unterminated";
+    let lexed = tokenize(src);
+    let err = &lexed.errors[0];
+    let start = src.find('\'').unwrap();
+    assert_eq!(err.offset, start);
+    assert_eq!(err.len, src.len() - start);
+    assert_eq!(&src[err.range()], "'unterminated");
+
+    // A stray multi-byte character spans its full UTF-8 width (and stays on a char boundary).
+    let lexed = tokenize("€");
+    let err = &lexed.errors[0];
+    assert_eq!(err.offset, 0);
+    assert_eq!(err.len, "€".len());
+    assert_eq!(&"€"[err.range()], "€");
+}
+
+#[test]
+fn lex_error_displays_human_message_with_location() {
+    let lexed = tokenize("ab 'x");
+    let err = &lexed.errors[0];
+    let shown = err.to_string();
+    assert!(shown.contains("unterminated string literal"), "{shown}");
+    assert!(shown.contains("at byte 3"), "{shown}");
+    let _: &dyn std::error::Error = err;
+}
+
+#[test]
 fn stray_characters_are_errors_not_panics() {
     assert_eq!(lex("!"), vec![(BANG, "!")]);
     assert_eq!(n_errors("!"), 1);

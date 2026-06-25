@@ -415,6 +415,132 @@ impl SyntaxKind {
         let v = self as u16;
         v > SyntaxKind::__KW_START as u16 && v < SyntaxKind::__KW_END as u16
     }
+
+    /// A human-readable name for this kind, for diagnostics.
+    ///
+    /// Where the `Debug` representation reads `SyntaxKind::INTO_KW` (useless to a SQL author),
+    /// this reads `INTO`; punctuation is quoted (`'('`), and the literal/name kinds get a phrase
+    /// (`an identifier`, `a string literal`). Keyword kinds derive their text from the variant
+    /// name by stripping the trailing `_KW`, so every keyword is covered without a per-variant arm.
+    pub fn describe(self) -> &'static str {
+        use SyntaxKind::*;
+        match self {
+            // Literals & names.
+            IDENT => "an identifier",
+            QUOTED_IDENT => "a quoted identifier",
+            STRING => "a string literal",
+            DOLLAR_STRING => "a dollar-quoted string",
+            INT_NUMBER => "an integer literal",
+            FLOAT_NUMBER => "a number literal",
+            VARIABLE => "a variable",
+            // Punctuation & operators (quoted so the symbol is unambiguous in a sentence).
+            L_PAREN => "'('",
+            R_PAREN => "')'",
+            L_BRACKET => "'['",
+            R_BRACKET => "']'",
+            L_BRACE => "'{'",
+            R_BRACE => "'}'",
+            COMMA => "','",
+            DOT => "'.'",
+            SEMICOLON => "';'",
+            COLON => "':'",
+            COLON2 => "'::'",
+            ASSIGN => "':='",
+            EQ => "'='",
+            NEQ => "'<>'",
+            LT => "'<'",
+            LTE => "'<='",
+            GT => "'>'",
+            GTE => "'>='",
+            PLUS => "'+'",
+            MINUS => "'-'",
+            STAR => "'*'",
+            SLASH => "'/'",
+            PERCENT => "'%'",
+            CONCAT => "'||'",
+            PIPE => "'|'",
+            PIPE_GT => "'|>'",
+            FLOW_PIPE => "'->>'",
+            ARROW => "'->'",
+            FAT_ARROW => "'=>'",
+            AMP => "'&'",
+            CARET => "'^'",
+            TILDE => "'~'",
+            AT => "'@'",
+            DOLLAR => "'$'",
+            QUESTION => "'?'",
+            BANG => "'!'",
+            // Trivia / structural.
+            WHITESPACE => "whitespace",
+            NEWLINE => "a newline",
+            COMMENT => "a comment",
+            BLOCK_COMMENT => "a block comment",
+            EOF => "end of input",
+            CONTEXTUAL_KEYWORD => "a keyword",
+            // Keywords: derive the bare spelling (`INTO_KW` -> `INTO`) from the variant name.
+            kind if kind.is_keyword() => kind.keyword_word(),
+            // Any node kind reached here (should not happen on an error path).
+            _ => "input",
+        }
+    }
+
+    /// The bare keyword spelling for a keyword kind (`INTO_KW` -> `INTO`), derived from the
+    /// variant's `Debug` name with the trailing `_KW` removed. Returns `""` for non-keywords.
+    fn keyword_word(self) -> &'static str {
+        macro_rules! kw {
+            ($($variant:ident => $word:literal,)*) => {
+                match self {
+                    $(SyntaxKind::$variant => $word,)*
+                    _ => "",
+                }
+            };
+        }
+        kw! {
+            SELECT_KW => "SELECT", FROM_KW => "FROM", WHERE_KW => "WHERE", GROUP_KW => "GROUP",
+            BY_KW => "BY", HAVING_KW => "HAVING", ORDER_KW => "ORDER", LIMIT_KW => "LIMIT",
+            OFFSET_KW => "OFFSET", FETCH_KW => "FETCH", TOP_KW => "TOP", AS_KW => "AS",
+            AND_KW => "AND", OR_KW => "OR", NOT_KW => "NOT", NULL_KW => "NULL", IS_KW => "IS",
+            IN_KW => "IN", LIKE_KW => "LIKE", ILIKE_KW => "ILIKE", RLIKE_KW => "RLIKE",
+            REGEXP_KW => "REGEXP", BETWEEN_KW => "BETWEEN", CASE_KW => "CASE", WHEN_KW => "WHEN",
+            THEN_KW => "THEN", ELSE_KW => "ELSE", END_KW => "END", JOIN_KW => "JOIN",
+            INNER_KW => "INNER", LEFT_KW => "LEFT", RIGHT_KW => "RIGHT", FULL_KW => "FULL",
+            OUTER_KW => "OUTER", CROSS_KW => "CROSS", LATERAL_KW => "LATERAL",
+            NATURAL_KW => "NATURAL", ON_KW => "ON", USING_KW => "USING", WITH_KW => "WITH",
+            RECURSIVE_KW => "RECURSIVE", UNION_KW => "UNION", ALL_KW => "ALL", ANY_KW => "ANY",
+            EXCEPT_KW => "EXCEPT", INTERSECT_KW => "INTERSECT", MINUS_KW => "MINUS",
+            DISTINCT_KW => "DISTINCT", QUALIFY_KW => "QUALIFY", OVER_KW => "OVER",
+            PARTITION_KW => "PARTITION", WINDOW_KW => "WINDOW", ROWS_KW => "ROWS",
+            RANGE_KW => "RANGE", UNBOUNDED_KW => "UNBOUNDED", PRECEDING_KW => "PRECEDING",
+            FOLLOWING_KW => "FOLLOWING", CURRENT_KW => "CURRENT", ROW_KW => "ROW", ASC_KW => "ASC",
+            DESC_KW => "DESC", NULLS_KW => "NULLS", FIRST_KW => "FIRST", LAST_KW => "LAST",
+            TRUE_KW => "TRUE", FALSE_KW => "FALSE", CAST_KW => "CAST", TRY_CAST_KW => "TRY_CAST",
+            EXISTS_KW => "EXISTS", VALUES_KW => "VALUES", PIVOT_KW => "PIVOT",
+            UNPIVOT_KW => "UNPIVOT", SAMPLE_KW => "SAMPLE", TABLESAMPLE_KW => "TABLESAMPLE",
+            CREATE_KW => "CREATE", REPLACE_KW => "REPLACE", IF_KW => "IF", TABLE_KW => "TABLE",
+            VIEW_KW => "VIEW", TEMPORARY_KW => "TEMPORARY", TEMP_KW => "TEMP",
+            TRANSIENT_KW => "TRANSIENT", VOLATILE_KW => "VOLATILE", SECURE_KW => "SECURE",
+            INSERT_KW => "INSERT", INTO_KW => "INTO", UPDATE_KW => "UPDATE", DELETE_KW => "DELETE",
+            MERGE_KW => "MERGE", SET_KW => "SET", FLATTEN_KW => "FLATTEN", CONNECT_KW => "CONNECT",
+            START_KW => "START", PRIOR_KW => "PRIOR", LANGUAGE_KW => "LANGUAGE",
+            JAVASCRIPT_KW => "JAVASCRIPT", PYTHON_KW => "PYTHON", JAVA_KW => "JAVA",
+            SCALA_KW => "SCALA", SQL_KW => "SQL", BEGIN_KW => "BEGIN", DECLARE_KW => "DECLARE",
+            LET_KW => "LET", RETURN_KW => "RETURN", CALL_KW => "CALL", PROCEDURE_KW => "PROCEDURE",
+            FUNCTION_KW => "FUNCTION", RETURNS_KW => "RETURNS", TASK_KW => "TASK",
+            WAREHOUSE_KW => "WAREHOUSE", SCHEDULE_KW => "SCHEDULE", AFTER_KW => "AFTER",
+            COPY_KW => "COPY", GRANTS_KW => "GRANTS", HANDLER_KW => "HANDLER",
+            PACKAGES_KW => "PACKAGES", IMPORTS_KW => "IMPORTS",
+            RUNTIME_VERSION_KW => "RUNTIME_VERSION", EXECUTE_KW => "EXECUTE", OWNER_KW => "OWNER",
+            CALLER_KW => "CALLER", STRICT_KW => "STRICT", CALLED_KW => "CALLED",
+            INPUT_KW => "INPUT", OUTPUT_KW => "OUTPUT", OUT_KW => "OUT", MATCHED_KW => "MATCHED",
+            DROP_KW => "DROP", ALTER_KW => "ALTER", WITHIN_KW => "WITHIN", FOR_KW => "FOR",
+            IMMEDIATE_KW => "IMMEDIATE", OVERWRITE_KW => "OVERWRITE", GRANT_KW => "GRANT",
+            REVOKE_KW => "REVOKE", USE_KW => "USE", SHOW_KW => "SHOW", DESCRIBE_KW => "DESCRIBE",
+            TRUNCATE_KW => "TRUNCATE", COMMIT_KW => "COMMIT", ROLLBACK_KW => "ROLLBACK",
+            UNDROP_KW => "UNDROP", ELSEIF_KW => "ELSEIF", WHILE_KW => "WHILE", LOOP_KW => "LOOP",
+            REPEAT_KW => "REPEAT", UNTIL_KW => "UNTIL", DO_KW => "DO", EXCEPTION_KW => "EXCEPTION",
+            CURSOR_KW => "CURSOR", RESULTSET_KW => "RESULTSET",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -446,5 +572,30 @@ mod tests {
     #[should_panic]
     fn from_u16_out_of_range_panics() {
         let _ = SyntaxKind::from_u16(u16::MAX);
+    }
+
+    #[test]
+    fn describe_is_human_readable() {
+        assert_eq!(SyntaxKind::INTO_KW.describe(), "INTO");
+        assert_eq!(SyntaxKind::SELECT_KW.describe(), "SELECT");
+        assert_eq!(SyntaxKind::L_PAREN.describe(), "'('");
+        assert_eq!(SyntaxKind::FAT_ARROW.describe(), "'=>'");
+        assert_eq!(SyntaxKind::IDENT.describe(), "an identifier");
+        assert_eq!(SyntaxKind::STRING.describe(), "a string literal");
+        assert_eq!(SyntaxKind::EOF.describe(), "end of input");
+    }
+
+    #[test]
+    fn describe_covers_every_keyword() {
+        // Every keyword kind must yield a non-empty spelling; a new keyword added to the enum
+        // without a `describe` arm would fall through to "" and fail here.
+        for raw in (SyntaxKind::__KW_START as u16 + 1)..(SyntaxKind::__KW_END as u16) {
+            let kind = SyntaxKind::from_u16(raw);
+            assert!(kind.is_keyword());
+            assert!(
+                !kind.describe().is_empty(),
+                "{kind:?} has no describe() text"
+            );
+        }
     }
 }

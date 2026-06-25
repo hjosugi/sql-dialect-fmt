@@ -71,4 +71,13 @@ impl<'a> Input<'a> {
             None => self.total,
         }
     }
+
+    /// Byte length of the meaningful token at `pos`, or `0` past the end (where there is no token
+    /// to span). Lets a diagnostic underline the whole offending token, not a single character.
+    pub(crate) fn token_len(&self, pos: usize) -> usize {
+        match self.meaningful.get(pos) {
+            Some(&i) => self.all[i].text.len(),
+            None => 0,
+        }
+    }
 }

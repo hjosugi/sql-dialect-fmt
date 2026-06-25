@@ -110,21 +110,38 @@ pub fn format_edits(text: &str, options: &FormatOptions) -> Vec<TextEdit> {
     }]
 }
 
-/// Parse diagnostics for `textDocument/publishDiagnostics`. The parser never fails, so this is the
-/// set of recovered errors (empty for clean input).
+/// Diagnostics for `textDocument/publishDiagnostics`: both lexer and parser errors. Neither stage
+/// ever fails, so this is the set of *recovered* errors (empty for clean input).
+///
+/// Lexer errors (unterminated literals/comments, stray characters) are surfaced too — they are
+/// reported by the tokenizer before the parser runs, so the parser-only error list would otherwise
+/// miss them. We read them through the highlighter, which already re-exposes the lexer's errors.
+/// Each diagnostic's range covers the whole offending token (via its byte `range()`), not a single
+/// character, so editors underline the real span.
 pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
-    let parse = snow_fmt_parser::parse(text);
     let index = LineIndex::new(text);
-    parse
-        .errors()
-        .iter()
-        .map(|err| Diagnostic {
-            range: Range::new(index.position(err.offset), index.position(err.offset + 1)),
-            severity: Some(DiagnosticSeverity::ERROR),
-            source: Some("snow-fmt".to_string()),
-            message: err.message.clone(),
-            ..Default::default()
-        })
+    let to_range = |span: std::ops::Range<usize>| {
+        Range::new(index.position(span.start), index.position(span.end))
+    };
+    let make = |range: Range, message: String| Diagnostic {
+        range,
+        severity: Some(DiagnosticSeverity::ERROR),
+        source: Some("snow-fmt".to_string()),
+        message,
+        ..Default::default()
+    };
+
+    let lex_errors = snow_fmt_highlight::highlight(text).errors;
+    let parse = snow_fmt_parser::parse(text);
+    lex_errors
+        .into_iter()
+        .map(|err| make(to_range(err.range()), err.message))
+        .chain(
+            parse
+                .errors()
+                .iter()
+                .map(|err| make(to_range(err.range()), err.message.clone())),
+        )
         .collect()
 }
 
@@ -260,6 +277,44 @@ mod tests {
         let diags = diagnostics("select from where");
         assert!(!diags.is_empty());
         assert_eq!(diags[0].severity, Some(DiagnosticSeverity::ERROR));
+    }
+
+    #[test]
+    fn lexer_errors_reach_diagnostics() {
+        // An unterminated string is a *lexer* error (the parser never sees it as a token boundary
+        // problem). It must still surface as a diagnostic, and its range must cover the whole
+        // unterminated literal, not a single character.
+        let text = "SELECT 'oops";
+        let diags = diagnostics(text);
+        let lex_diag = diags
+            .iter()
+            .find(|d| d.message.contains("unterminated string"))
+            .expect("an unterminated-string diagnostic");
+        assert_eq!(lex_diag.severity, Some(DiagnosticSeverity::ERROR));
+        let quote = text.find('\'').unwrap() as u32;
+        assert_eq!(lex_diag.range.start, Position::new(0, quote));
+        // Spans to end of the line (the whole literal), so end column > start column.
+        assert!(lex_diag.range.end.character > lex_diag.range.start.character);
+    }
+
+    #[test]
+    fn parser_diagnostic_range_covers_the_token() {
+        // `MERGE tgt ...` (no INTO) reports "expected INTO" at the `tgt` token; the LSP range must
+        // span the whole 3-character identifier, not one character.
+        let text = "MERGE tgt USING src ON a = b";
+        let diags = diagnostics(text);
+        let into = diags
+            .iter()
+            .find(|d| d.message == "expected INTO")
+            .expect("an INTO diagnostic");
+        let col = text.find("tgt").unwrap() as u32;
+        assert_eq!(into.range.start, Position::new(0, col));
+        assert_eq!(into.range.end, Position::new(0, col + 3));
+    }
+
+    #[test]
+    fn clean_sql_still_has_no_lexer_or_parser_diagnostics() {
+        assert!(diagnostics("SELECT a FROM t").is_empty());
     }
 
     #[test]

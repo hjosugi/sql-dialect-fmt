@@ -21,12 +21,32 @@ mod parser;
 pub use ast::*;
 pub use snow_fmt_syntax::{SyntaxKind, SyntaxNode};
 
-/// A diagnostic produced while parsing, located at a byte offset into the source.
+/// A diagnostic produced while parsing, located at a byte span into the source.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseError {
     pub message: String,
+    /// Byte offset into the source where the offending token begins.
     pub offset: usize,
+    /// Byte length of the offending token's text, so a diagnostic underlines the whole token
+    /// rather than a single character. `0` for a zero-width point (e.g. an error at end of input,
+    /// where there is no token to point at).
+    pub len: usize,
 }
+
+impl ParseError {
+    /// The byte range `offset..offset + len` this error covers in the source.
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.offset..self.offset + self.len
+    }
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} at byte {}", self.message, self.offset)
+    }
+}
+
+impl std::error::Error for ParseError {}
 
 /// The result of parsing: a lossless green tree plus any diagnostics.
 #[derive(Clone)]

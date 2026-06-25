@@ -312,7 +312,12 @@ impl<'a> Parser<'a> {
     // ---- consumption ----
 
     fn advance(&mut self, kind: SyntaxKind) {
-        assert!(!self.at_eof(), "advance past end of input");
+        // Never advance past end of input. Callers guard with `at`/`!at_eof`, but stay total
+        // (return rather than `assert!`) so a stray call at EOF can never panic — the parser's
+        // hard never-panic invariant. `bump`/`bump_as` keep their `debug_assert` guards for tests.
+        if self.at_eof() {
+            return;
+        }
         self.events.push(Event::Advance { kind });
         self.pos += 1;
         self.fuel.set(INITIAL_FUEL);
@@ -348,20 +353,26 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Consume `kind` if present, else record a diagnostic (no token is consumed).
+    /// Consume `kind` if present, else record a diagnostic (no token is consumed). The message
+    /// names the expected token with its human-readable spelling (`expected INTO`, `expected '('`),
+    /// never the internal `SyntaxKind` debug name.
     pub(crate) fn expect(&mut self, kind: SyntaxKind) {
         if !self.eat(kind) {
-            self.error(format!("expected {kind:?}"));
+            self.error(format!("expected {}", kind.describe()));
         }
     }
 
     // ---- errors ----
 
+    /// Record a diagnostic spanning the current (offending) token. At end of input the span is the
+    /// zero-width point at the source's end, so the message still attaches to a location.
     pub(crate) fn error(&mut self, msg: impl Into<String>) {
         let offset = self.input.offset(self.pos);
+        let len = self.input.token_len(self.pos);
         self.errors.push(ParseError {
             message: msg.into(),
             offset,
+            len,
         });
     }
 

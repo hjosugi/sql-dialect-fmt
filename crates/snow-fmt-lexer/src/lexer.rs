@@ -89,11 +89,15 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
         self.tokens.push(Token { kind, text });
     }
 
+    /// Record a lexical diagnostic spanning `offset..self.pos` (the offending token text consumed
+    /// so far). Called once the lexer has advanced past the start of the bad token, so the current
+    /// position marks the end of the span being reported.
     #[inline]
     fn error(&mut self, message: impl Into<String>, offset: usize) {
         self.errors.push(LexError {
             message: message.into(),
             offset,
+            len: self.pos.saturating_sub(offset),
         });
     }
 
