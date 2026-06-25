@@ -109,9 +109,9 @@ fn statement(p: &mut Parser) {
     } else if p.at(ALTER_KW) {
         alter_stmt(p);
     } else if p.at(GRANT_KW) {
-        lenient_stmt(p, GRANT_STMT);
+        grant_stmt(p);
     } else if p.at(REVOKE_KW) {
-        lenient_stmt(p, REVOKE_STMT);
+        revoke_stmt(p);
     } else if p.at(USE_KW) {
         lenient_stmt(p, USE_STMT);
     } else if p.at(SHOW_KW) {
@@ -328,16 +328,9 @@ fn create_stmt(p: &mut Parser) {
         p.expect(REPLACE_KW);
     }
     // Modifiers before the object kind (SECURE / TEMPORARY / TRANSIENT / MATERIALIZED / ...). Stop
-    // at a query/body `AS` so `create_other` can leave body-bearing creates (e.g. CREATE TASK)
-    // verbatim instead of swallowing the body into this flat run.
-    while !p.at(TABLE_KW)
-        && !p.at(VIEW_KW)
-        && !p.at(PROCEDURE_KW)
-        && !p.at(FUNCTION_KW)
-        && !p.at(SEMICOLON)
-        && !at_create_body(p)
-        && !p.at_eof()
-    {
+    // at the object-kind word so the right sub-rule sees it; also stop at a query/body `AS` and the
+    // statement end so a malformed prefix can never run away.
+    while !at_object_kind(p) && !p.at(SEMICOLON) && !at_create_body(p) && !p.at_eof() {
         p.bump_any();
     }
     if p.at(VIEW_KW) {
@@ -346,17 +339,231 @@ fn create_stmt(p: &mut Parser) {
         create_table(p);
     } else if p.at(PROCEDURE_KW) || p.at(FUNCTION_KW) {
         create_routine(p);
+    } else if at_named_object_kind(p) {
+        create_object(p);
     } else {
         create_other(p);
     }
     m.complete(p, CREATE_STMT);
 }
 
-/// Object kinds without a query body — `CREATE SCHEMA/DATABASE/WAREHOUSE/SEQUENCE/STAGE/FILE
-/// FORMAT/ROLE/…` — parsed leniently as a flat token run so they round-trip and get inline spacing
-/// (like [`alter_stmt`]). If the statement carries an `AS <body>` (e.g. `CREATE TASK … AS <dml>`),
-/// bail to an error so it passes through verbatim rather than being flattened into one line — the
-/// formatter cannot lay out a body it has not parsed structurally.
+/// At the keyword/word that names the kind of object being created: a reserved object keyword
+/// (`TABLE`, `VIEW`, `PROCEDURE`, `FUNCTION`, `TASK`, `WAREHOUSE`) or one of the contextual object
+/// words (`SCHEMA`, `DATABASE`, `STAGE`, `SEQUENCE`, `STREAM`, `DYNAMIC` table, `FILE` format).
+fn at_object_kind(p: &Parser) -> bool {
+    p.at(TABLE_KW)
+        || p.at(VIEW_KW)
+        || p.at(PROCEDURE_KW)
+        || p.at(FUNCTION_KW)
+        || at_named_object_kind(p)
+}
+
+/// At a Phase-7 "named object" kind — the property-region creates this rule structures
+/// (`SCHEMA`/`DATABASE`/`WAREHOUSE`/`STAGE`/`SEQUENCE`/`STREAM`/`TASK`/`DYNAMIC TABLE`/`FILE FORMAT`).
+fn at_named_object_kind(p: &Parser) -> bool {
+    p.at(TASK_KW)
+        || p.at(WAREHOUSE_KW)
+        || p.nth_contextual(0, ContextualKeyword::Schema)
+        || p.nth_contextual(0, ContextualKeyword::Database)
+        || p.nth_contextual(0, ContextualKeyword::Stage)
+        || p.nth_contextual(0, ContextualKeyword::Sequence)
+        || p.nth_contextual(0, ContextualKeyword::Stream)
+        || p.nth_contextual(0, ContextualKeyword::Dynamic)
+        || p.nth_contextual(0, ContextualKeyword::File)
+}
+
+/// `CREATE [OR REPLACE] [modifiers] <kind> [IF NOT EXISTS] <name> <property>* [<clause>]* [AS <body>]`
+/// for the object kinds whose body is a property region rather than a column list:
+/// SCHEMA / DATABASE / WAREHOUSE / STAGE / SEQUENCE / FILE FORMAT, plus the body-bearing
+/// STREAM (`ON TABLE …`), TASK (`SCHEDULE = … AFTER … AS <sql>`), and DYNAMIC TABLE
+/// (`TARGET_LAG = … WAREHOUSE = … AS <query>`).
+///
+/// The object-kind word and any optional column list are kept inline on the `CREATE_STMT` header;
+/// each property (`KEY = value`, `KEY = ( … )`, or a bare flag word) becomes an [`OBJECT_PROPERTY`],
+/// the stream source a [`STREAM_SOURCE`], a task predecessor list a [`TASK_AFTER`], and the
+/// `AS <body>` is parsed structurally so it lays out like any other query/statement.
+fn create_object(p: &mut Parser) {
+    // The object-kind word(s): one word, or the two-word `FILE FORMAT` / `DYNAMIC TABLE`.
+    object_kind_words(p);
+    if_exists_clause(p);
+    if p.at_name() {
+        name_ref(p);
+    }
+    // A few object kinds carry a column list (DYNAMIC TABLE, sometimes STREAM); keep it inline.
+    if p.at(L_PAREN) {
+        column_def_list(p);
+    }
+    p.eat(WITH_KW); // optional `WITH` before the property region (e.g. CREATE WAREHOUSE w WITH …)
+    object_property_region(p);
+    if at_create_body(p) {
+        p.bump(AS_KW);
+        create_body(p);
+    }
+}
+
+/// Consume the object-kind word(s): the two-word kinds `FILE FORMAT` and `DYNAMIC TABLE`, otherwise
+/// a single word. `FILE`/`DYNAMIC` are contextual, so they round-trip and the formatter up-cases the
+/// whole kind via the [`OBJECT_PROPERTY`]-free header walk.
+fn object_kind_words(p: &mut Parser) {
+    if p.nth_contextual(0, ContextualKeyword::File) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // FILE
+        if p.nth_contextual(0, ContextualKeyword::Format) {
+            p.bump_as(CONTEXTUAL_KEYWORD); // FORMAT
+        }
+    } else if p.nth_contextual(0, ContextualKeyword::Dynamic) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // DYNAMIC
+        if p.at(TABLE_KW) {
+            p.bump(TABLE_KW);
+        }
+    } else if p.at_keyword() {
+        // A reserved object keyword (TASK / WAREHOUSE / TABLE / …) — already up-cased by bump_any.
+        p.bump_any();
+    } else {
+        // SCHEMA / DATABASE / STAGE / SEQUENCE / STREAM — contextual words, up-cased like keywords.
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    }
+}
+
+/// The defensive property/clause region of an object DDL, terminated by an `AS <body>`, `;`, or EOF.
+/// Each iteration must make progress: every branch bumps at least one token, and the catch-all bumps
+/// the current token into an [`OBJECT_PROPERTY`] so a surprise token can never stall the loop.
+fn object_property_region(p: &mut Parser) {
+    while !at_create_body(p) && !p.at(SEMICOLON) && !p.at_eof() {
+        if p.at(ON_KW) {
+            stream_source(p);
+        } else if p.at(AFTER_KW) {
+            task_after(p);
+        } else if p.at(WHEN_KW) {
+            // CREATE TASK … WHEN <boolean_expr>.
+            let m = p.start();
+            p.bump(WHEN_KW);
+            expr(p);
+            m.complete(p, OBJECT_PROPERTY);
+        } else {
+            object_property(p);
+        }
+    }
+}
+
+/// One object property: `KEY = value`, `KEY = ( … )`, the unset/no-prefixed flags (`NOORDER`), or a
+/// bare flag word. Always consumes at least one token.
+fn object_property(p: &mut Parser) {
+    let m = p.start();
+    p.bump_any(); // the property name / flag word (kept verbatim; values are case-sensitive)
+    if p.eat(EQ) {
+        if p.at(L_PAREN) {
+            balanced_parens(p); // KEY = ( sub-option = value, … ) — e.g. FILE_FORMAT = (TYPE = 'CSV')
+        } else if !at_create_body(p) && !p.at(SEMICOLON) && !p.at_eof() {
+            p.bump_any(); // a single literal / bare-word / @stage value
+        }
+        // Some values carry trailing units as separate words: `START WITH 1`, `INCREMENT BY 1`.
+        while at_property_value_tail(p) {
+            p.bump_any();
+        }
+    } else {
+        // Bare option words like `START WITH 1` / `INCREMENT BY 1` where the `=` is omitted, or a
+        // standalone flag (`NOORDER`). Absorb the immediate value tail so it stays on one line.
+        while at_property_value_tail(p) {
+            p.bump_any();
+        }
+    }
+    m.complete(p, OBJECT_PROPERTY);
+}
+
+/// A continuation token of the current property's value: a `WITH`/`BY` connector or a literal/word
+/// that is not the start of the next property, a clause, or the body. Keeps `START WITH 1` and
+/// `INCREMENT BY 1` (the `=`-less sequence forms) together on one line.
+fn at_property_value_tail(p: &Parser) -> bool {
+    if p.at(WITH_KW) || p.at(BY_KW) {
+        return true;
+    }
+    // A bare value word/literal that is not itself a new `KEY = …` property and not a clause/body.
+    let starts_new_property = p.nth_at(1, EQ);
+    !starts_new_property
+        && !p.at(SEMICOLON)
+        && !p.at(ON_KW)
+        && !p.at(AFTER_KW)
+        && !p.at(WHEN_KW)
+        && !at_create_body(p)
+        && !p.at_eof()
+        && (p.at(INT_NUMBER) || p.at(FLOAT_NUMBER) || p.at(STRING) || p.at(VARIABLE))
+}
+
+/// A stream's `ON { TABLE | VIEW | STAGE } <name> [ { AT | BEFORE } ( … ) ]` source clause.
+fn stream_source(p: &mut Parser) {
+    let m = p.start();
+    p.bump(ON_KW);
+    // The source object kind word (TABLE / VIEW / STAGE / EXTERNAL TABLE …) then the name.
+    if p.at(TABLE_KW) || p.at(VIEW_KW) {
+        p.bump_any();
+    } else if p.nth_contextual(0, ContextualKeyword::Stage) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    } else if p.at_keyword() {
+        p.bump_any();
+    }
+    if p.at_name() {
+        name_ref(p);
+    }
+    // Optional time-travel: `AT ( … )` / `BEFORE ( … )`.
+    if p.nth_contextual(0, ContextualKeyword::At) || p.nth_contextual(0, ContextualKeyword::Before)
+    {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        }
+    }
+    m.complete(p, STREAM_SOURCE);
+}
+
+/// A task's `AFTER <pred> [, <pred>]*` predecessor list.
+fn task_after(p: &mut Parser) {
+    let m = p.start();
+    p.bump(AFTER_KW);
+    if p.at_name() {
+        name_ref(p);
+        while p.eat(COMMA) {
+            if p.at_name() {
+                name_ref(p);
+            } else {
+                break;
+            }
+        }
+    }
+    m.complete(p, TASK_AFTER);
+}
+
+/// The `<body>` after `AS` in a body-bearing object DDL: a query (TASK over a SELECT, DYNAMIC TABLE),
+/// a DML statement (TASK), a scripting block, or a parenthesized query. Parsed structurally so it
+/// lays out like a standalone statement.
+fn create_body(p: &mut Parser) {
+    if p.at(SELECT_KW)
+        || p.at(WITH_KW)
+        || p.at(VALUES_KW)
+        || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
+    {
+        query_expr(p);
+    } else if p.at(INSERT_KW) {
+        insert_stmt(p);
+    } else if p.at(UPDATE_KW) {
+        update_stmt(p);
+    } else if p.at(DELETE_KW) {
+        delete_stmt(p);
+    } else if p.at(MERGE_KW) {
+        merge_stmt(p);
+    } else if p.at(CALL_KW) {
+        call_stmt(p);
+    } else if at_block_start(p) {
+        block_stmt(p);
+    } else if !p.at(SEMICOLON) && !p.at_eof() {
+        // An unmodeled body shape: keep it as an expression statement so it still round-trips.
+        let m = p.start();
+        expr(p);
+        m.complete(p, EXPR_STMT);
+    }
+}
+
+/// Object kinds without a query body that this rule does not specialize — parsed leniently as a flat
+/// token run so they round-trip and get inline spacing (like [`alter_stmt`]).
 fn create_other(p: &mut Parser) {
     while !p.at(SEMICOLON) && !p.at_eof() {
         if at_create_body(p) {
@@ -368,6 +575,162 @@ fn create_other(p: &mut Parser) {
         }
         p.bump_any();
     }
+}
+
+// ---- access control: GRANT / REVOKE ----
+
+/// `GRANT <privileges> ON <object> TO [ROLE|USER] <name> [WITH GRANT OPTION]`, plus the role/share
+/// grant shapes (`GRANT ROLE r TO …`, `GRANT <role> TO USER u`). The privilege list, the `ON …`
+/// securable, and the `TO …` grantee are each their own node so the formatter can stack them; a
+/// trailing `WITH GRANT OPTION` (or any unmodeled tail) is kept as inline tokens.
+fn grant_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(GRANT_KW);
+    priv_list(p, |p| p.at(ON_KW) || at_to(p));
+    if p.at(ON_KW) {
+        grant_target(p);
+    }
+    if at_to(p) {
+        grantee(p, GranteeIntro::To);
+    }
+    // `WITH GRANT OPTION`, `COPY CURRENT GRANTS`, etc. — kept inline as tokens.
+    grant_tail(p);
+    m.complete(p, GRANT_STMT);
+}
+
+/// At the contextual `TO` that introduces a grantee.
+fn at_to(p: &Parser) -> bool {
+    p.nth_contextual(0, ContextualKeyword::To)
+}
+
+/// Which keyword introduces the grantee: `TO` for GRANT, `FROM` for REVOKE.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GranteeIntro {
+    To,
+    From,
+}
+
+/// `REVOKE [GRANT OPTION FOR] <privileges> ON <object> FROM [ROLE|USER] <name> [CASCADE|RESTRICT]`.
+fn revoke_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(REVOKE_KW);
+    // Optional `GRANT OPTION FOR` prefix — `GRANT`/`FOR` are keywords; `OPTION` is contextual.
+    if p.at(GRANT_KW) && p.nth_contextual(1, ContextualKeyword::Option) {
+        p.bump(GRANT_KW);
+        p.bump_as(CONTEXTUAL_KEYWORD); // OPTION
+        p.eat(FOR_KW);
+    }
+    priv_list(p, |p| p.at(ON_KW) || p.at(FROM_KW));
+    if p.at(ON_KW) {
+        grant_target(p);
+    }
+    if p.at(FROM_KW) {
+        grantee(p, GranteeIntro::From);
+    }
+    // `CASCADE` / `RESTRICT` and any unmodeled tail — kept inline as tokens.
+    grant_tail(p);
+    m.complete(p, REVOKE_STMT);
+}
+
+/// The comma-separated privilege list before `ON` (`SELECT, INSERT, UPDATE`), the catch-all
+/// `ALL [PRIVILEGES]`, or a role/privilege word. `stop` reports the token that ends the list.
+fn priv_list(p: &mut Parser, stop: impl Fn(&Parser) -> bool) {
+    let m = p.start();
+    while !stop(p) && !at_to(p) && !p.at(SEMICOLON) && !p.at_eof() {
+        if p.at(COMMA) {
+            p.bump(COMMA);
+        } else if p.nth_contextual(0, ContextualKeyword::Privileges) {
+            p.bump_as(CONTEXTUAL_KEYWORD); // `ALL PRIVILEGES`
+        } else {
+            // A privilege word/phrase (SELECT, ALL, IMPORTED, …). Up-case keyword-spelled ones
+            // (SELECT/INSERT/UPDATE/DELETE/CREATE/…); keep others verbatim.
+            p.bump_any();
+        }
+    }
+    m.complete(p, PRIV_LIST);
+}
+
+/// The `ON <object_type> <object_name>` securable. The object type and name are kept as inline
+/// tokens (`TABLE db.sch.t`, `ALL TABLES IN SCHEMA s`, `FUTURE SCHEMAS IN DATABASE d`) so the wide,
+/// open-ended surface round-trips losslessly while still living on its own line.
+fn grant_target(p: &mut Parser) {
+    let m = p.start();
+    p.bump(ON_KW);
+    while !at_to(p) && !p.at(FROM_KW) && !at_grant_tail(p) && !p.at(SEMICOLON) && !p.at_eof() {
+        if at_object_type_word(p) {
+            p.bump_as(CONTEXTUAL_KEYWORD); // SCHEMA / DATABASE / STAGE / SEQUENCE / STREAM
+        } else {
+            p.bump_any();
+        }
+    }
+    m.complete(p, GRANT_TARGET);
+}
+
+/// An object-type word inside a GRANT/REVOKE securable (`ON SCHEMA s`, `ON ALL TABLES IN DATABASE
+/// d`). The reserved ones (`TABLE`/`VIEW`/`WAREHOUSE`) are already up-cased by `bump_any`; this
+/// reaches the contextual ones so the whole securable reads in canonical case.
+fn at_object_type_word(p: &Parser) -> bool {
+    p.nth_contextual(0, ContextualKeyword::Schema)
+        || p.nth_contextual(0, ContextualKeyword::Database)
+        || p.nth_contextual(0, ContextualKeyword::Stage)
+        || p.nth_contextual(0, ContextualKeyword::Sequence)
+        || p.nth_contextual(0, ContextualKeyword::Stream)
+}
+
+/// The `{ TO | FROM } [ROLE|USER|SHARE|DATABASE ROLE] <name>` recipient. A trailing
+/// `WITH GRANT OPTION` / `CASCADE` / `RESTRICT` ends the grantee.
+fn grantee(p: &mut Parser, intro: GranteeIntro) {
+    let m = p.start();
+    // The introducer keyword: `FROM` is reserved; `TO` is contextual.
+    match intro {
+        GranteeIntro::To => {
+            if at_to(p) {
+                p.bump_as(CONTEXTUAL_KEYWORD);
+            }
+        }
+        GranteeIntro::From => p.expect(FROM_KW),
+    }
+    // Optional grantee kind (ROLE / USER / SHARE / DATABASE ROLE / APPLICATION ROLE …).
+    while at_grantee_kind(p) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    }
+    if p.at_name() {
+        name_ref(p);
+    }
+    m.complete(p, GRANTEE);
+}
+
+/// A grantee-kind word that precedes the recipient name (`ROLE r`, `USER u`, `SHARE s`).
+fn at_grantee_kind(p: &Parser) -> bool {
+    p.nth_contextual(0, ContextualKeyword::Role)
+        || p.nth_contextual(0, ContextualKeyword::User)
+        || p.nth_contextual(0, ContextualKeyword::Share)
+        || p.nth_contextual(0, ContextualKeyword::Database)
+}
+
+/// The optional statement tail after the grantee: `WITH GRANT OPTION`, `COPY CURRENT GRANTS`,
+/// `CASCADE`, `RESTRICT`, `GRANTED BY …`. Kept as inline tokens so it round-trips and stays on the
+/// grantee's line; the recognized access-control words (`OPTION`/`CASCADE`/`RESTRICT`) are tagged
+/// contextual so the formatter up-cases them like keywords.
+fn grant_tail(p: &mut Parser) {
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        if p.nth_contextual(0, ContextualKeyword::Option)
+            || p.nth_contextual(0, ContextualKeyword::Cascade)
+            || p.nth_contextual(0, ContextualKeyword::Restrict)
+        {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+        } else {
+            p.bump_any();
+        }
+    }
+}
+
+/// At the start of a grant/revoke statement tail (`WITH GRANT OPTION`, `CASCADE`, `RESTRICT`, …),
+/// used so `grant_target` does not swallow it.
+fn at_grant_tail(p: &Parser) -> bool {
+    p.at(WITH_KW)
+        || p.nth_contextual(0, ContextualKeyword::Cascade)
+        || p.nth_contextual(0, ContextualKeyword::Restrict)
 }
 
 /// At an `AS` that introduces a statement/query body (a task's DML, a dynamic-table query, a

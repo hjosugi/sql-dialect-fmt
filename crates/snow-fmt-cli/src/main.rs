@@ -209,9 +209,9 @@ mod tests {
 
     #[test]
     fn unparsable_input_is_unchanged() {
-        // The parser can't model this, so it round-trips byte-for-byte (plus the encoder's newline
-        // handling leaves it as-is here).
-        let input = b"CREATE STREAM s ON TABLE t;\n";
+        // `ALTER`'s surface is modeled only leniently, so this canonical one-liner round-trips
+        // byte-for-byte (the encoder's newline handling leaves it as-is here).
+        let input = b"ALTER TABLE t ADD COLUMN c INT;\n";
         assert_eq!(fmt(input), input);
     }
 

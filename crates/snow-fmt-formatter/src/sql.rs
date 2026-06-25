@@ -289,6 +289,17 @@ impl Lowerer {
         concat(parts)
     }
 
+    /// A keyword the formatter synthesizes (not present as its own token in the tree), cased per the
+    /// options. Used where layout re-emits a keyword on its own line — e.g. the `AS` before an object
+    /// DDL body. Spacing state is left untouched; callers control the surrounding lines.
+    fn synth_kw(&self, word: &str) -> Doc {
+        if self.ctx.uppercase_keywords {
+            text(word.to_ascii_uppercase())
+        } else {
+            text(word.to_ascii_lowercase())
+        }
+    }
+
     /// Lower a `SELECT_STMT`: a `SELECT <list>` header group followed by one clause per line.
     fn lower_select(&mut self, select: &SyntaxNode) -> Doc {
         // `SELECT` and any `DISTINCT`/`ALL` quantifier are the statement's leading tokens.
@@ -426,8 +437,18 @@ impl Lowerer {
     }
 
     /// `CREATE [OR REPLACE] ... TABLE/VIEW ...`: the header inline (a column-def list expanded in
-    /// place) and a defining/CTAS query after `AS` on its own line(s).
+    /// place) and a defining/CTAS query after `AS` on its own line(s). For object DDL (SCHEMA /
+    /// WAREHOUSE / STAGE / FILE FORMAT / SEQUENCE / STREAM / TASK / DYNAMIC TABLE) each property
+    /// (`KEY = value`), the stream source (`ON …`), and a task's `AFTER …` predecessor list each get
+    /// their own indented line; a `TASK`/`DYNAMIC TABLE` body after `AS` is laid out structurally.
     fn lower_create(&mut self, node: &SyntaxNode) -> Doc {
+        // Properties / clauses that stack one-per-line, indented under the CREATE header.
+        let has_props = node
+            .children()
+            .any(|c| matches!(c.kind(), OBJECT_PROPERTY | STREAM_SOURCE | TASK_AFTER));
+        if has_props {
+            return self.lower_create_object(node);
+        }
         self.lower_clausal(
             node,
             |_| false,
@@ -438,6 +459,79 @@ impl Lowerer {
                 )
             },
         )
+    }
+
+    /// Object DDL with a property region: the `CREATE <kind> <name> [(cols)]` header stays inline,
+    /// then each property / stream source / `AFTER` list / body clause on its own indented line.
+    fn lower_create_object(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = Vec::new();
+        let mut clauses = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() || token.kind() == AS_KW {
+                    continue; // `AS` is re-synthesized on the body's own line below
+                }
+                head.push(self.token(token));
+            } else if let Some(node) = child.into_node() {
+                match node.kind() {
+                    // The object name and any header-attached column list (`DYNAMIC TABLE dt (a, b)`)
+                    // stay inline on the CREATE header.
+                    NAME | NAME_REF | COLUMN_DEF_LIST => head.push(self.lower_node(&node)),
+                    // Properties and sub-clauses each break onto their own indented line.
+                    OBJECT_PROPERTY | STREAM_SOURCE | TASK_AFTER => {
+                        self.reset();
+                        clauses.push(concat(vec![hard_line(), self.lower_node(&node)]));
+                    }
+                    // The `AS <body>` query/statement: `AS` flush on its own line, body below.
+                    _ => {
+                        self.reset();
+                        clauses.push(concat(vec![
+                            hard_line(),
+                            self.synth_kw("AS"),
+                            hard_line(),
+                            self.lower_query(&node),
+                        ]));
+                    }
+                }
+            }
+        }
+        concat(vec![concat(head), indent(concat(clauses))])
+    }
+
+    /// `GRANT <privs> ON <object> TO [ROLE] r [WITH GRANT OPTION]` /
+    /// `REVOKE [GRANT OPTION FOR] <privs> ON <object> FROM [ROLE] r [CASCADE|RESTRICT]`: the keyword
+    /// and privilege list on the header line, the `ON …` securable and the `TO|FROM …` grantee each
+    /// on their own indented line. A trailing `WITH GRANT OPTION` / `CASCADE` / `RESTRICT` rides with
+    /// the grantee. The privilege list, securable, and grantee bodies stay inline (token runs).
+    fn lower_grant(&mut self, node: &SyntaxNode) -> Doc {
+        let mut head = Vec::new();
+        let mut clauses = Vec::new();
+        let mut seen_clause = false;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if seen_clause {
+                    // A trailing tail token (`WITH GRANT OPTION`, `CASCADE`, …) rides after the
+                    // grantee on its line.
+                    clauses.push(self.token(token));
+                } else {
+                    head.push(self.token(token));
+                }
+            } else if let Some(node) = child.into_node() {
+                match node.kind() {
+                    PRIV_LIST => head.push(self.lower_node(&node)),
+                    GRANT_TARGET | GRANTEE => {
+                        seen_clause = true;
+                        self.reset();
+                        clauses.push(concat(vec![hard_line(), self.lower_node(&node)]));
+                    }
+                    _ => head.push(self.lower_node(&node)),
+                }
+            }
+        }
+        concat(vec![concat(head), indent(concat(clauses))])
     }
 
     // ---- Snowflake Scripting (Phase 8) ----
@@ -800,6 +894,7 @@ impl Lowerer {
             DELETE_STMT => self.lower_delete(node),
             MERGE_STMT => self.lower_merge(node),
             CREATE_STMT => self.lower_create(node),
+            GRANT_STMT | REVOKE_STMT => self.lower_grant(node),
             COPY_STMT => self.lower_copy(node),
             COPY_LOCATION => self.lower_copy_location(node),
             STAGE_REF => self.lower_stage_ref(node),

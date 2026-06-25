@@ -72,12 +72,44 @@ pub(crate) enum ContextualKeyword {
     // the `To` variant declared above. ----
     /// `FOR i IN REVERSE <start> TO <end>` — counts down.
     Reverse,
-    /// `<name> [<type>] DEFAULT <expr>` — a declaration's default value.
+    /// `<name> [<type>] DEFAULT <expr>` — a declaration's default value (also a DDL column default).
     Default,
     /// `BREAK [<label>]` — exit a loop.
     Break,
     /// `CONTINUE [<label>]` — skip to the next loop iteration.
     Continue,
+    // ---- Phase 7 object DDL kinds (contextual so they stay usable as identifiers) ----
+    /// `CREATE SCHEMA …`.
+    Schema,
+    /// `CREATE DATABASE …`.
+    Database,
+    /// `CREATE STAGE …` / `… ON STAGE …`.
+    Stage,
+    /// `CREATE SEQUENCE …`.
+    Sequence,
+    /// `CREATE STREAM …`.
+    Stream,
+    /// `CREATE DYNAMIC TABLE …`.
+    Dynamic,
+    /// `CREATE FILE FORMAT …`.
+    File,
+    /// `CREATE FILE FORMAT …` — second word.
+    Format,
+    // ---- Phase 7 GRANT / REVOKE vocabulary ----
+    /// `… TO ROLE r` / `… FROM ROLE r`.
+    Role,
+    /// `… TO USER u`.
+    User,
+    /// `GRANT <role> TO SHARE s`.
+    Share,
+    /// `REVOKE … FROM r RESTRICT|CASCADE` — cascade.
+    Cascade,
+    /// `REVOKE … FROM r RESTRICT` — restrict.
+    Restrict,
+    /// `REVOKE GRANT OPTION FOR …` / `… WITH GRANT OPTION` — option.
+    Option,
+    /// `GRANT ALL PRIVILEGES …`.
+    Privileges,
 }
 
 impl ContextualKeyword {
@@ -110,6 +142,21 @@ impl ContextualKeyword {
             ContextualKeyword::Default => "default",
             ContextualKeyword::Break => "break",
             ContextualKeyword::Continue => "continue",
+            ContextualKeyword::Schema => "schema",
+            ContextualKeyword::Database => "database",
+            ContextualKeyword::Stage => "stage",
+            ContextualKeyword::Sequence => "sequence",
+            ContextualKeyword::Stream => "stream",
+            ContextualKeyword::Dynamic => "dynamic",
+            ContextualKeyword::File => "file",
+            ContextualKeyword::Format => "format",
+            ContextualKeyword::Role => "role",
+            ContextualKeyword::User => "user",
+            ContextualKeyword::Share => "share",
+            ContextualKeyword::Cascade => "cascade",
+            ContextualKeyword::Restrict => "restrict",
+            ContextualKeyword::Option => "option",
+            ContextualKeyword::Privileges => "privileges",
         }
     }
 }

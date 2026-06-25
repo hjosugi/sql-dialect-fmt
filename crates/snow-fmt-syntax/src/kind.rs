@@ -355,6 +355,14 @@ pub enum SyntaxKind {
     // Phase 6: multi-table INSERT
     INTO_CLAUSE,
     INSERT_WHEN,
+    // Phase 7: structural object DDL (CREATE SCHEMA/DATABASE/WAREHOUSE/STAGE/FILE FORMAT/SEQUENCE/
+    // STREAM/TASK/DYNAMIC TABLE) and access control (GRANT/REVOKE).
+    OBJECT_PROPERTY, // one `KEY = value`, `KEY = ( ... )`, or bare flag word property
+    STREAM_SOURCE,   // a stream's `ON { TABLE | VIEW | STAGE } <name> [AT|BEFORE ( ... )]` source
+    TASK_AFTER,      // a task's `AFTER <pred> [, <pred>]*` predecessor list
+    PRIV_LIST,       // the privilege list of a GRANT/REVOKE (`SELECT, INSERT` / `ALL PRIVILEGES`)
+    GRANT_TARGET,    // the `ON <object_type> <object_name>` securable of a GRANT/REVOKE
+    GRANTEE,         // the `[ROLE|USER] <name>` recipient of a GRANT/REVOKE
 
     #[doc(hidden)]
     __LAST,

@@ -291,13 +291,30 @@ fn create_object_kinds_without_a_body_parse_cleanly() {
 }
 
 #[test]
-fn create_with_query_body_is_left_verbatim() {
-    // A body-bearing CREATE (e.g. a task's DML) is deliberately left to error so the formatter
-    // passes it through verbatim instead of flattening the body onto one line.
-    let p = parse("CREATE TASK t WAREHOUSE = wh AS\nINSERT INTO log\nSELECT 1");
+fn create_task_with_dml_body_is_structural() {
+    // A body-bearing CREATE (e.g. a task's DML) now parses structurally: the property region and the
+    // `AS <body>` are real nodes so the formatter can lay each on its own line (Phase 7 object DDL).
+    let src = "CREATE TASK t WAREHOUSE = wh AS\nINSERT INTO log\nSELECT 1";
+    let p = parse(src);
     assert!(
-        !p.errors().is_empty(),
-        "CREATE TASK ... AS <dml> should not parse cleanly (kept verbatim)"
+        p.errors().is_empty(),
+        "CREATE TASK ... AS <dml> should parse cleanly: {:?}",
+        p.errors()
+    );
+    assert_eq!(p.syntax().to_string(), src, "round-trip failed");
+    let create = p
+        .syntax()
+        .children()
+        .find(|n| n.kind() == SyntaxKind::CREATE_STMT)
+        .expect("a CREATE_STMT");
+    let kinds: Vec<SyntaxKind> = create.descendants().map(|n| n.kind()).collect();
+    assert!(
+        kinds.contains(&SyntaxKind::OBJECT_PROPERTY),
+        "expected an OBJECT_PROPERTY for WAREHOUSE = wh: {kinds:?}"
+    );
+    assert!(
+        kinds.contains(&SyntaxKind::INSERT_STMT),
+        "expected the AS body to parse as an INSERT_STMT: {kinds:?}"
     );
 }
 
