@@ -1,12 +1,14 @@
 [package]
 name = "snow-fmt-test-support"
-version = "0.0.0"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Shared assertion helpers for snow-fmt integration tests."
+# Internal-only: shared test helpers, never published to crates.io.
+publish = false
 
 [dependencies]
-snow-fmt-highlight = { path = "../snow-fmt-highlight" }
-snow-fmt-lexer = { path = "../snow-fmt-lexer" }
-snow-fmt-parser = { path = "../snow-fmt-parser" }
+snow-fmt-highlight = { path = "../snow-fmt-highlight", version = "0.1.0" }
+snow-fmt-lexer = { path = "../snow-fmt-lexer", version = "0.1.0" }
+snow-fmt-parser = { path = "../snow-fmt-parser", version = "0.1.0" }

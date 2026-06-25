@@ -1,16 +1,21 @@
 [package]
 name = "snow-fmt-lexer"
-version = "0.0.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Hand-written, lossless, error-resilient lexer for Snowflake SQL (snow-fmt toolchain)."
 
 [dependencies]
-snow-fmt-syntax = { path = "../snow-fmt-syntax" }
+snow-fmt-syntax = { path = "../snow-fmt-syntax", version = "0.1.0" }
 
 [dev-dependencies]
 # Let integration tests call into the syntax crate directly (e.g. keyword_kind).
-snow-fmt-syntax = { path = "../snow-fmt-syntax" }
-snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures" }
-snow-fmt-test-support = { path = "../snow-fmt-test-support" }
+snow-fmt-syntax = { path = "../snow-fmt-syntax", version = "0.1.0" }
+snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures", version = "0.1.0" }
+snow-fmt-test-support = { path = "../snow-fmt-test-support", version = "0.1.0" }

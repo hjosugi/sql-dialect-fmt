@@ -1,9 +1,14 @@
 [package]
 name = "snow-fmt-cli"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "snow-fmt: an opinionated Snowflake SQL formatter (command-line)."
 
 [[bin]]
@@ -11,5 +16,5 @@ name = "snow-fmt"
 path = "src/main.rs"
 
 [dependencies]
-snow-fmt-encoding = { path = "../snow-fmt-encoding" }
-snow-fmt-formatter = { path = "../snow-fmt-formatter" }
+snow-fmt-encoding = { path = "../snow-fmt-encoding", version = "0.1.0" }
+snow-fmt-formatter = { path = "../snow-fmt-formatter", version = "0.1.0" }

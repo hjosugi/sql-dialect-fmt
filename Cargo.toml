@@ -3,9 +3,15 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
+version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/hjosugi/snow-fmt"
+homepage = "https://github.com/hjosugi/snow-fmt"
+readme = "README.md"
+authors = ["snow-fmt contributors"]
+keywords = ["snowflake", "sql", "formatter", "parser"]
+categories = ["development-tools", "parser-implementations"]
 
 # Optimize release builds for the "fast by default" goal.
 [profile.release]

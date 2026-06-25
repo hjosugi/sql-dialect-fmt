@@ -398,11 +398,11 @@ dependencies = [
 
 [[package]]
 name = "snow-fmt-encoding"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "snow-fmt-formatter"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "insta",
  "snow-fmt-lexer",
@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "snow-fmt-highlight"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "serde_json",
  "snow-fmt-lexer",
@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "snow-fmt-lexer"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "snow-fmt-syntax",
  "snow-fmt-test-fixtures",
@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "snow-fmt-parser"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "rowan",
  "snow-fmt-lexer",
@@ -468,18 +468,18 @@ dependencies = [
 
 [[package]]
 name = "snow-fmt-syntax"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "rowan",
 ]
 
 [[package]]
 name = "snow-fmt-test-fixtures"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "snow-fmt-test-support"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "snow-fmt-highlight",
  "snow-fmt-lexer",
