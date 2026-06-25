@@ -721,16 +721,13 @@ impl Lowerer {
     fn lower_stage_ref(&mut self, node: &SyntaxNode) -> Doc {
         let sep = self.sep_before(AT);
         self.resume_after(IDENT);
-        concat(vec![sep, text(node.text().to_string().trim().to_string())])
+        concat(vec![sep, trimmed_text(node)])
     }
 
     /// A COPY target/source location, emitted verbatim (preserving `@stage/path`, whose `/` operator
     /// spacing would mangle) with the leading-trivia space trimmed for idempotency.
     fn lower_copy_location(&mut self, node: &SyntaxNode) -> Doc {
-        let doc = concat(vec![
-            space(),
-            text(node.text().to_string().trim().to_string()),
-        ]);
+        let doc = concat(vec![space(), trimmed_text(node)]);
         self.resume_after(IDENT);
         doc
     }
@@ -791,8 +788,7 @@ impl Lowerer {
             } else if let Some(node) = child.as_node() {
                 // `node.text()` can carry the leading inter-token space on a reparse; trim it so the
                 // single explicit space stays idempotent.
-                let body = node.text().to_string().trim().to_string();
-                parts.push(concat(vec![space(), text(body)]));
+                parts.push(concat(vec![space(), trimmed_text(node)]));
                 self.resume_after(R_PAREN);
             }
         }
@@ -1009,16 +1005,19 @@ impl Lowerer {
                 operands.push(self.lower_query(node));
             }
         }
+        // Consume the operands by value (the `Vec` is discarded afterwards) so the operand subtrees
+        // move into the result instead of being cloned.
+        let mut operands = operands.into_iter();
         let mut parts = Vec::new();
-        if let Some(lhs) = operands.first() {
-            parts.push(lhs.clone());
+        if let Some(lhs) = operands.next() {
+            parts.push(lhs);
         }
         // Operator keywords (e.g. `UNION ALL`) share one line between the operands.
         parts.push(hard_line());
         parts.push(concat(ops));
-        if let Some(rhs) = operands.get(1) {
+        if let Some(rhs) = operands.next() {
             parts.push(hard_line());
-            parts.push(rhs.clone());
+            parts.push(rhs);
         }
         concat(parts)
     }
@@ -1323,4 +1322,17 @@ fn is_value_end(kind: SyntaxKind) -> bool {
 /// Reproduce a node's source text exactly (including its inner trivia/comments).
 fn verbatim(node: &SyntaxNode) -> Doc {
     text(node.text().to_string())
+}
+
+/// A node's source text with surrounding whitespace removed, materialized in a single allocation.
+/// `node.text()` is a rope view, so it must be collected into a `String`; trimming in place then
+/// avoids the second `String` the `…to_string().trim().to_string()` idiom would allocate.
+fn trimmed_text(node: &SyntaxNode) -> Doc {
+    let mut s = node.text().to_string();
+    s.truncate(s.trim_end().len());
+    let start = s.len() - s.trim_start().len();
+    if start > 0 {
+        s.drain(..start);
+    }
+    text(s)
 }

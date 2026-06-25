@@ -22,8 +22,9 @@ use std::borrow::Cow;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Doc {
     /// Verbatim text. Must not contain newlines — use the line builders for those so width
-    /// tracking and indentation stay correct.
-    Text(Cow<'static, str>),
+    /// tracking and indentation stay correct. The display width is folded in at construction time
+    /// (via [`text`]) so the fit/break measurement never re-scans the string.
+    Text(Cow<'static, str>, usize),
     /// A line break whose rendering depends on the enclosing group's mode (see [`LineKind`]).
     Line(LineKind),
     /// A sequence of documents laid out one after another.
@@ -32,7 +33,16 @@ pub enum Doc {
     /// the group always breaks (Prettier's `shouldBreak`) — used for "explode this collection"
     /// decisions like a magic trailing comma. Unlike a hard line, `expand` does **not** propagate
     /// to enclosing groups, so an inner collection can explode while its parent stays flat.
-    Group { content: Box<Doc>, expand: bool },
+    ///
+    /// `must_break` is `expand || has_forced_break(content)`, computed once when the group is built
+    /// (see [`group`]). Because groups are constructed bottom-up, each group carries its own
+    /// answer and ancestors read it in O(1) instead of re-walking the whole subtree on every
+    /// fit/break decision.
+    Group {
+        content: Box<Doc>,
+        expand: bool,
+        must_break: bool,
+    },
     /// Increases the indentation level applied to line breaks inside it.
     Indent(Box<Doc>),
     /// Content deferred to just before the next newline (or the document's end). The vehicle for
@@ -56,9 +66,12 @@ pub enum LineKind {
 
 // ---- builders ----
 
-/// Verbatim text (a borrowed `&'static str` or an owned `String`).
+/// Verbatim text (a borrowed `&'static str` or an owned `String`). The display width is measured
+/// once here and cached on the node, so the printer's fit/break measurement never re-scans it.
 pub fn text(s: impl Into<Cow<'static, str>>) -> Doc {
-    Doc::Text(s.into())
+    let s = s.into();
+    let width = text_width(&s);
+    Doc::Text(s, width)
 }
 
 /// Lay out the parts one after another.
@@ -68,9 +81,11 @@ pub fn concat(parts: Vec<Doc>) -> Doc {
 
 /// A layout-choice group: flat when it fits on the line, broken otherwise.
 pub fn group(inner: Doc) -> Doc {
+    let must_break = has_forced_break(&inner);
     Doc::Group {
         content: Box::new(inner),
         expand: false,
+        must_break,
     }
 }
 
@@ -80,6 +95,7 @@ pub fn group_expanded(inner: Doc) -> Doc {
     Doc::Group {
         content: Box::new(inner),
         expand: true,
+        must_break: true,
     }
 }
 
@@ -105,7 +121,7 @@ pub fn hard_line() -> Doc {
 
 /// A literal, non-collapsible space.
 pub fn space() -> Doc {
-    Doc::Text(Cow::Borrowed(" "))
+    Doc::Text(Cow::Borrowed(" "), 1)
 }
 
 /// The empty document (renders to nothing).
@@ -171,7 +187,13 @@ struct Cmd<'a> {
 /// Display width of a string in terminal columns: the sum of each character's column width, so a
 /// line of CJK text is measured by how wide it actually renders, not by its scalar count. This only
 /// feeds the fit/break decision, so refining it never changes which tokens are emitted.
+///
+/// Pure ASCII — the overwhelmingly common case in SQL — has width equal to its byte length, so we
+/// short-circuit on it and only decode/classify code points when a non-ASCII byte is present.
 fn text_width(s: &str) -> usize {
+    if s.is_ascii() {
+        return s.len();
+    }
     s.chars().map(char_width).sum()
 }
 
@@ -205,17 +227,22 @@ fn char_width(c: char) -> usize {
 
 /// Does `doc` contain a hard line anywhere within (propagating through nested groups, exactly like
 /// Prettier's `breakParent`)? Such a document can never be printed flat.
+///
+/// Nested groups are consulted via their cached `must_break` flag rather than re-walked. Because
+/// the builders compute this bottom-up (a group's flag is set when it is constructed, by which time
+/// its children already carry theirs), the whole tree is classified in O(nodes) overall.
 fn has_forced_break(doc: &Doc) -> bool {
     match doc {
         Doc::Line(LineKind::Hard) | Doc::BreakParent => true,
-        Doc::Line(_) | Doc::Text(_) => false,
+        Doc::Line(_) | Doc::Text(..) => false,
         // A line suffix's own content is deferred and must not force the current line to break.
         Doc::LineSuffix(_) => false,
         Doc::Concat(parts) => parts.iter().any(has_forced_break),
         Doc::Indent(inner) => has_forced_break(inner),
         // An exploded group propagates to ancestors: a multiline collection can't sit inline, so
-        // every group containing it must break too (cf. Black's magic trailing comma).
-        Doc::Group { content, expand } => *expand || has_forced_break(content),
+        // every group containing it must break too (cf. Black's magic trailing comma). The answer
+        // was precomputed when the group was built.
+        Doc::Group { must_break, .. } => *must_break,
     }
 }
 
@@ -240,8 +267,8 @@ fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> b
             }
         };
         match cmd.doc {
-            Doc::Text(s) => {
-                remaining -= text_width(s) as isize;
+            Doc::Text(_, width) => {
+                remaining -= *width as isize;
                 if remaining < 0 {
                     return false;
                 }
@@ -256,12 +283,12 @@ fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> b
                 doc: inner,
                 mode: cmd.mode,
             }),
-            Doc::Group { content, expand } => {
-                let mode = if *expand || has_forced_break(content) {
-                    Mode::Break
-                } else {
-                    Mode::Flat
-                };
+            Doc::Group {
+                content,
+                must_break,
+                ..
+            } => {
+                let mode = if *must_break { Mode::Break } else { Mode::Flat };
                 stack.push(Cmd {
                     indent: cmd.indent,
                     mode,
@@ -315,9 +342,9 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
             None => break,
         };
         match cmd.doc {
-            Doc::Text(s) => {
+            Doc::Text(s, width) => {
                 out.push_str(s);
-                col += text_width(s);
+                col += *width;
             }
             Doc::Concat(parts) => {
                 for part in parts.iter().rev() {
@@ -331,8 +358,12 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                 doc: inner,
                 mode: cmd.mode,
             }),
-            Doc::Group { content, expand } => {
-                let mode = if *expand || has_forced_break(content) {
+            Doc::Group {
+                content,
+                must_break,
+                ..
+            } => {
+                let mode = if *must_break {
                     Mode::Break
                 } else if fits(
                     opts.line_width as isize - col as isize,
@@ -392,15 +423,39 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
 
 /// Trim trailing whitespace from each line, drop leading/trailing blank lines, and ensure a single
 /// trailing newline. This keeps output stable under re-formatting regardless of verbatim spans.
+///
+/// Single streaming pass: each line is `trim_end`ed; leading blank lines are skipped, and interior
+/// blank lines are buffered as `pending_blanks` so any run of them that turns out to be trailing is
+/// dropped rather than emitted. Equivalent to the former collect-join-trim, without the temporary
+/// `Vec<&str>` or the intermediate joined `String`.
 fn finalize(raw: String) -> String {
-    let trimmed: Vec<&str> = raw.lines().map(|line| line.trim_end()).collect();
-    let body = trimmed.join("\n");
-    let body = body.trim_matches('\n');
-    if body.is_empty() {
-        String::new()
-    } else {
-        format!("{body}\n")
+    let mut out = String::with_capacity(raw.len());
+    let mut started = false;
+    let mut pending_blanks = 0usize;
+    for line in raw.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            if started {
+                pending_blanks += 1;
+            }
+            // leading blank lines are dropped entirely
+            continue;
+        }
+        if started {
+            // one separator for the previous content line, plus any buffered interior blanks
+            out.push('\n');
+            for _ in 0..pending_blanks {
+                out.push('\n');
+            }
+        }
+        pending_blanks = 0;
+        out.push_str(line);
+        started = true;
     }
+    if started {
+        out.push('\n');
+    }
+    out
 }
 
 #[cfg(test)]
@@ -544,5 +599,55 @@ mod tests {
         // spaces dangling on the blank line.
         let doc = concat(vec![text("a"), indent(hard_line()), hard_line(), text("b")]);
         assert_eq!(p(&doc, 80), "a\n\nb\n");
+    }
+
+    #[test]
+    fn text_caches_its_display_width() {
+        // The width folded in by `text` must equal a fresh measurement, for both ASCII (fast path)
+        // and wide CJK input — this is what the fit/break decision now reads instead of re-scanning.
+        for s in ["select", "a, b, c", "長芋", "a長b", ""] {
+            match text(s) {
+                Doc::Text(stored, width) => {
+                    assert_eq!(stored, s);
+                    assert_eq!(width, text_width(s));
+                }
+                other => panic!("text() should build a Text node, got {other:?}"),
+            }
+        }
+        // The ASCII fast path agrees with the per-char fold.
+        assert_eq!(
+            text_width("SELECT a, b"),
+            "SELECT a, b".chars().map(char_width).sum()
+        );
+    }
+
+    #[test]
+    fn group_precomputes_its_forced_break() {
+        // A plain group over flat content stays optional; a group wrapping a hard line is marked
+        // must-break at construction, which is what the printer reads in O(1).
+        match group(concat(vec![text("a"), line(), text("b")])) {
+            Doc::Group { must_break, .. } => assert!(!must_break),
+            other => panic!("expected a group, got {other:?}"),
+        }
+        match group(concat(vec![text("a"), hard_line(), text("b")])) {
+            Doc::Group { must_break, .. } => assert!(must_break),
+            other => panic!("expected a group, got {other:?}"),
+        }
+        // group_expanded is always must-break.
+        match group_expanded(text("x")) {
+            Doc::Group { must_break, .. } => assert!(must_break),
+            other => panic!("expected a group, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn finalize_drops_leading_and_trailing_blank_lines_but_keeps_interior() {
+        // Leading and trailing blank lines vanish; an interior blank-line run is preserved; every
+        // line is right-trimmed. Equivalent to the previous collect/join/trim implementation.
+        let raw = String::from("\n  \na  \n\n\nb \n\n  \n");
+        assert_eq!(finalize(raw), "a\n\n\nb\n");
+        assert_eq!(finalize(String::new()), "");
+        assert_eq!(finalize(String::from("   \n  ")), "");
+        assert_eq!(finalize(String::from("only")), "only\n");
     }
 }
