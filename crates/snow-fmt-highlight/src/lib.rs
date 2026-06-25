@@ -7,6 +7,13 @@
 use snow_fmt_lexer::{tokenize, LexError};
 use snow_fmt_syntax::{keyword_kind, SyntaxKind};
 
+pub mod semantic;
+pub use semantic::{
+    delta_encode, detect_injections, line_tokens, resolve_tokens, semantic_token, semantic_tokens,
+    semantic_tokens_lsp, InjectedLanguage, Injection, LineToken, ResolvedToken,
+    SemanticTokenModifiers, SemanticTokenType, SemanticTokens,
+};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Highlighted<'a> {
     pub tokens: Vec<HighlightToken<'a>>,

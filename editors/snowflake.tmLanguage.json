@@ -1,0 +1,158 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Snowflake SQL",
+  "scopeName": "source.snowflake-sql",
+  "fileTypes": [
+    "sql",
+    "snowsql"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#dollar-quoted"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#stages"
+    },
+    {
+      "include": "#quoted-identifiers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-dash.sql",
+          "match": "(--|//).*$"
+        },
+        {
+          "name": "comment.block.sql",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.single.sql",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        {
+          "name": "constant.character.escape.sql",
+          "match": "''|\\\\."
+        }
+      ]
+    },
+    "dollar-quoted": {
+      "name": "string.quoted.dollar.sql",
+      "begin": "\\$\\$",
+      "end": "\\$\\$"
+    },
+    "numbers": {
+      "name": "constant.numeric.sql",
+      "match": "(?i)\\b\\d+(\\.\\d+)?(e[+-]?\\d+)?\\b|\\.\\d+(e[+-]?\\d+)?\\b"
+    },
+    "types": {
+      "name": "support.type.sql",
+      "match": "(?i)\\b(timestamp_ntz|timestamp_ltz|timestamp_tz|timestamp|geography|geometry|datetime|variant|varchar|numeric|integer|decimal|boolean|vector|string|object|number|double|binary|bigint|float|array|time|text|real|date|char|map|int|dec)\\b"
+    },
+    "keywords": {
+      "name": "keyword.other.sql",
+      "match": "(?i)\\b(runtime_version|tablesample|javascript|warehouse|unbounded|transient|temporary|resultset|recursive|procedure|preceding|partition|overwrite|intersect|immediate|following|exception|volatile|try_cast|truncate|schedule|rollback|packages|language|function|distinct|describe|unpivot|returns|replace|qualify|natural|matched|lateral|imports|handler|flatten|execute|declare|current|connect|between|within|window|values|update|undrop|strict|select|secure|sample|revoke|return|repeat|regexp|python|output|offset|insert|having|grants|exists|except|elseif|delete|cursor|create|commit|caller|called|while|where|using|until|union|table|start|scala|rlike|right|range|prior|pivot|owner|outer|order|nulls|minus|merge|limit|input|inner|ilike|group|grant|first|fetch|false|cross|begin|alter|after|with|when|view|true|then|temp|task|show|rows|over|null|loop|like|left|last|join|java|into|full|from|else|drop|desc|copy|cast|case|call|use|top|sql|set|row|out|not|let|for|end|asc|any|and|all|or|on|is|in|if|do|by|as)\\b"
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.parameter.positional.sql",
+          "match": "\\$\\d+"
+        },
+        {
+          "name": "variable.other.session.sql",
+          "match": "\\$[A-Za-z_][A-Za-z0-9_$]*"
+        },
+        {
+          "name": "variable.parameter.bind.sql",
+          "match": ":[A-Za-z_][A-Za-z0-9_$]*"
+        },
+        {
+          "name": "variable.parameter.placeholder.sql",
+          "match": "\\?"
+        }
+      ]
+    },
+    "stages": {
+      "name": "variable.other.stage.sql",
+      "match": "@(~|%[A-Za-z_\"][A-Za-z0-9_$.\"]*|[A-Za-z_\"][A-Za-z0-9_$./\"]*)?"
+    },
+    "quoted-identifiers": {
+      "name": "string.quoted.double.identifier.sql",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.sql",
+          "match": "\"\""
+        }
+      ]
+    },
+    "operators": {
+      "name": "keyword.operator.sql",
+      "match": "->>|\\|>|::|=>|->|\\|\\||<=|>=|!=|<>|:=|[-+*/%=<>:&^~]|\\*\\*"
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section.parens.begin.sql",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.parens.end.sql",
+          "match": "\\)"
+        },
+        {
+          "name": "punctuation.section.brackets.begin.sql",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.section.brackets.end.sql",
+          "match": "\\]"
+        },
+        {
+          "name": "punctuation.separator.comma.sql",
+          "match": ","
+        },
+        {
+          "name": "punctuation.accessor.dot.sql",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.terminator.statement.sql",
+          "match": ";"
+        }
+      ]
+    }
+  }
+}
