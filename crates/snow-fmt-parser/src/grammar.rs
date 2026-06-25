@@ -1218,8 +1218,13 @@ fn time_travel(p: &mut Parser) {
 /// and any method/seed are captured leniently (balanced parens) for inline formatting.
 fn sample_clause(p: &mut Parser) {
     p.bump_any(); // SAMPLE / TABLESAMPLE
-    if p.at_name() {
-        name_ref(p); // sampling method: BERNOULLI / SYSTEM / ROW / BLOCK
+                  // Sampling method: BERNOULLI / SYSTEM / BLOCK are plain words; ROW is the reserved keyword
+                  // `ROW_KW` (so `p.at_name()` is false for it) — accept it explicitly. Guard the `(` so a bare
+                  // `SAMPLE (10)` (no method) and a `ROW`-without-parens both stay total.
+    if p.at(ROW_KW) && p.nth_at(1, L_PAREN) {
+        p.bump(ROW_KW);
+    } else if p.at_name() {
+        name_ref(p);
     }
     if p.at(L_PAREN) {
         balanced_parens(p);

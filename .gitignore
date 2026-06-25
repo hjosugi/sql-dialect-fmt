@@ -8,3 +8,6 @@
 # Local Snowflake spec store (regenerate with spec/snowflake_spec.py); not committed
 /spec/snowflake_spec.db
 /spec/snapshots/
+
+# Claude Code session & worktrees
+.claude/
