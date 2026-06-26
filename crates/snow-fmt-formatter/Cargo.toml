@@ -21,6 +21,7 @@ insta = "1.48.0"
 snow-fmt-lexer = { path = "../snow-fmt-lexer", version = "0.1.0" }
 snow-fmt-test-fixtures = { path = "../snow-fmt-test-fixtures", version = "0.1.0" }
 snow-fmt-test-support = { path = "../snow-fmt-test-support", version = "0.1.0" }
+proptest = "1"
 
 [[bench]]
 name = "format"

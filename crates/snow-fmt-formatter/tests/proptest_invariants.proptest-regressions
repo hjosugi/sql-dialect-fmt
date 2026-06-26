@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc df42cd801f4201a426f6aaf9406c30f9dcda90227ba5f42ef92ddf3acc5959cb # shrinks to s = "create select select\n-- y\nselect "
+cc 26ac05b9a712d825ce832eba68bcaba8685d45c8a919c8b49c246ba71c750d37 # shrinks to s = "$$ \n$$ "
