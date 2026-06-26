@@ -185,9 +185,9 @@ fn create_object_stacks_each_property() {
     assert_eq!(
         fmt("create warehouse w warehouse_size = 'XSMALL' auto_suspend = 60 auto_resume = true"),
         "CREATE WAREHOUSE w\n    \
-           warehouse_size = 'XSMALL'\n    \
-           auto_suspend = 60\n    \
-           auto_resume = TRUE;\n",
+           WAREHOUSE_SIZE = 'XSMALL'\n    \
+           AUTO_SUSPEND = 60\n    \
+           AUTO_RESUME = TRUE;\n",
     );
 }
 
@@ -208,7 +208,7 @@ fn create_dynamic_table_keeps_query_structural() {
     assert_eq!(
         fmt("create dynamic table dt target_lag = '1 minute' warehouse = w as select a from t"),
         "CREATE DYNAMIC TABLE dt\n    \
-           target_lag = '1 minute'\n    \
+           TARGET_LAG = '1 minute'\n    \
            WAREHOUSE = w\n    \
            AS\n    \
            SELECT a\n    \

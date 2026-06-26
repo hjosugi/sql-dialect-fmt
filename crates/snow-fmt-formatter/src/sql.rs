@@ -257,6 +257,13 @@ impl Lowerer {
 
     /// Emit a significant token together with any comments attached to it.
     fn token(&mut self, token: &SyntaxToken) -> Doc {
+        self.token_cased(token, false)
+    }
+
+    /// Like [`Self::token`], but `force_keyword` up-cases the token like a keyword even though it is
+    /// a plain identifier in the tree — used for recognized option-key words (see
+    /// [`Self::lower_option_node`]). It only ever changes ASCII case, never the spelling.
+    fn token_cased(&mut self, token: &SyntaxToken, force_keyword: bool) -> Doc {
         let start = offset(token);
         let leading = self.comments.leading.remove(&start).unwrap_or_default();
         let trailing = self.comments.trailing.remove(&start).unwrap_or_default();
@@ -275,7 +282,7 @@ impl Lowerer {
         };
         self.advance(token.kind());
         parts.push(sep);
-        parts.push(keyword_text(token, self.ctx));
+        parts.push(keyword_text_forced(token, self.ctx, force_keyword));
         for comment in trailing {
             if comment.is_line {
                 // A line comment must end its line: defer it, and force the line to break.
@@ -892,6 +899,7 @@ impl Lowerer {
             CREATE_STMT => self.lower_create(node),
             GRANT_STMT | REVOKE_STMT => self.lower_grant(node),
             COPY_STMT => self.lower_copy(node),
+            COPY_OPTION | OBJECT_PROPERTY => self.lower_option_node(node),
             COPY_LOCATION => self.lower_copy_location(node),
             STAGE_REF => self.lower_stage_ref(node),
             COLUMN_DEF_LIST => concat(vec![space(), self.lower_column_def_list(node)]),
@@ -908,6 +916,82 @@ impl Lowerer {
             SET_CLAUSE | VALUES_CLAUSE => self.lower_keyword_item_list(node),
             _ => self.lower_children(node),
         }
+    }
+
+    /// Lower a COPY `COPY_OPTION` or object-DDL `OBJECT_PROPERTY` node, up-casing the recognized
+    /// option-**key** word(s) so they match the surrounding reserved keywords when keyword-casing is
+    /// on.
+    ///
+    /// ## Casing policy (option keys)
+    /// The parser captures an option key (`FILE_FORMAT`, `ON_ERROR`, `WAREHOUSE_SIZE`, `TARGET_LAG`,
+    /// the nested `TYPE`/`SKIP_HEADER`/… inside `FILE_FORMAT = ( … )`, …) as a plain `IDENT`, because
+    /// these words are *not* reserved and double as ordinary identifiers — so by default they were
+    /// emitted verbatim, producing mixed-case output next to up-cased reserved keywords. Here we
+    /// up-case a token **only** when it is a key in **key position**:
+    ///   * it is an `IDENT`/`CONTEXTUAL_KEYWORD` whose lower-cased text is a known canonical option
+    ///     key (`is_option_key`), and
+    ///   * it is not a *value* (its preceding significant sibling is not `=`), and
+    ///   * it sits in key position — immediately followed by `=`, or by the `WITH`/`BY` connector of
+    ///     the `=`-less `START WITH n` / `INCREMENT BY n` sequence forms, or it is a no-value flag
+    ///     word (`is_option_flag`, e.g. `ORDER` / `NOORDER`).
+    ///
+    /// Option **values**, user identifiers, string/numeric literals, and `@stage` names are never
+    /// touched — only the ASCII case of a recognized key word changes — so the round-trip and
+    /// token-preservation guarantees (which case-fold) still hold.
+    fn lower_option_node(&mut self, node: &SyntaxNode) -> Doc {
+        // The node's significant tokens, in order, with their original kinds — used for the
+        // key-position lookahead/lookbehind below. (Child *nodes*, e.g. a `PARTITION BY (expr)`
+        // body, never contain option keys, so they are lowered normally.)
+        let sig: Vec<SyntaxKind> = node
+            .children_with_tokens()
+            .filter_map(|el| el.into_token())
+            .filter(|t| !t.kind().is_trivia())
+            .map(|t| t.kind())
+            .collect();
+
+        let mut parts = Vec::new();
+        let mut sig_idx: usize = 0;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                let prev = sig_idx.checked_sub(1).map(|i| sig[i]);
+                let next = sig.get(sig_idx + 1).copied();
+                let force = self.is_option_key_position(token, prev, next);
+                parts.push(self.token_cased(token, force));
+                sig_idx += 1;
+            } else if let Some(node) = child.as_node() {
+                parts.push(self.lower_node(node));
+            }
+        }
+        concat(parts)
+    }
+
+    /// Whether `token` is a recognized option key sitting in key position (see the policy on
+    /// [`Self::lower_option_node`]); `prev`/`next` are its neighbouring significant token kinds.
+    fn is_option_key_position(
+        &self,
+        token: &SyntaxToken,
+        prev: Option<SyntaxKind>,
+        next: Option<SyntaxKind>,
+    ) -> bool {
+        // Only identifier-like words are ever keys; a literal/`@stage`/operator never is.
+        if !matches!(token.kind(), IDENT | CONTEXTUAL_KEYWORD) {
+            return false;
+        }
+        // A token right after `=` is a value, never a key (`ON_ERROR = SKIP_FILE`).
+        if prev == Some(EQ) {
+            return false;
+        }
+        let word = token.text();
+        // A bare flag (`NOORDER`) is itself a recognized key needing no `= value`.
+        if is_option_flag(word) {
+            return true;
+        }
+        // Otherwise a recognized key in `KEY = …` (any nesting) or the `=`-less `START WITH n` /
+        // `INCREMENT BY n` sequence forms (key word immediately followed by the `WITH`/`BY` word).
+        matches!(next, Some(EQ | WITH_KW | BY_KW)) && is_option_key(word)
     }
 
     /// The generic fallback: emit a node's significant tokens with spacing, recursing into child
@@ -1251,16 +1335,157 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
 }
 
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.
-fn keyword_text(token: &SyntaxToken, ctx: Ctx) -> Doc {
+///
+/// `force_keyword` treats the token as a keyword for casing even though it is a plain identifier in
+/// the tree — used for recognized COPY/object-DDL option-key words (see [`Lowerer::lower_option_node`]
+/// and [`is_option_key`]). It only ever toggles ASCII case, never re-spells the word.
+fn keyword_text_forced(token: &SyntaxToken, ctx: Ctx, force_keyword: bool) -> Doc {
     // Soft (contextual) keywords are tagged `CONTEXTUAL_KEYWORD` rather than living in the keyword
     // range, but they upper-case just like real keywords.
-    let is_keyword = token.kind().is_keyword() || token.kind() == CONTEXTUAL_KEYWORD;
+    let is_keyword = force_keyword || token.kind().is_keyword() || token.kind() == CONTEXTUAL_KEYWORD;
     if ctx.uppercase_keywords && is_keyword {
         text(token.text().to_ascii_uppercase())
     } else {
         text(token.text().to_string())
     }
 }
+
+/// Whether `word` (case-insensitively) is a canonical Snowflake COPY / object-DDL option **key** —
+/// a word the formatter up-cases when it appears in key position (see [`Lowerer::lower_option_node`]).
+///
+/// The list is the union of the documented `copyOptions`, `formatTypeOptions`, `CREATE … <object>`
+/// property keys, and the nested file-format / stage option keys
+/// (docs.snowflake.com `copy-into-table`, `copy-into-location`, `create-file-format`,
+/// `create-stage`, `create-warehouse`, `create-dynamic-table`, `create-task`, `create-sequence`,
+/// `create-stream`, `create-schema`). It is matched case-insensitively against the lower-case
+/// canonical spelling. Adding a word here only changes the *casing* of a recognized key in key
+/// position — never a value, identifier, or literal.
+fn is_option_key(word: &str) -> bool {
+    OPTION_KEYS.binary_search(&word.to_ascii_lowercase().as_str()).is_ok()
+}
+
+/// A no-value option flag word (`ORDER` / `NOORDER`): a recognized key that stands alone with no
+/// `= value`. Used so a trailing flag still up-cases even though no `=` follows it.
+fn is_option_flag(word: &str) -> bool {
+    OPTION_FLAGS.binary_search(&word.to_ascii_lowercase().as_str()).is_ok()
+}
+
+/// Canonical option-key spellings, lower-cased and **kept sorted** for `binary_search`. (Multi-word
+/// keys such as `PARTITION BY`, `START WITH`, `CLUSTER BY`, `COPY GRANTS` are recognized via their
+/// already-reserved leading keyword and the `WITH`/`BY` connector, so only single identifier words
+/// live here.) Verified against docs.snowflake.com.
+const OPTION_KEYS: &[&str] = &[
+    "allow_duplicate",
+    "append_only",
+    "auto_refresh",
+    "auto_resume",
+    "auto_suspend",
+    "base_location",
+    "binary_as_text",
+    "binary_format",
+    "catalog",
+    "comment",
+    "compression",
+    "config",
+    "credentials",
+    "data_retention_time_in_days",
+    "date_format",
+    "default_ddl_collation",
+    "detailed_output",
+    "directory",
+    "disable_auto_convert",
+    "empty_field_as_null",
+    "enable",
+    "enable_octal",
+    "enable_query_acceleration",
+    "enable_schema_evolution",
+    "encoding",
+    "encryption",
+    "enforce_length",
+    "error_integration",
+    "error_on_column_count_mismatch",
+    "escape",
+    "escape_unenclosed_field",
+    "execute_as",
+    "external_volume",
+    "field_delimiter",
+    "field_optionally_enclosed_by",
+    "file_extension",
+    "file_format",
+    "files",
+    "finalize",
+    "force",
+    "format_name",
+    "ignore_utf8_errors",
+    "include_metadata",
+    "include_query_id",
+    "increment",
+    "initialize",
+    "initially_suspended",
+    "insert_only",
+    "log_level",
+    "master_key",
+    "match_by_column_name",
+    "max_cluster_count",
+    "max_concurrency_level",
+    "max_data_extension_time_in_days",
+    "max_file_size",
+    "min_cluster_count",
+    "multi_line",
+    "null_if",
+    "on_error",
+    "overlap_policy",
+    "overwrite",
+    "parse_header",
+    "pattern",
+    "preserve_space",
+    "purge",
+    "query_acceleration_max_scale_factor",
+    "record_delimiter",
+    "refresh_mode",
+    "refresh_on_create",
+    "replace_invalid_characters",
+    "resource_constraint",
+    "resource_monitor",
+    "return_failed_only",
+    "runtime_version",
+    "scaling_policy",
+    "schedule",
+    "show_initial_rows",
+    "single",
+    "size_limit",
+    "skip_blank_lines",
+    "skip_byte_order_mark",
+    "skip_header",
+    "snappy_compression",
+    "start",
+    "statement_queued_timeout_in_seconds",
+    "statement_timeout_in_seconds",
+    "storage_integration",
+    "strip_null_values",
+    "strip_outer_array",
+    "strip_outer_element",
+    "suspend_task_after_num_failures",
+    "target_completion_interval",
+    "target_lag",
+    "time_format",
+    "timestamp_format",
+    "trim_space",
+    "truncatecolumns",
+    "type",
+    "url",
+    "use_logical_type",
+    "use_vectorized_scanner",
+    "user_task_managed_initial_warehouse_size",
+    "user_task_timeout_ms",
+    "validation_mode",
+    "warehouse",
+    "warehouse_size",
+    "warehouse_type",
+];
+
+/// No-value option flag words, lower-cased and **kept sorted** (see [`is_option_flag`]).
+const OPTION_FLAGS: &[&str] = &["noorder", "order"];
 
 /// Whether a single space belongs between adjacent tokens `prev` and `cur`.
 fn needs_space(prev: SyntaxKind, cur: SyntaxKind) -> bool {

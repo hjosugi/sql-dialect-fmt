@@ -547,8 +547,8 @@ fn copy_into_puts_from_and_options_on_their_own_lines() {
         @"
     COPY INTO raw.orders
     FROM @raw.stage/orders/
-    file_format = (type = json)
-    on_error = continue;
+    FILE_FORMAT = (TYPE = json)
+    ON_ERROR = continue;
     ",
     );
 }
