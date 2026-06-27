@@ -1,6 +1,6 @@
-# Releasing snow-fmt
+# Releasing sql-dialect-fmt
 
-snow-fmt ships as a set of crates that share **one workspace version**, declared
+sql-dialect-fmt ships as a set of crates that share **one workspace version**, declared
 once in the root `Cargo.toml` under `[workspace.package]` and inherited by every
 crate via `version.workspace = true`. Bumping that single line versions the whole
 workspace coherently.
@@ -18,7 +18,7 @@ Published to crates.io (in dependency order):
 | 5 | `snow-fmt-highlight` | syntax, lexer |
 | 6 | `snow-fmt-hover` | syntax, lexer |
 | 7 | `snow-fmt-encoding` | — |
-| 8 | `snow-fmt-cli` | encoding, formatter |
+| 8 | `sql-dialect-fmt` | encoding, formatter |
 | 9 | `snow-fmt-lsp` | formatter, highlight, hover, parser, syntax |
 
 **Not published** (`publish = false`):
@@ -55,6 +55,7 @@ Published to crates.io (in dependency order):
    cargo publish --dry-run -p snow-fmt-syntax
    cargo publish --dry-run -p snow-fmt-parser
    cargo publish --dry-run -p snow-fmt-formatter
+   cargo publish --dry-run -p sql-dialect-fmt
    # (and the rest below)
    ```
 
@@ -79,7 +80,7 @@ Published to crates.io (in dependency order):
    cargo publish -p snow-fmt-highlight
    cargo publish -p snow-fmt-hover
    cargo publish -p snow-fmt-encoding
-   cargo publish -p snow-fmt-cli
+   cargo publish -p sql-dialect-fmt
    cargo publish -p snow-fmt-lsp
    ```
 

@@ -160,6 +160,10 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.quoted_ident_body(start);
                     self.push(SyntaxKind::QUOTED_IDENT, start);
                 }
+                b'`' if self.options.dialect.supports_backtick_identifiers() => {
+                    self.backtick_ident_body(start);
+                    self.push(SyntaxKind::QUOTED_IDENT, start);
+                }
                 // $1 / $name variables (but not body delimiters, handled above). Gated on dollar
                 // quoting so non-Snowflake dialects lex a bare `$` as the DOLLAR operator instead.
                 b'$' if dollar_quoting
@@ -254,6 +258,24 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.pos += 1; // doubled quote → escaped, keep going
                 } else {
                     break; // closing quote
+                }
+            }
+        }
+    }
+
+    /// Consume a Databricks/Spark `` `quoted identifier` ``. Handles doubled backticks.
+    fn backtick_ident_body(&mut self, start: usize) {
+        self.pos += 1; // opening `
+        loop {
+            if self.at_end() {
+                self.error("unterminated backtick identifier", start);
+                break;
+            }
+            if self.bump() == b'`' {
+                if self.peek() == b'`' {
+                    self.pos += 1; // doubled backtick, keep going
+                } else {
+                    break; // closing backtick
                 }
             }
         }

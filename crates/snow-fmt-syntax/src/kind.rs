@@ -240,6 +240,8 @@ pub enum SyntaxKind {
     FROM_CLAUSE,
     WHERE_CLAUSE,
     TABLE_REF,
+    LATERAL_VIEW,
+    AS_OF_TRAVEL,
     ARG_LIST,
     TYPE_NAME,
     NAME,
@@ -284,6 +286,8 @@ pub enum SyntaxKind {
     CASE_EXPR,
     CASE_WHEN,
     JSON_ACCESS,
+    LAMBDA_EXPR,
+    LAMBDA_PARAMS,
     VALUES_CLAUSE,
     VALUES_ROW,
     // Phase 6: DML statements

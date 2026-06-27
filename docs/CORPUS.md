@@ -32,7 +32,7 @@ above, each committed sample must already be in formatter-canonical form: `forma
 Regenerate the samples after an intentional formatting change with:
 
 ```sh
-cargo run -p snow-fmt-cli --bin snow-fmt -- --write --no-config \
+cargo run -p sql-dialect-fmt --bin sql-dialect-fmt -- --write --no-config \
   crates/snow-fmt-formatter/tests/corpus_sample
 ```
 
@@ -62,8 +62,8 @@ collects every offending file before failing, so one pass gives the full list.
 Reproduce the file in isolation first:
 
 ```sh
-cargo run -p snow-fmt-cli --bin snow-fmt -- --no-config path/to/offender.sql > /tmp/once.sql
-cargo run -p snow-fmt-cli --bin snow-fmt -- --no-config /tmp/once.sql > /tmp/twice.sql
+cargo run -p sql-dialect-fmt --bin sql-dialect-fmt -- --no-config path/to/offender.sql > /tmp/once.sql
+cargo run -p sql-dialect-fmt --bin sql-dialect-fmt -- --no-config /tmp/once.sql > /tmp/twice.sql
 diff /tmp/once.sql /tmp/twice.sql
 ```
 

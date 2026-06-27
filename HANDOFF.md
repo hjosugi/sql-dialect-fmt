@@ -54,7 +54,7 @@
 | `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
 | `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
 | `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル、statement/folds、軽量 expression、context-aware injections まで） | 🚧 初期+ |
-| `snow-fmt-cli` | 実用 `snow-fmt` CLI（`--write`/`--check`/stdin、複数ファイル/ディレクトリ、`snow-fmt.toml`、エンコーディング保持）。v0.1.0 | ✅ |
+| `sql-dialect-fmt` | 実用 CLI（互換 `snow-fmt` alias あり。`--write`/`--check`/stdin、複数ファイル/ディレクトリ、`snow-fmt.toml`、`--dialect snowflake|databricks`、エンコーディング保持）。v0.1.0 | ✅ |
 | `snow-fmt-encoding` | 文字コード/改行ユーティリティ | 🚧 |
 | `snow-fmt-test-fixtures` | easy-test-cases を `include_str!` で内蔵（外部 `easy-test-cases/` 無しでも `cargo test` 通る） | ✅ |
 | `snow-fmt-test-support` | テスト共有ユーティリティ | ✅ |

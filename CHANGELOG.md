@@ -9,8 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
-This is the first release line of **snow-fmt**, a Rust toolchain for formatting and
-highlighting Snowflake SQL. The format is mechanically **lossless and idempotent**:
+This is the first release line of **sql-dialect-fmt**, a Rust toolchain for formatting and
+highlighting Snowflake SQL and Databricks SQL. The format is mechanically **lossless and idempotent**:
 unparseable input passes through unchanged, significant tokens and comments are
 preserved, and `format(format(x)) == format(x)`.
 
@@ -32,6 +32,8 @@ preserved, and `format(format(x)) == format(x)`.
   - DDL: `CREATE TABLE` / `VIEW` / CTAS, `DROP`, lenient `ALTER`,
     `CREATE PROCEDURE` / `FUNCTION` skeletons with verbatim `$$…$$` bodies.
   - `COPY INTO` (load / unload, stage paths preserved verbatim).
+  - Databricks dialect slice: backtick identifiers, `LATERAL VIEW`, Delta table
+    options, `VERSION` / `TIMESTAMP AS OF`, and higher-order-function lambdas.
 - **Formatter** (`snow-fmt-formatter`): generic Wadler/Prettier-style Doc IR engine
   with a width-aware printer, plus Snowflake formatting rules built on the CST.
   Headline feature: **magic trailing comma**. Real comment attachment
@@ -44,8 +46,9 @@ preserved, and `format(format(x)) == format(x)`.
   `rowan` language definition shared across the toolchain.
 - **Encoding** (`snow-fmt-encoding`): byte-to-text decoding/re-encoding helpers so
   the CLI preserves the input's original encoding and line endings.
-- **CLI** (`snow-fmt-cli`): the `snow-fmt` binary with `--write`, `--check`,
-  stdin/stdout, and `--line-width` / `--indent-width` / `--no-uppercase` options.
+- **CLI** (`sql-dialect-fmt`): the `sql-dialect-fmt` binary (plus `snow-fmt`
+  compatibility alias) with `--write`, `--check`, stdin/stdout, `--dialect`,
+  and `--line-width` / `--indent-width` / `--no-uppercase` options.
 - **LSP** (`snow-fmt-lsp`): Language Server providing formatting, semantic tokens,
   and diagnostics over stdio.
 

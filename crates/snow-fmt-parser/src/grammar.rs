@@ -45,7 +45,7 @@ pub(crate) fn source_file(p: &mut Parser) {
 /// statement. Lenient statement parsers consult this so `->>` is left for `stmt::statement_or_flow`
 /// instead of being swallowed into the preceding flat token run.
 fn at_stmt_terminator(p: &Parser) -> bool {
-    p.at(SEMICOLON) || p.at(FLOW_PIPE) || p.at_eof()
+    p.at(SEMICOLON) || (p.dialect().supports_flow_operator() && p.at(FLOW_PIPE)) || p.at_eof()
 }
 
 // ---- DDL (Phase 7) ----
@@ -73,7 +73,7 @@ fn create_stmt(p: &mut Parser) {
     // Modifiers before the object kind (SECURE / TEMPORARY / TRANSIENT / MATERIALIZED / ...). Stop
     // at the object-kind word so the right sub-rule sees it; also stop at a query/body `AS` and the
     // statement end so a malformed prefix can never run away.
-    while !at_object_kind(p) && !p.at(SEMICOLON) && !at_create_body(p) && !p.at_eof() {
+    while !at_object_kind(p) && !at_stmt_terminator(p) && !at_create_body(p) {
         // Contextual modifier words (`MATERIALIZED`, `LOCAL`, `GLOBAL`) precede the object kind;
         // up-case them like keywords. Reserved modifiers (SECURE/TEMP/TRANSIENT/…) up-case already.
         if p.nth_contextual(0, ContextualKeyword::Materialized)
@@ -919,11 +919,77 @@ fn create_table(p: &mut Parser) {
     // Tolerate table options (CLUSTER BY (...), COMMENT = '...', ...) up to an optional CTAS query,
     // up-casing the recognized DDL words so they format like keywords.
     while !p.at(AS_KW) && !at_stmt_terminator(p) {
-        bump_ddl_word(p);
+        if p.dialect().supports_delta_table_options() && at_databricks_table_option(p) {
+            databricks_table_option(p);
+        } else {
+            bump_ddl_word(p);
+        }
     }
     if p.eat(AS_KW) {
         query_expr(p);
     }
+}
+
+fn at_databricks_table_option(p: &Parser) -> bool {
+    p.at(USING_KW)
+        || p.nth_contextual(0, ContextualKeyword::Location)
+        || p.nth_contextual(0, ContextualKeyword::Tblproperties)
+        || p.nth_contextual(0, ContextualKeyword::Options)
+        || (p.nth_contextual(0, ContextualKeyword::Partitioned) && p.nth_at(1, BY_KW))
+        || (p.nth_contextual(0, ContextualKeyword::Cluster) && p.nth_at(1, BY_KW))
+}
+
+fn databricks_table_option(p: &mut Parser) {
+    let m = p.start();
+    if p.at(USING_KW) {
+        p.bump(USING_KW);
+        if p.at_name() {
+            name_ref(p);
+        } else if !at_databricks_table_option_stop(p) {
+            p.bump_any();
+        }
+    } else if p.nth_contextual(0, ContextualKeyword::Location) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        if !at_databricks_table_option_stop(p) {
+            p.bump_any();
+        }
+    } else if p.nth_contextual(0, ContextualKeyword::Tblproperties)
+        || p.nth_contextual(0, ContextualKeyword::Options)
+    {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        } else {
+            databricks_table_option_tail(p);
+        }
+    } else if p.nth_contextual(0, ContextualKeyword::Partitioned)
+        || p.nth_contextual(0, ContextualKeyword::Cluster)
+    {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        p.expect(BY_KW);
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        } else {
+            databricks_table_option_tail(p);
+        }
+    } else {
+        bump_ddl_word(p);
+    }
+    m.complete(p, OBJECT_PROPERTY);
+}
+
+fn databricks_table_option_tail(p: &mut Parser) {
+    while !at_databricks_table_option_stop(p) && !at_databricks_table_option(p) {
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        } else {
+            bump_ddl_word(p);
+        }
+    }
+}
+
+fn at_databricks_table_option_stop(p: &Parser) -> bool {
+    p.at(AS_KW) || at_stmt_terminator(p)
 }
 
 fn column_def_list(p: &mut Parser) {
@@ -1542,7 +1608,9 @@ fn from_clause(p: &mut Parser) {
     p.bump(FROM_KW);
     table_ref(p);
     loop {
-        if at_join_start(p) {
+        if p.dialect().supports_lateral_view() && at_lateral_view(p) {
+            lateral_view(p);
+        } else if at_join_start(p) {
             join(p);
         } else if p.eat(COMMA) {
             table_ref(p);
@@ -1599,6 +1667,9 @@ fn table_ref(p: &mut Parser) {
     if at_time_travel(p) {
         time_travel(p);
     }
+    if p.dialect().supports_as_of_travel() && at_databricks_as_of_travel(p) {
+        databricks_as_of_travel(p);
+    }
     if p.at(END_KW) && p.nth_at(1, L_PAREN) {
         p.bump(END_KW); // CHANGES ... END ( TIMESTAMP => ... )
         balanced_parens(p);
@@ -1616,6 +1687,39 @@ fn table_ref(p: &mut Parser) {
     m.complete(p, TABLE_REF);
 }
 
+fn at_lateral_view(p: &Parser) -> bool {
+    p.at(LATERAL_KW) && p.nth_at(1, VIEW_KW)
+}
+
+/// Databricks/Spark `LATERAL VIEW [OUTER] generator(...) [table_alias] AS col [, ...]`.
+fn lateral_view(p: &mut Parser) {
+    let m = p.start();
+    p.bump(LATERAL_KW);
+    p.expect(VIEW_KW);
+    p.eat(OUTER_KW);
+    if at_expr_start(p) {
+        expr(p);
+    } else {
+        p.error("expected a generator expression after LATERAL VIEW");
+    }
+    if p.at_name() {
+        name(p);
+    }
+    p.eat(AS_KW);
+    if p.at_name() {
+        name(p);
+        while p.eat(COMMA) {
+            if p.at_name() {
+                name(p);
+            } else {
+                p.error("expected a column alias after ','");
+                break;
+            }
+        }
+    }
+    m.complete(p, LATERAL_VIEW);
+}
+
 /// Time-travel: `AT ( ... )` / `BEFORE ( ... )` (`at`/`before` are contextual keywords).
 fn at_time_travel(p: &Parser) -> bool {
     (p.nth_contextual(0, ContextualKeyword::At) || p.nth_contextual(0, ContextualKeyword::Before))
@@ -1628,6 +1732,31 @@ fn time_travel(p: &mut Parser) {
     if p.at(L_PAREN) {
         balanced_parens(p);
     }
+}
+
+fn at_databricks_as_of_travel(p: &Parser) -> bool {
+    (p.nth_contextual(0, ContextualKeyword::Version)
+        || p.nth_contextual(0, ContextualKeyword::Timestamp))
+        && p.nth_at(1, AS_KW)
+        && p.nth_contextual(2, ContextualKeyword::Of)
+}
+
+/// Databricks table time travel: `VERSION AS OF <expr>` / `TIMESTAMP AS OF <expr>`.
+fn databricks_as_of_travel(p: &mut Parser) {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // VERSION / TIMESTAMP
+    p.expect(AS_KW);
+    if p.nth_contextual(0, ContextualKeyword::Of) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    } else {
+        p.error("expected OF in time travel clause");
+    }
+    if at_expr_start(p) {
+        expr(p);
+    } else {
+        p.error("expected a time travel value");
+    }
+    m.complete(p, AS_OF_TRAVEL);
 }
 
 /// `<table> {SAMPLE|TABLESAMPLE} [method] ( n [ROWS] ) [REPEATABLE|SEED ( seed )]`. The fraction
@@ -1900,6 +2029,8 @@ fn at_alias_blocker(p: &Parser) -> bool {
     (p.nth_contextual(0, ContextualKeyword::Asof) && p.nth_at(1, JOIN_KW))
         || (p.nth_contextual(0, ContextualKeyword::MatchCondition) && p.nth_at(1, L_PAREN))
         || at_time_travel(p)
+        || (p.dialect().supports_as_of_travel() && at_databricks_as_of_travel(p))
+        || (p.dialect().supports_lateral_view() && at_lateral_view(p))
 }
 
 fn at_join_start(p: &Parser) -> bool {
@@ -2229,6 +2360,18 @@ fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
             continue;
         }
 
+        // Databricks higher-order-function lambda: `x -> expr` / `(x, y) -> expr`.
+        if p.dialect().supports_lambda_expr() && p.at(ARROW) {
+            if 0 < min_bp {
+                break;
+            }
+            let m = lhs.precede(p);
+            p.bump(ARROW);
+            expr_bp(p, 1);
+            lhs = m.complete(p, LAMBDA_EXPR);
+            continue;
+        }
+
         // Compound predicates, all at comparison precedence.
         if p.at(IS_KW) {
             if BP_CMP.0 < min_bp {
@@ -2337,6 +2480,8 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         m.complete(p, EXISTS_EXPR)
     } else if p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)) {
         subquery(p) // scalar subquery
+    } else if p.dialect().supports_lambda_expr() && at_parenthesized_lambda_params(p) {
+        lambda_params(p)
     } else if p.at(L_PAREN) {
         let m = p.start();
         p.bump(L_PAREN);
@@ -2366,6 +2511,47 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         return None;
     };
     Some(cm)
+}
+
+fn at_parenthesized_lambda_params(p: &Parser) -> bool {
+    if !p.at(L_PAREN) {
+        return false;
+    }
+    let mut depth = 0u32;
+    for i in 0..48 {
+        if p.nth_at(i, EOF) {
+            return false;
+        }
+        if p.nth_at(i, L_PAREN) {
+            depth += 1;
+        } else if p.nth_at(i, R_PAREN) {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                return p.nth_at(i + 1, ARROW);
+            }
+        }
+    }
+    false
+}
+
+fn lambda_params(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(L_PAREN);
+    if !p.at(R_PAREN) {
+        if p.at_name() {
+            name(p);
+        } else {
+            p.error("expected a lambda parameter");
+        }
+        while p.eat(COMMA) {
+            if p.at(R_PAREN) {
+                break;
+            }
+            name(p);
+        }
+    }
+    p.expect(R_PAREN);
+    m.complete(p, LAMBDA_PARAMS)
 }
 
 fn at_keyword_call_name(p: &Parser) -> bool {

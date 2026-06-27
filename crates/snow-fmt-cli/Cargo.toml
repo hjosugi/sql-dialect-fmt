@@ -1,5 +1,5 @@
 [package]
-name = "snow-fmt-cli"
+name = "sql-dialect-fmt"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,11 +9,12 @@ readme.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "snow-fmt: an opinionated Snowflake SQL formatter (command-line)."
+description = "sql-dialect-fmt: an opinionated SQL dialect formatter (command-line)."
 
 [[bin]]
 name = "snow-fmt"
-path = "src/main.rs"
+path = "src/bin/snow-fmt.rs"
+test = false
 
 [dependencies]
 rayon = "1"

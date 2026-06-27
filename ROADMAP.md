@@ -127,7 +127,7 @@
 
 ## Phase 10 — 仕上げ・周辺 🚧
 - ✅ 🔎 Cortex / AISQL 関数（`AI_COMPLETE` などの `AI_*`, `SNOWFLAKE.CORTEX.*(...)`）を LSP semantic token で `function` + `defaultLibrary` として認識（公式 docs 確認済み）… [semantic.rs](crates/snow-fmt-highlight/src/semantic.rs)
-- ✅ CLI `snow-fmt`（`--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、`--no-config`、`--line-width`/`--indent-width`/`--no-uppercase`/`--uppercase`、エンコーディング保持、error UX、`cargo install` 可、v0.1.0） … [crates/snow-fmt-cli/](crates/snow-fmt-cli/)
+- ✅ CLI `sql-dialect-fmt`（互換 `snow-fmt` alias あり。`--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、`--no-config`、`--dialect snowflake|databricks`、`--line-width`/`--indent-width`/`--no-uppercase`/`--uppercase`、エンコーディング保持、error UX、`cargo install` 可、v0.1.0） … [crates/snow-fmt-cli/](crates/snow-fmt-cli/)
 - ✅ 複数ファイル**並列**整形（`rayon`）。処理は並列、stdout/stderr/check 表示は入力順で安定。Criterion ベンチマークは [benches/format.rs](crates/snow-fmt-formatter/benches/format.rs) で導入済み
 - ✅ 大規模コーパスでのべき等性・無破壊（ラウンドトリップ）回帰（内蔵 easy fixture 全 SQL + always-on sample corpus + optional external corpus harness `SNOW_FMT_EXTERNAL_CORPUS`、docs/CI smoke つき）。残: 公開可能な外部コーパスの継続運用
 - ✅ エディタ拡張（VS Code）パッケージング（`editors/` を extension root とする `package.json` + `language-configuration.json`）
@@ -136,7 +136,7 @@
 ---
 
 ### 現状サマリ（2026-06）
-**Phase 0–6 は完了**、Phase 7 は Semantic View を含む主要 DDL/object DDL/access control まで実用域、Phase 8 は主要 routine body delimiter/language を保守的に整形、Phase 9/10 は LSP/editor/CLI 並列/外部 corpus harness/Chrome+WASM まで実用域。コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。CLI `snow-fmt` v0.1.0 公開可。
+**Phase 0–6 は完了**、Phase 7 は Semantic View を含む主要 DDL/object DDL/access control まで実用域、Phase 8 は主要 routine body delimiter/language を保守的に整形、Phase 9/10 は LSP/editor/CLI 並列/外部 corpus harness/Chrome+WASM まで実用域。コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。Databricks mode は LATERAL VIEW / Delta DDL options / VERSION・TIMESTAMP AS OF / lambda / backtick identifier の第一弾を実装済み。CLI `sql-dialect-fmt` v0.1.0 公開可。
 
 **残りの主な未着手（価値順）**:
 1. **網羅強化**: Semantic View/Preview object option の継続追随、公開可能な外部コーパスの継続運用。

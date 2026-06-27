@@ -25,11 +25,11 @@ jobs:
         id: version
         run: echo "version=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_OUTPUT"
       - name: Build release binary
-        run: cargo build --release -p snow-fmt-cli
+        run: cargo build --release -p sql-dialect-fmt --bin sql-dialect-fmt
       - name: Package binary
         run: |
-          asset="snow-fmt-${{ steps.version.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz"
-          tar -czf "$asset" -C target/release snow-fmt
+          asset="sql-dialect-fmt-${{ steps.version.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz"
+          tar -czf "$asset" -C target/release sql-dialect-fmt
           sha256sum "$asset" > "$asset.sha256"
       - name: Create GitHub Release
         env:
@@ -43,5 +43,5 @@ jobs:
             --target "${{ github.sha }}" \
             --title "$v" \
             --generate-notes \
-            "snow-fmt-$v-x86_64-unknown-linux-gnu.tar.gz" \
-            "snow-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256"
+            "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz" \
+            "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256"

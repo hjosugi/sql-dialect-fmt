@@ -917,7 +917,7 @@ impl Lowerer {
                 }
                 parts.push(self.token(token));
             } else if let Some(node) = child.as_node() {
-                if node.kind() == JOIN {
+                if matches!(node.kind(), JOIN | LATERAL_VIEW) {
                     parts.push(hard_line());
                     self.reset();
                 }
@@ -962,7 +962,7 @@ impl Lowerer {
     fn lower_node(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
             // Parenthesized comma lists, lowered structurally (wrap + magic trailing comma).
-            ARG_LIST | VALUES_ROW | COLUMN_LIST => self.lower_paren_list(node),
+            ARG_LIST | VALUES_ROW | COLUMN_LIST | LAMBDA_PARAMS => self.lower_paren_list(node),
             IN_EXPR => self.lower_in_expr(node),
             CASE_EXPR => self.lower_case(node),
             SUBQUERY => self.lower_subquery(node),

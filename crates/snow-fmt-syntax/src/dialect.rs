@@ -79,6 +79,19 @@ impl Dialect {
         matches!(self, Dialect::Databricks)
     }
 
+    /// Delta/Spark table DDL options: `USING`, `LOCATION`, `TBLPROPERTIES`, `OPTIONS`, and
+    /// `PARTITIONED BY`. Databricks only.
+    #[must_use]
+    pub fn supports_delta_table_options(self) -> bool {
+        matches!(self, Dialect::Databricks)
+    }
+
+    /// Higher-order-function lambdas: `x -> expr` and `(x, y) -> expr`. Databricks only for now.
+    #[must_use]
+    pub fn supports_lambda_expr(self) -> bool {
+        matches!(self, Dialect::Databricks)
+    }
+
     /// Time travel via `VERSION AS OF` / `TIMESTAMP AS OF`. Databricks only (Snowflake uses
     /// `AT` / `BEFORE`).
     #[must_use]
@@ -107,6 +120,8 @@ mod tests {
         assert!(s.supports_stage_refs());
         assert!(!s.supports_backtick_identifiers());
         assert!(!s.supports_lateral_view());
+        assert!(!s.supports_delta_table_options());
+        assert!(!s.supports_lambda_expr());
         assert!(!s.supports_as_of_travel());
     }
 
@@ -121,6 +136,8 @@ mod tests {
         assert!(!d.supports_stage_refs());
         assert!(d.supports_backtick_identifiers());
         assert!(d.supports_lateral_view());
+        assert!(d.supports_delta_table_options());
+        assert!(d.supports_lambda_expr());
         assert!(d.supports_as_of_travel());
     }
 }

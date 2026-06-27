@@ -1,4 +1,4 @@
-//! End-to-end tests driving the real `snow-fmt` binary.
+//! End-to-end tests driving the real `sql-dialect-fmt` binary.
 //!
 //! These cover the productionized surface: multi-file and directory inputs, `snow-fmt.toml`
 //! discovery and CLI override precedence, `--check` exit codes, stdin↔stdout, and the error UX
@@ -14,14 +14,14 @@ use tempfile::TempDir;
 /// Run the binary with `args`, optional `stdin`, in working directory `cwd`. Returns
 /// (exit code, stdout, stderr).
 fn run(cwd: &Path, args: &[&str], stdin: Option<&str>) -> (i32, String, String) {
-    let bin = env!("CARGO_BIN_EXE_snow-fmt");
+    let bin = env!("CARGO_BIN_EXE_sql-dialect-fmt");
     let mut cmd = Command::new(bin);
     cmd.args(args)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let mut child = cmd.spawn().expect("spawn snow-fmt");
+    let mut child = cmd.spawn().expect("spawn sql-dialect-fmt");
     {
         let mut child_stdin = child.stdin.take().expect("stdin");
         if let Some(input) = stdin {
@@ -57,11 +57,24 @@ fn stdin_to_stdout_formats() {
 }
 
 #[test]
+fn stdin_to_stdout_formats_databricks_when_requested() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, err) = run(
+        tmp.path(),
+        &["--dialect", "databricks"],
+        Some("select transform(items, x -> x + 1) from events"),
+    );
+    assert_eq!(code, 0);
+    assert_eq!(out, "SELECT transform(items, x -> x + 1)\nFROM events;\n");
+    assert!(!err.contains("parse error"), "stderr: {err}");
+}
+
+#[test]
 fn version_and_help_succeed() {
     let tmp = TempDir::new().unwrap();
     let (code_v, out_v, _) = run(tmp.path(), &["--version"], None);
     assert_eq!(code_v, 0);
-    assert!(out_v.contains("snow-fmt"));
+    assert!(out_v.contains("sql-dialect-fmt"));
 
     let (code_h, out_h, _) = run(tmp.path(), &["--help"], None);
     assert_eq!(code_h, 0);
@@ -168,6 +181,21 @@ fn config_file_is_discovered_and_applied() {
         !out.contains("SELECT"),
         "keywords should stay lowercase: {out:?}"
     );
+}
+
+#[test]
+fn config_file_can_select_databricks_dialect() {
+    let tmp = TempDir::new().unwrap();
+    write(tmp.path(), "snow-fmt.toml", "dialect = \"databricks\"\n");
+    let f = write(
+        tmp.path(),
+        "q.sql",
+        "select `a b` from `catalog`.`schema`.`table`",
+    );
+    let (code, out, err) = run(tmp.path(), &[f.to_str().unwrap()], None);
+    assert_eq!(code, 0);
+    assert_eq!(out, "SELECT `a b`\nFROM `catalog`.`schema`.`table`;\n");
+    assert!(!err.contains("parse error"), "stderr: {err}");
 }
 
 #[test]

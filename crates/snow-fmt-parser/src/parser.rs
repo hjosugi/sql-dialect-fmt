@@ -87,6 +87,20 @@ contextual_keywords! {
     /// `COMMENT ON <object> IS '...'` — recognized only before `ON` so it never shadows the very
     /// common `comment` column/identifier.
     Comment => "comment",
+    /// Databricks table time travel: `VERSION AS OF <expr>`.
+    Version => "version",
+    /// Databricks table time travel: `TIMESTAMP AS OF <expr>`.
+    Timestamp => "timestamp",
+    /// The `OF` in Databricks `VERSION AS OF` / `TIMESTAMP AS OF`.
+    Of => "of",
+    /// Databricks `CREATE TABLE ... LOCATION '<path>'`.
+    Location => "location",
+    /// Databricks `CREATE TABLE ... TBLPROPERTIES (...)`.
+    Tblproperties => "tblproperties",
+    /// Databricks `CREATE TABLE ... OPTIONS (...)`.
+    Options => "options",
+    /// Databricks `CREATE TABLE ... PARTITIONED BY (...)`.
+    Partitioned => "partitioned",
     /// `BEGIN TRANSACTION` — distinguishes a transaction start from a Snowflake Scripting block.
     Transaction => "transaction",
     /// `BEGIN WORK` — the SQL-standard spelling of a transaction start.

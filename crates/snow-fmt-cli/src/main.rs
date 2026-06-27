@@ -1,22 +1,21 @@
-//! `snow-fmt` — the command-line Snowflake SQL formatter.
-//!
-//! Reads SQL from files, directories (recursed for `*.sql`), or stdin, formats it, and either
-//! prints to stdout, rewrites the files (`--write`), or checks formatting (`--check`). Formatting
-//! is encoding-aware: a UTF-8 BOM and UTF-16 inputs round-trip, and bytes that are not valid text
-//! pass through untouched. The formatter never panics and never drops content — input it cannot
-//! parse is returned unchanged, and the parse diagnostics are surfaced to stderr so a malformed
-//! file is reported rather than silently passed through.
-//!
-//! ## Configuration
-//! Formatting knobs come from three layers, lowest priority first:
-//!   1. the formatter's built-in defaults,
-//!   2. the nearest `snow-fmt.toml` discovered by walking up from each input (or the CWD),
-//!   3. explicit CLI flags.
-//!
-//! ## Exit codes
-//!   * `0` — success (formatted to stdout/written, or `--check` found nothing to do),
-//!   * `1` — `--check` only: at least one input would be reformatted,
-//!   * `2` — a parse error, an I/O error, or a usage error.
+// `sql-dialect-fmt` — the command-line SQL dialect formatter.
+//
+// Reads SQL from files, directories (recursed for `*.sql`), or stdin, formats it, and either
+// prints to stdout, rewrites the files (`--write`), or checks formatting (`--check`). Formatting
+// is encoding-aware: a UTF-8 BOM and UTF-16 inputs round-trip, and bytes that are not valid text
+// pass through untouched. The formatter never panics and never drops content — input it cannot
+// parse is returned unchanged, and the parse diagnostics are surfaced to stderr so a malformed
+// file is reported rather than silently passed through.
+//
+// Configuration knobs come from three layers, lowest priority first:
+//   1. the formatter's built-in defaults,
+//   2. the nearest `snow-fmt.toml` discovered by walking up from each input (or the CWD),
+//   3. explicit CLI flags.
+//
+// Exit codes:
+//   * `0` — success (formatted to stdout/written, or `--check` found nothing to do),
+//   * `1` — `--check` only: at least one input would be reformatted,
+//   * `2` — a parse error, an I/O error, or a usage error.
 
 mod config;
 
@@ -28,6 +27,7 @@ use std::process::ExitCode;
 
 use rayon::prelude::*;
 use snow_fmt_formatter::FormatOptions;
+use snow_fmt_parser::Dialect;
 
 use config::Config;
 
@@ -40,7 +40,7 @@ fn main() -> ExitCode {
     match run(std::env::args_os().skip(1)) {
         Ok(code) => code,
         Err(err) => {
-            eprintln!("snow-fmt: {err}");
+            eprintln!("sql-dialect-fmt: {err}");
             ExitCode::from(EXIT_ERROR)
         }
     }
@@ -64,6 +64,7 @@ struct Overrides {
     line_width: Option<usize>,
     indent_width: Option<usize>,
     uppercase_keywords: Option<bool>,
+    dialect: Option<Dialect>,
 }
 
 impl Overrides {
@@ -77,6 +78,9 @@ impl Overrides {
         if let Some(uppercase_keywords) = self.uppercase_keywords {
             options.uppercase_keywords = uppercase_keywords;
         }
+        if let Some(dialect) = self.dialect {
+            options.dialect = dialect;
+        }
     }
 }
 
@@ -88,7 +92,7 @@ fn run<I: IntoIterator<Item = OsString>>(raw: I) -> Result<ExitCode, String> {
             return Ok(ExitCode::SUCCESS);
         }
         Parsed::Version => {
-            println!("snow-fmt {}", env!("CARGO_PKG_VERSION"));
+            println!("sql-dialect-fmt {}", env!("CARGO_PKG_VERSION"));
             return Ok(ExitCode::SUCCESS);
         }
     };
@@ -124,12 +128,12 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
         .map_err(|err| format!("failed to read stdin: {err}"))?;
 
     // Surface parse problems on stderr, but keep going (the formatter passes content through).
-    report_parse_errors(&source, None);
+    report_parse_errors(&source, None, options.dialect);
     let formatted = format_bytes(&source, &options);
 
     if args.check {
         if formatted != source {
-            eprintln!("snow-fmt: stdin is not formatted");
+            eprintln!("sql-dialect-fmt: stdin is not formatted");
             return Ok(ExitCode::from(EXIT_CHECK_FAILED));
         }
         return Ok(ExitCode::SUCCESS);
@@ -205,7 +209,7 @@ fn run_paths(args: &Args) -> Result<ExitCode, String> {
     // checking many files). Streaming to stdout stays clean for piping.
     if args.write {
         eprintln!(
-            "snow-fmt: {} file(s); {} reformatted, {} unchanged{}",
+            "sql-dialect-fmt: {} file(s); {} reformatted, {} unchanged{}",
             summary.total,
             summary.written,
             summary.unchanged,
@@ -214,13 +218,13 @@ fn run_paths(args: &Args) -> Result<ExitCode, String> {
     } else if args.check {
         if summary.would_change == 0 {
             eprintln!(
-                "snow-fmt: {} file(s) already formatted{}",
+                "sql-dialect-fmt: {} file(s) already formatted{}",
                 summary.total,
                 errors_suffix(summary.with_errors),
             );
         } else {
             eprintln!(
-                "snow-fmt: {} of {} file(s) would be reformatted{}",
+                "sql-dialect-fmt: {} of {} file(s) would be reformatted{}",
                 summary.would_change,
                 summary.total,
                 errors_suffix(summary.with_errors),
@@ -238,7 +242,7 @@ fn process_file(args: &Args, file: &Path) -> Result<FileOutcome, String> {
     let options = options_for(args, Some(file))?;
     let source =
         fs::read(file).map_err(|err| format!("failed to read {}: {err}", file.display()))?;
-    let parse_errors = collect_parse_error_messages(&source, Some(file));
+    let parse_errors = collect_parse_error_messages(&source, Some(file), options.dialect);
     let formatted = format_bytes(&source, &options);
     let changed = formatted != source;
     let mut written = false;
@@ -335,20 +339,24 @@ fn is_sql_file(path: &Path) -> bool {
 /// This does **not** abort processing: the formatter still round-trips the content losslessly.
 /// It exists purely so malformed input is *visible* instead of silently passing through. Opaque
 /// (non-text) bytes are skipped — there is nothing to parse.
-fn report_parse_errors(source: &[u8], file: Option<&Path>) -> bool {
-    let messages = collect_parse_error_messages(source, file);
+fn report_parse_errors(source: &[u8], file: Option<&Path>, dialect: Dialect) -> bool {
+    let messages = collect_parse_error_messages(source, file, dialect);
     for message in &messages {
         eprintln!("{message}");
     }
     !messages.is_empty()
 }
 
-fn collect_parse_error_messages(source: &[u8], file: Option<&Path>) -> Vec<String> {
+fn collect_parse_error_messages(
+    source: &[u8],
+    file: Option<&Path>,
+    dialect: Dialect,
+) -> Vec<String> {
     let decoded = snow_fmt_encoding::DecodedText::decode(source);
     let Some(text) = decoded.as_str() else {
         return Vec::new();
     };
-    let parse = snow_fmt_parser::parse(text);
+    let parse = snow_fmt_parser::parse_with_dialect(text, dialect);
     let errors = parse.errors();
     if errors.is_empty() {
         return Vec::new();
@@ -363,7 +371,7 @@ fn collect_parse_error_messages(source: &[u8], file: Option<&Path>) -> Vec<Strin
         .map(|error| {
             let (line, col) = line_col(text, error.offset);
             format!(
-                "snow-fmt: parse error in {where_}:{line}:{col}: {}",
+                "sql-dialect-fmt: parse error in {where_}:{line}:{col}: {}",
                 error.message
             )
         })
@@ -414,6 +422,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
             "--no-config" => no_config = true,
             "--no-uppercase" => overrides.uppercase_keywords = Some(false),
             "--uppercase" => overrides.uppercase_keywords = Some(true),
+            "--dialect" => overrides.dialect = Some(take_dialect(&mut args, "--dialect")?),
             "--line-width" => overrides.line_width = Some(take_usize(&mut args, "--line-width")?),
             "--indent-width" => {
                 overrides.indent_width = Some(take_usize(&mut args, "--indent-width")?)
@@ -433,6 +442,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
                 match flag {
                     "--line-width" => overrides.line_width = Some(parse_usize(flag, value)?),
                     "--indent-width" => overrides.indent_width = Some(parse_usize(flag, value)?),
+                    "--dialect" => overrides.dialect = Some(parse_dialect_flag(value)?),
                     _ => return Err(format!("unknown option {flag}\n\n{}", usage())),
                 }
             }
@@ -463,6 +473,17 @@ fn take_usize<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<
     parse_usize(flag, value.to_string_lossy().as_ref())
 }
 
+fn take_dialect<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<Dialect, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a dialect"))?;
+    parse_dialect_flag(value.to_string_lossy().as_ref())
+}
+
+fn parse_dialect_flag(value: &str) -> Result<Dialect, String> {
+    config::parse_dialect(value)
+}
+
 fn parse_usize(flag: &str, value: &str) -> Result<usize, String> {
     value
         .parse::<usize>()
@@ -471,10 +492,10 @@ fn parse_usize(flag: &str, value: &str) -> Result<usize, String> {
 
 fn usage() -> String {
     "\
-snow-fmt — an opinionated Snowflake SQL formatter
+sql-dialect-fmt — an opinionated SQL dialect formatter
 
 USAGE:
-    snow-fmt [OPTIONS] [PATHS...]
+    sql-dialect-fmt [OPTIONS] [PATHS...]
 
     PATHS may be files or directories. Directories are searched recursively for
     *.sql files. With no PATHS, reads SQL from stdin and writes the formatted
@@ -488,6 +509,7 @@ OPTIONS:
         --check           Exit non-zero if any input is not already formatted (no writes)
         --line-width N    Target line width (default 100)
         --indent-width N  Spaces per indent level (default 4)
+        --dialect NAME    SQL dialect: snowflake or databricks (default snowflake)
         --uppercase       Upper-case SQL keywords (the default)
         --no-uppercase    Do not upper-case SQL keywords
         --no-config       Ignore any snow-fmt.toml; use defaults and flags only
@@ -550,17 +572,26 @@ mod tests {
 
     #[test]
     fn parses_options() {
-        let args = run_args(&["--line-width", "80", "--no-uppercase", "a.sql"]);
+        let args = run_args(&[
+            "--line-width",
+            "80",
+            "--dialect",
+            "databricks",
+            "--no-uppercase",
+            "a.sql",
+        ]);
         assert_eq!(args.overrides.line_width, Some(80));
+        assert_eq!(args.overrides.dialect, Some(Dialect::Databricks));
         assert_eq!(args.overrides.uppercase_keywords, Some(false));
         assert_eq!(args.paths, vec![PathBuf::from("a.sql")]);
     }
 
     #[test]
     fn parses_eq_style_options() {
-        let args = run_args(&["--line-width=70", "--indent-width=2"]);
+        let args = run_args(&["--line-width=70", "--indent-width=2", "--dialect=snowflake"]);
         assert_eq!(args.overrides.line_width, Some(70));
         assert_eq!(args.overrides.indent_width, Some(2));
+        assert_eq!(args.overrides.dialect, Some(Dialect::Snowflake));
     }
 
     #[test]
@@ -596,6 +627,12 @@ mod tests {
     }
 
     #[test]
+    fn invalid_dialect_arg_errors() {
+        assert!(parse_args(["--dialect", "oracle"].map(Into::into)).is_err());
+        assert!(parse_args(["--dialect"].map(Into::into)).is_err());
+    }
+
+    #[test]
     fn line_col_maps_offsets() {
         let text = "abc\ndefg\nhi";
         assert_eq!(line_col(text, 0), (1, 1));
@@ -610,10 +647,12 @@ mod tests {
         let mut options = FormatOptions::default();
         let overrides = Overrides {
             line_width: Some(42),
+            dialect: Some(Dialect::Databricks),
             ..Overrides::default()
         };
         overrides.apply_to(&mut options);
         assert_eq!(options.line_width, 42);
+        assert_eq!(options.dialect, Dialect::Databricks);
         assert_eq!(options.indent_width, 4);
     }
 }

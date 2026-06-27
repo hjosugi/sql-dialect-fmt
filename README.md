@@ -1,32 +1,34 @@
-# snow-fmt
+# sql-dialect-fmt
 
 [![CI](https://github.com/hjosugi/snow-fmt/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/snow-fmt/actions/workflows/ci.yml)
 
-Snowflake SQL のフォーマッタ＋シンタックスハイライタ（Rust 製）。`gofmt` / Prettier / Biome 流の opinionated・ほぼ設定なしの整形を目指します。
+Snowflake SQL と Databricks SQL のフォーマッタ＋シンタックスハイライタ（Rust 製）。`gofmt` / Prettier / Biome 流の opinionated・ほぼ設定なしの整形を目指します。
 
 整形は **無破壊・べき等** を機械的に保証します（パースできない入力は無変更で素通し、整形しても有意トークンとコメントは保存、`format(format(x)) == format(x)`）。
 
 ## インストール
 
 ```sh
-# このリポジトリから直接（`snow-fmt` バイナリが入る）
-cargo install --git https://github.com/hjosugi/snow-fmt snow-fmt-cli
+# このリポジトリから直接（`sql-dialect-fmt` バイナリが入る）
+cargo install --git https://github.com/hjosugi/snow-fmt sql-dialect-fmt
 
 # ローカルチェックアウトから
 cargo install --path crates/snow-fmt-cli
-# または: cargo build --release -p snow-fmt-cli  →  target/release/snow-fmt
+# または: cargo build --release -p sql-dialect-fmt  →  target/release/sql-dialect-fmt
 ```
 
 ## 使い方
 
 ```sh
-snow-fmt query.sql                 # 整形して stdout へ
-snow-fmt --write *.sql             # ファイルをその場で整形
-snow-fmt --check src/**/*.sql      # 未整形なら非ゼロ終了（CI 向け）
-cat query.sql | snow-fmt           # stdin → stdout
+sql-dialect-fmt query.sql                 # 整形して stdout へ
+sql-dialect-fmt --write *.sql             # ファイルをその場で整形
+sql-dialect-fmt --check src/**/*.sql      # 未整形なら非ゼロ終了（CI 向け）
+cat query.sql | sql-dialect-fmt           # stdin → stdout
 
-# オプション: --line-width N（既定100） / --indent-width N（既定4） / --no-uppercase
+# オプション: --dialect snowflake|databricks / --line-width N（既定100） / --indent-width N（既定4） / --no-uppercase
 ```
+
+互換のため、同じ実装を指す `snow-fmt` バイナリ alias も引き続きビルドされます。
 
 ## Snowsight / Chrome 拡張
 
@@ -51,7 +53,7 @@ cargo fmt --all --check
 
 ## 状態
 
-SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。LSP/semantic tokens/hover、Tree-sitter grammar、CLI、Snowsight 用 Chrome/WASM 拡張も入っています。看板機能は **magic trailing comma**。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
+Snowflake は SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。Databricks は LATERAL VIEW、Delta DDL option、VERSION/TIMESTAMP AS OF、higher-order function lambda、backtick identifier を dialect mode でサポート。LSP/semantic tokens/hover、Tree-sitter grammar、CLI、Snowsight 用 Chrome/WASM 拡張も入っています。看板機能は **magic trailing comma**。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
 
 ## クレート構成
 
@@ -66,7 +68,7 @@ SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object D
 | `snow-fmt-tree-sitter` | 同梱 Tree-sitter grammar の Rust バインディング |
 | `snow-fmt-lsp` | Language Server（formatting / semanticTokens / 診断、stdio） |
 | `snow-fmt-wasm` | Snowsight/Chrome 拡張向けの WebAssembly bridge |
-| `snow-fmt-cli` | CLI エントリポイント |
+| `sql-dialect-fmt` | CLI エントリポイント（crate path は `crates/snow-fmt-cli`） |
 
 ## ライセンス
 

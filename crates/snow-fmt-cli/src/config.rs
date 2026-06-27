@@ -8,8 +8,9 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use snow_fmt_formatter::FormatOptions;
+use snow_fmt_parser::Dialect;
 
 /// The file name the CLI looks for when walking up directories.
 pub const CONFIG_FILE_NAME: &str = "snow-fmt.toml";
@@ -25,6 +26,29 @@ pub struct Config {
     pub indent_width: Option<usize>,
     /// Upper-case SQL keywords.
     pub uppercase_keywords: Option<bool>,
+    /// SQL dialect to parse and format.
+    #[serde(default, deserialize_with = "deserialize_dialect")]
+    pub dialect: Option<Dialect>,
+}
+
+pub fn parse_dialect(value: &str) -> Result<Dialect, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "snowflake" => Ok(Dialect::Snowflake),
+        "databricks" => Ok(Dialect::Databricks),
+        _ => Err(format!(
+            "dialect expects one of: snowflake, databricks; got {value:?}"
+        )),
+    }
+}
+
+fn deserialize_dialect<'de, D>(deserializer: D) -> Result<Option<Dialect>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .map(|value| parse_dialect(&value).map_err(serde::de::Error::custom))
+        .transpose()
 }
 
 impl Config {
@@ -53,6 +77,9 @@ impl Config {
         }
         if let Some(uppercase_keywords) = self.uppercase_keywords {
             options.uppercase_keywords = uppercase_keywords;
+        }
+        if let Some(dialect) = self.dialect {
+            options.dialect = dialect;
         }
     }
 }
@@ -117,11 +144,14 @@ mod tests {
 
     #[test]
     fn parses_all_keys() {
-        let cfg = Config::parse("line_width = 80\nindent_width = 2\nuppercase_keywords = false\n")
-            .expect("valid");
+        let cfg = Config::parse(
+            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\ndialect = \"databricks\"\n",
+        )
+        .expect("valid");
         assert_eq!(cfg.line_width, Some(80));
         assert_eq!(cfg.indent_width, Some(2));
         assert_eq!(cfg.uppercase_keywords, Some(false));
+        assert_eq!(cfg.dialect, Some(Dialect::Databricks));
     }
 
     #[test]
@@ -135,6 +165,7 @@ mod tests {
         assert_eq!(cfg.indent_width, Some(8));
         assert_eq!(cfg.line_width, None);
         assert_eq!(cfg.uppercase_keywords, None);
+        assert_eq!(cfg.dialect, None);
     }
 
     #[test]
@@ -150,11 +181,18 @@ mod tests {
     #[test]
     fn apply_overrides_only_set_fields() {
         let mut options = FormatOptions::default();
-        let cfg = Config::parse("line_width = 60\n").expect("valid");
+        let cfg = Config::parse("line_width = 60\ndialect = \"databricks\"\n").expect("valid");
         cfg.apply_to(&mut options);
         assert_eq!(options.line_width, 60);
+        assert_eq!(options.dialect, Dialect::Databricks);
         // Untouched fields keep their defaults.
         assert_eq!(options.indent_width, 4);
         assert!(options.uppercase_keywords);
+    }
+
+    #[test]
+    fn invalid_dialect_is_rejected() {
+        assert!(Config::parse("dialect = \"oracle\"\n").is_err());
+        assert!(parse_dialect("oracle").is_err());
     }
 }
