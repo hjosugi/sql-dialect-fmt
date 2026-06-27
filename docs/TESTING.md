@@ -89,3 +89,9 @@ fixtures do not require updating every consumer test:
 Broader generated corpora should stay outside the repository. Use the CLI
 `--fixtures` flag for one-off local checks rather than committing generated
 fixture directories.
+
+Formatter corpus checks have one additional always-on layer:
+`crates/snow-fmt-formatter/tests/corpus_sample/`. These files are committed in
+formatter-canonical form and are checked by `external_corpus.rs` for
+idempotency, significant-token preservation, and clean reparse. Larger local or
+private corpora should use `SNOW_FMT_EXTERNAL_CORPUS`; see `docs/CORPUS.md`.

@@ -654,6 +654,77 @@ impl Lowerer {
         concat(parts)
     }
 
+    /// `CASE [operand] WHEN … THEN … [ELSE …] END [CASE]` — arms are indented one level, with each
+    /// arm body using the same statement-list layout as `IF` branches.
+    fn lower_case_stmt(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        let mut first_case = true;
+        let mut pending_else = false;
+        self.reset();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                match token.kind() {
+                    CASE_KW if first_case => {
+                        first_case = false;
+                        parts.push(self.token(token));
+                    }
+                    ELSE_KW => {
+                        self.reset();
+                        parts.push(indent(concat(vec![hard_line(), self.token(token)])));
+                        pending_else = true;
+                    }
+                    END_KW => {
+                        parts.push(hard_line());
+                        self.reset();
+                        parts.push(self.token(token));
+                        pending_else = false;
+                    }
+                    _ => parts.push(self.token(token)), // trailing CASE in END CASE
+                }
+            } else if let Some(node) = child.as_node() {
+                match node.kind() {
+                    CASE_STMT_WHEN => {
+                        self.reset();
+                        parts.push(indent(concat(vec![
+                            hard_line(),
+                            self.lower_case_stmt_when(node),
+                        ])));
+                        pending_else = false;
+                    }
+                    STMT_LIST if pending_else => {
+                        parts.push(indent(self.lower_block_body(node)));
+                        pending_else = false;
+                    }
+                    _ => parts.push(self.lower_node(node)), // simple CASE operand
+                }
+            }
+        }
+        concat(parts)
+    }
+
+    /// One `WHEN <test> THEN <body>` arm of a procedural CASE statement.
+    fn lower_case_stmt_when(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                if node.kind() == STMT_LIST {
+                    parts.push(self.lower_block_body(node));
+                } else {
+                    parts.push(self.lower_node(node));
+                }
+            }
+        }
+        concat(parts)
+    }
+
     /// `FOR/WHILE … DO … END`, `LOOP … END LOOP`, `REPEAT … UNTIL … END REPEAT` — body indented.
     fn lower_loop(&mut self, node: &SyntaxNode) -> Doc {
         let mut parts = Vec::new();
@@ -912,6 +983,7 @@ impl Lowerer {
             // Snowflake Scripting (Phase 8).
             BLOCK_STMT => self.lower_block(node),
             IF_STMT => self.lower_if(node),
+            CASE_STMT => self.lower_case_stmt(node),
             LOOP_STMT => self.lower_loop(node),
             DECLARE_SECTION => self.lower_declare_section(node),
             EXCEPTION_SECTION => self.lower_exception_section(node),

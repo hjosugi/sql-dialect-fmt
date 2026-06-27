@@ -261,12 +261,17 @@ fn execute_immediate_dollar_body_is_preserved_verbatim() {
 }
 
 #[test]
-fn case_statement_is_kept_inline_for_now() {
-    // The procedural CASE statement is captured as one balanced run and rendered inline (its arms
-    // are not yet pretty-printed). Documented deferral — assert the stable behaviour so a future
-    // change is a conscious one.
+fn case_statement_lays_out_each_arm() {
     assert_eq!(
         fmt("begin case when x > 0 then y := 'p'; else y := 'n'; end case; end"),
-        "BEGIN\n    CASE WHEN x > 0 THEN y := 'p'; ELSE y := 'n'; END CASE;\nEND;\n"
+        "BEGIN\n    CASE\n        WHEN x > 0 THEN\n            y := 'p';\n        ELSE\n            y := 'n';\n    END CASE;\nEND;\n"
+    );
+}
+
+#[test]
+fn simple_case_statement_lays_out_each_arm() {
+    assert_eq!(
+        fmt("begin case grade when 1 then y := 'a'; when 2 then y := 'b'; else y := 'c'; end case; end"),
+        "BEGIN\n    CASE grade\n        WHEN 1 THEN\n            y := 'a';\n        WHEN 2 THEN\n            y := 'b';\n        ELSE\n            y := 'c';\n    END CASE;\nEND;\n"
     );
 }

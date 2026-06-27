@@ -41,6 +41,13 @@ pub(crate) fn source_file(p: &mut Parser) {
     m.complete(p, SOURCE_FILE);
 }
 
+/// A top-level statement ends at `;`, EOF, or the flow operator `->>` that chains it to the next
+/// statement. Lenient statement parsers consult this so `->>` is left for `stmt::statement_or_flow`
+/// instead of being swallowed into the preceding flat token run.
+fn at_stmt_terminator(p: &Parser) -> bool {
+    p.at(SEMICOLON) || p.at(FLOW_PIPE) || p.at_eof()
+}
+
 // ---- DDL (Phase 7) ----
 
 /// `IF [NOT] EXISTS`, tolerated wherever Snowflake allows it.
@@ -204,7 +211,7 @@ fn create_policy(p: &mut Parser) {
     if p.at_name() {
         name_ref(p);
     }
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         bump_ddl_word(p);
     }
 }
@@ -230,7 +237,7 @@ fn policy_kind_words(p: &mut Parser) {
 /// Each iteration must make progress: every branch bumps at least one token, and the catch-all bumps
 /// the current token into an [`OBJECT_PROPERTY`] so a surprise token can never stall the loop.
 fn object_property_region(p: &mut Parser) {
-    while !at_create_body(p) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_create_body(p) && !at_stmt_terminator(p) {
         if at_semantic_view_clause_start(p) {
             semantic_view_clause(p);
         } else if p.at(ON_KW) {
@@ -374,7 +381,7 @@ fn object_property(p: &mut Parser) {
     if p.eat(EQ) {
         if p.at(L_PAREN) {
             balanced_parens(p); // KEY = ( sub-option = value, … ) — e.g. FILE_FORMAT = (TYPE = 'CSV')
-        } else if !at_create_body(p) && !p.at(SEMICOLON) && !p.at_eof() {
+        } else if !at_create_body(p) && !at_stmt_terminator(p) {
             p.bump_any(); // a single literal / bare-word / @stage value
         }
         // Some values carry trailing units as separate words: `START WITH 1`, `INCREMENT BY 1`.
@@ -495,7 +502,7 @@ fn create_body(p: &mut Parser) {
         call_stmt(p);
     } else if at_block_start(p) {
         block_stmt(p);
-    } else if !p.at(SEMICOLON) && !p.at_eof() {
+    } else if !at_stmt_terminator(p) {
         // An unmodeled body shape: keep it as an expression statement so it still round-trips.
         let m = p.start();
         expr(p);
@@ -506,10 +513,10 @@ fn create_body(p: &mut Parser) {
 /// Object kinds without a query body that this rule does not specialize — parsed leniently as a flat
 /// token run so they round-trip and get inline spacing (like [`alter_stmt`]).
 fn create_other(p: &mut Parser) {
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         if at_create_body(p) {
             p.error("CREATE ... AS <body> is not yet formatted; left verbatim");
-            while !p.at(SEMICOLON) && !p.at_eof() {
+            while !at_stmt_terminator(p) {
                 p.bump_any();
             }
             return;
@@ -577,7 +584,7 @@ fn revoke_stmt(p: &mut Parser) {
 /// `ALL [PRIVILEGES]`, or a role/privilege word. `stop` reports the token that ends the list.
 fn priv_list(p: &mut Parser, stop: impl Fn(&Parser) -> bool) {
     let m = p.start();
-    while !stop(p) && !at_to(p) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !stop(p) && !at_to(p) && !at_stmt_terminator(p) {
         if p.at(COMMA) {
             p.bump(COMMA);
         } else if p.nth_contextual(0, ContextualKeyword::Privileges) {
@@ -597,7 +604,7 @@ fn priv_list(p: &mut Parser, stop: impl Fn(&Parser) -> bool) {
 fn grant_target(p: &mut Parser) {
     let m = p.start();
     p.bump(ON_KW);
-    while !at_to(p) && !p.at(FROM_KW) && !at_grant_tail(p) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_to(p) && !p.at(FROM_KW) && !at_grant_tail(p) && !at_stmt_terminator(p) {
         if at_object_type_word(p) {
             p.bump_as(CONTEXTUAL_KEYWORD); // SCHEMA / DATABASE / STAGE / SEQUENCE / STREAM
         } else {
@@ -654,7 +661,7 @@ fn at_grantee_kind(p: &Parser) -> bool {
 /// grantee's line; the recognized access-control words (`OPTION`/`CASCADE`/`RESTRICT`) are tagged
 /// contextual so the formatter up-cases them like keywords.
 fn grant_tail(p: &mut Parser) {
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         if p.nth_contextual(0, ContextualKeyword::Option)
             || p.nth_contextual(0, ContextualKeyword::Cascade)
             || p.nth_contextual(0, ContextualKeyword::Restrict)
@@ -703,7 +710,7 @@ fn create_routine(p: &mut Parser) {
         column_def_list(p); // parameter list, parsed leniently like column defs
     }
     // RETURNS / LANGUAGE / RUNTIME_VERSION / PACKAGES / HANDLER / EXECUTE AS / ... up to `AS <body>`.
-    while !at_routine_body(p) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_routine_body(p) && !at_stmt_terminator(p) {
         p.bump_any();
     }
     if at_routine_body(p) {
@@ -744,7 +751,7 @@ fn copy_stmt(p: &mut Parser) {
     if p.eat(FROM_KW) {
         copy_operand(p);
     }
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         copy_option(p);
     }
     m.complete(p, COPY_STMT);
@@ -795,7 +802,7 @@ fn copy_operand(p: &mut Parser) {
         return;
     }
     let m = p.start();
-    while !p.at(FROM_KW) && !p.at(SEMICOLON) && !p.at_eof() && !at_copy_option_start(p) {
+    while !p.at(FROM_KW) && !at_stmt_terminator(p) && !at_copy_option_start(p) {
         p.bump_any();
     }
     m.complete(p, COPY_LOCATION);
@@ -819,7 +826,7 @@ fn copy_option(p: &mut Parser) {
         if p.eat(EQ) {
             if p.at(L_PAREN) {
                 balanced_parens(p);
-            } else if !p.at(SEMICOLON) && !p.at_eof() {
+            } else if !at_stmt_terminator(p) {
                 p.bump_any(); // a single literal / bare word value
             }
         }
@@ -886,7 +893,7 @@ fn create_view(p: &mut Parser) {
     }
     // Tolerate view options (COMMENT = '...', masking policies, ...) up to the defining query,
     // up-casing recognized DDL words so they format like keywords.
-    while !p.at(AS_KW) && !p.at(SELECT_KW) && !p.at(WITH_KW) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !p.at(AS_KW) && !p.at(SELECT_KW) && !p.at(WITH_KW) && !at_stmt_terminator(p) {
         bump_ddl_word(p);
     }
     p.eat(AS_KW);
@@ -911,7 +918,7 @@ fn create_table(p: &mut Parser) {
     }
     // Tolerate table options (CLUSTER BY (...), COMMENT = '...', ...) up to an optional CTAS query,
     // up-casing the recognized DDL words so they format like keywords.
-    while !p.at(AS_KW) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !p.at(AS_KW) && !at_stmt_terminator(p) {
         bump_ddl_word(p);
     }
     if p.eat(AS_KW) {
@@ -1018,7 +1025,7 @@ fn drop_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(DROP_KW);
     // Object kind (TABLE / VIEW / SCHEMA / ...).
-    if !p.at(SEMICOLON) && !p.at_eof() {
+    if !at_stmt_terminator(p) {
         p.bump_any();
     }
     if_exists_clause(p);
@@ -1026,7 +1033,7 @@ fn drop_stmt(p: &mut Parser) {
         name_ref(p);
     }
     // Tolerate trailing options (CASCADE / RESTRICT / ...), up-casing the recognized DDL words.
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         bump_ddl_word(p);
     }
     m.complete(p, DROP_STMT);
@@ -1037,7 +1044,7 @@ fn drop_stmt(p: &mut Parser) {
 fn alter_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(ALTER_KW);
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         p.bump_any();
     }
     m.complete(p, ALTER_STMT);
@@ -1050,7 +1057,7 @@ fn alter_stmt(p: &mut Parser) {
 fn lenient_stmt(p: &mut Parser, node: SyntaxKind) {
     let m = p.start();
     p.bump_any(); // the leading statement keyword
-    while !p.at(FLOW_PIPE) && !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         p.bump_any();
     }
     m.complete(p, node);
@@ -1079,7 +1086,7 @@ fn at_begin_transaction(p: &Parser) -> bool {
 fn comment_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump_as(CONTEXTUAL_KEYWORD); // COMMENT
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         p.bump_any();
     }
     m.complete(p, COMMENT_STMT);
@@ -1092,7 +1099,7 @@ fn call_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(CALL_KW);
     expr(p); // the procedure-call expression: name(args)
-    while !p.at(SEMICOLON) && !p.at_eof() {
+    while !at_stmt_terminator(p) {
         p.bump_any();
     }
     m.complete(p, CALL_STMT);
@@ -1182,8 +1189,7 @@ fn block_statement(p: &mut Parser) {
     } else if at_block_start(p) {
         block_stmt(p); // nested DECLARE…/BEGIN…END
     } else if p.at(CASE_KW) {
-        // CASE statement: kept as one balanced token run (rendered inline) — not yet pretty-printed.
-        balanced_construct(p, SCRIPT_STMT);
+        case_stmt(p);
     } else if p.at(LET_KW) {
         simple_script_stmt(p, LET_STMT);
     } else if p.at(RETURN_KW) {
@@ -1276,6 +1282,31 @@ fn if_stmt(p: &mut Parser) {
     m.complete(p, IF_STMT);
 }
 
+/// A procedural `CASE` statement, in both documented forms: searched
+/// `CASE WHEN <cond> THEN <stmts> ... END [CASE]` and simple
+/// `CASE <operand> WHEN <value> THEN <stmts> ... END [CASE]`.
+fn case_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(CASE_KW);
+    if !p.at(WHEN_KW) {
+        expr(p); // simple CASE operand
+    }
+    while p.at(WHEN_KW) {
+        let arm = p.start();
+        p.bump(WHEN_KW);
+        expr(p);
+        p.expect(THEN_KW);
+        stmt_list(p, |p| p.at(WHEN_KW) || p.at(ELSE_KW) || p.at(END_KW));
+        arm.complete(p, CASE_STMT_WHEN);
+    }
+    if p.eat(ELSE_KW) {
+        stmt_list(p, |p| p.at(END_KW));
+    }
+    p.expect(END_KW);
+    p.eat(CASE_KW); // optional trailing CASE in `END CASE`
+    m.complete(p, CASE_STMT);
+}
+
 /// `FOR …/WHILE … DO <body> END FOR/WHILE`, `LOOP <body> END LOOP`, and
 /// `REPEAT <body> UNTIL <cond> END REPEAT` — unified as one loop node.
 fn loop_stmt(p: &mut Parser) {
@@ -1335,52 +1366,6 @@ fn exception_when(p: &mut Parser) {
     p.expect(THEN_KW);
     stmt_list(p, |p| p.at(WHEN_KW) || p.at(END_KW));
     m.complete(p, EXCEPTION_WHEN);
-}
-
-/// Consume a construct that opens with a block keyword (e.g. a `CASE` statement) up to its matching
-/// `END [trailer]`, tracking nesting so an inner construct's `END` does not close it early. Each
-/// opener (`IF`/`CASE`/`FOR`/`WHILE`/`LOOP`/`REPEAT`/`BEGIN`) is balanced by exactly one `END`.
-fn balanced_construct(p: &mut Parser, node: SyntaxKind) {
-    let m = p.start();
-    let mut depth: u32 = 0;
-    while !p.at_eof() {
-        if is_block_opener(p) {
-            depth += 1;
-            p.bump_any();
-        } else if p.at(END_KW) {
-            p.bump_any();
-            // Consume the optional trailer keyword so it is not re-read as an opener.
-            if is_construct_trailer(p) {
-                p.bump_any();
-            }
-            depth -= 1;
-            if depth == 0 {
-                break;
-            }
-        } else {
-            p.bump_any();
-        }
-    }
-    m.complete(p, node);
-}
-
-fn is_block_opener(p: &Parser) -> bool {
-    p.at(IF_KW)
-        || p.at(CASE_KW)
-        || p.at(FOR_KW)
-        || p.at(WHILE_KW)
-        || p.at(LOOP_KW)
-        || p.at(REPEAT_KW)
-        || p.at(BEGIN_KW)
-}
-
-fn is_construct_trailer(p: &Parser) -> bool {
-    p.at(IF_KW)
-        || p.at(CASE_KW)
-        || p.at(FOR_KW)
-        || p.at(WHILE_KW)
-        || p.at(LOOP_KW)
-        || p.at(REPEAT_KW)
 }
 
 // ---- queries ----

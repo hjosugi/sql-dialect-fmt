@@ -25,6 +25,14 @@ pub enum Doc {
     /// tracking and indentation stay correct. The display width is folded in at construction time
     /// (via [`text`]) so the fit/break measurement never re-scans the string.
     Text(Cow<'static, str>, usize),
+    /// A verbatim slice of source that may contain newlines, reproduced byte-for-byte (modulo the
+    /// printer's per-line right trim in [`finalize`]). This is the vehicle for verbatim fallback
+    /// regions without smuggling embedded `\n`s through [`Doc::Text`], which would corrupt column
+    /// tracking. Each contained newline re-bases the column to the current indentation.
+    ///
+    /// The cached width is the display width of the slice's last line. Build through
+    /// [`source_code_slice`], which folds the width in.
+    SourceCodeSlice(Cow<'static, str>, usize),
     /// A line break whose rendering depends on the enclosing group's mode (see [`LineKind`]).
     Line(LineKind),
     /// A sequence of documents laid out one after another.
@@ -47,6 +55,12 @@ pub enum Doc {
         expand: bool,
         must_break: bool,
     },
+    /// Picks one of two layouts by the enclosing group's mode: `broken` when that group breaks,
+    /// `flat` when it stays flat (Prettier's `ifBreak`). Built through [`if_group_breaks`].
+    ///
+    /// The broken arm is not consulted by [`has_forced_break`], so an `if_group_breaks` whose broken
+    /// arm contains a hard line does not force its own group to break.
+    IfBreak { broken: Box<Doc>, flat: Box<Doc> },
     /// Increases the indentation level applied to line breaks inside it.
     Indent(Box<Doc>),
     /// Content deferred to just before the next newline (or the document's end). The vehicle for
@@ -78,6 +92,15 @@ pub fn text(s: impl Into<Cow<'static, str>>) -> Doc {
     Doc::Text(s, width)
 }
 
+/// A verbatim slice of source that may span multiple lines. Use this — not [`text`] — for fallback
+/// regions that can contain embedded newlines: it re-bases the column at each newline so the slice
+/// stays aligned under indentation, and caches its last line's display width for fit decisions.
+pub fn source_code_slice(s: impl Into<Cow<'static, str>>) -> Doc {
+    let s = s.into();
+    let width = last_line_width(&s);
+    Doc::SourceCodeSlice(s, width)
+}
+
 /// Lay out the parts one after another.
 pub fn concat(parts: Vec<Doc>) -> Doc {
     Doc::Concat(parts)
@@ -106,6 +129,21 @@ pub fn group_expanded(inner: Doc) -> Doc {
 /// Indent every line break that occurs inside `inner` by one more level.
 pub fn indent(inner: Doc) -> Doc {
     Doc::Indent(Box::new(inner))
+}
+
+/// A hard-line-delimited, indented block: `inner` is placed on its own indented line(s), framed by a
+/// hard line before and after (Prettier/biome's `block_indent`).
+pub fn block_indent(inner: Doc) -> Doc {
+    concat(vec![indent(concat(vec![hard_line(), inner])), hard_line()])
+}
+
+/// Choose `broken` when the enclosing group breaks and `flat` when it stays flat (Prettier's
+/// `ifBreak`). Neither arm emits a newline by itself; this only selects which content appears.
+pub fn if_group_breaks(broken: Doc, flat: Doc) -> Doc {
+    Doc::IfBreak {
+        broken: Box::new(broken),
+        flat: Box::new(flat),
+    }
 }
 
 /// A space when flat, a newline when broken.
@@ -161,6 +199,88 @@ pub fn best_fitting(candidates: Vec<Doc>) -> Doc {
     Doc::BestFitting(candidates)
 }
 
+// ---- write-style composition layer ----
+
+/// A growable sink of [`Doc`] elements, the target of the [`doc_write!`] macro and of [`Format`]
+/// implementors.
+#[derive(Default)]
+pub struct DocBuffer {
+    parts: Vec<Doc>,
+}
+
+impl DocBuffer {
+    /// A new, empty buffer.
+    pub fn new() -> Self {
+        DocBuffer { parts: Vec::new() }
+    }
+
+    /// Append one already-built [`Doc`] element in order.
+    pub fn write_element(&mut self, doc: Doc) {
+        self.parts.push(doc);
+    }
+
+    /// Append a value by letting it format itself into this buffer.
+    pub fn write_fmt_value<T: Format + ?Sized>(&mut self, value: &T) {
+        value.fmt(self);
+    }
+
+    /// Append a value formatted by an external [`FormatRule`].
+    pub fn write_with_rule<T: ?Sized, R: FormatRule<T>>(&mut self, rule: &R, item: &T) {
+        rule.fmt(item, self);
+    }
+
+    /// Consume the buffer, returning the assembled document.
+    pub fn finish(mut self) -> Doc {
+        if self.parts.len() == 1 {
+            self.parts.pop().expect("len checked == 1")
+        } else {
+            Doc::Concat(self.parts)
+        }
+    }
+}
+
+/// A value that knows how to render itself into a [`DocBuffer`].
+pub trait Format {
+    /// Push this value's document representation onto `buffer`, in source order.
+    fn fmt(&self, buffer: &mut DocBuffer);
+}
+
+/// Formatting logic for a `T` kept outside `T`, matching the biome/ruff rule pattern.
+pub trait FormatRule<T: ?Sized> {
+    /// Push `item`'s document representation onto `buffer`.
+    fn fmt(&self, item: &T, buffer: &mut DocBuffer);
+}
+
+impl Format for Doc {
+    fn fmt(&self, buffer: &mut DocBuffer) {
+        buffer.write_element(self.clone());
+    }
+}
+
+impl<T: Format + ?Sized> Format for &T {
+    fn fmt(&self, buffer: &mut DocBuffer) {
+        (**self).fmt(buffer);
+    }
+}
+
+/// Run a single [`Format`] value to completion, returning its assembled [`Doc`].
+pub fn format_value<T: Format + ?Sized>(value: &T) -> Doc {
+    let mut buffer = DocBuffer::new();
+    buffer.write_fmt_value(value);
+    buffer.finish()
+}
+
+/// Push a comma-bracketed list of [`Format`] elements into a [`DocBuffer`], in order.
+#[macro_export]
+macro_rules! doc_write {
+    ($buffer:expr, [ $( $element:expr ),* $(,)? ]) => {{
+        $( $buffer.write_fmt_value(&$element); )*
+    }};
+}
+
+#[doc(inline)]
+pub use crate::doc_write;
+
 // ---- printing ----
 
 /// Knobs for the printer. Opinionated by design: just a target width and an indent step.
@@ -207,6 +327,15 @@ fn text_width(s: &str) -> usize {
     s.chars().map(char_width).sum()
 }
 
+/// Display width of the last line of a possibly multi-line slice: everything after the final
+/// newline, or the whole string when it has none.
+fn last_line_width(s: &str) -> usize {
+    match s.rfind('\n') {
+        Some(nl) => text_width(&s[nl + 1..]),
+        None => text_width(s),
+    }
+}
+
 /// Column width of a single character: `2` for East Asian Wide / Fullwidth code points (per Unicode
 /// Annex #11 — CJK ideographs, kana, Hangul syllables, fullwidth forms, most emoji), `1` otherwise.
 /// Combining marks are not special-cased (rare in SQL), so this is an upper bound there.
@@ -244,9 +373,12 @@ fn char_width(c: char) -> usize {
 fn has_forced_break(doc: &Doc) -> bool {
     match doc {
         Doc::Line(LineKind::Hard) | Doc::BreakParent => true,
-        Doc::Line(_) | Doc::Text(..) => false,
+        Doc::Line(_) | Doc::Text(..) | Doc::SourceCodeSlice(..) => false,
         // A line suffix's own content is deferred and must not force the current line to break.
         Doc::LineSuffix(_) => false,
+        // `if_group_breaks` resolves against its group's mode. Letting its broken arm force that
+        // group to break would be circular; the flat arm is what can force flat layout impossible.
+        Doc::IfBreak { flat, .. } => has_forced_break(flat),
         Doc::Concat(parts) => parts.iter().any(has_forced_break),
         Doc::BestFitting(candidates) => {
             !candidates.is_empty() && candidates.iter().all(has_forced_break)
@@ -285,6 +417,29 @@ fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> b
                 if remaining < 0 {
                     return false;
                 }
+            }
+            Doc::SourceCodeSlice(s, _) => {
+                let mut pieces = s.split('\n');
+                let first = pieces.next().unwrap_or_default();
+                remaining -= text_width(first) as isize;
+                if remaining < 0 {
+                    return false;
+                }
+                for piece in pieces {
+                    remaining =
+                        opts.line_width as isize - cmd.indent as isize - text_width(piece) as isize;
+                    if remaining < 0 {
+                        return false;
+                    }
+                }
+            }
+            Doc::IfBreak { broken, flat } => {
+                let chosen = if cmd.mode == Mode::Break {
+                    broken
+                } else {
+                    flat
+                };
+                stack.push(Cmd { doc: chosen, ..cmd });
             }
             Doc::Concat(parts) => {
                 for part in parts.iter().rev() {
@@ -366,6 +521,32 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
             Doc::Text(s, width) => {
                 out.push_str(s);
                 col += *width;
+            }
+            Doc::SourceCodeSlice(s, width) => {
+                let mut first = true;
+                for piece in s.split('\n') {
+                    if !first {
+                        out.push('\n');
+                        for _ in 0..cmd.indent {
+                            out.push(' ');
+                        }
+                    }
+                    out.push_str(piece);
+                    first = false;
+                }
+                col = if s.contains('\n') {
+                    cmd.indent + *width
+                } else {
+                    col + *width
+                };
+            }
+            Doc::IfBreak { broken, flat } => {
+                let chosen = if cmd.mode == Mode::Break {
+                    broken
+                } else {
+                    flat
+                };
+                cmds.push(Cmd { doc: chosen, ..cmd });
             }
             Doc::Concat(parts) => {
                 for part in parts.iter().rev() {
@@ -710,5 +891,96 @@ mod tests {
         assert_eq!(finalize(String::new()), "");
         assert_eq!(finalize(String::from("   \n  ")), "");
         assert_eq!(finalize(String::from("only")), "only\n");
+    }
+
+    #[test]
+    fn source_code_slice_single_line_behaves_like_text() {
+        let doc = concat(vec![text("a "), source_code_slice("b = c"), text(" d")]);
+        assert_eq!(p(&doc, 80), "a b = c d\n");
+    }
+
+    #[test]
+    fn source_code_slice_caches_its_last_line_width() {
+        match source_code_slice("alpha\nbeta\nlong-tail") {
+            Doc::SourceCodeSlice(s, width) => {
+                assert_eq!(s, "alpha\nbeta\nlong-tail");
+                assert_eq!(width, "long-tail".len());
+            }
+            other => panic!("expected a source slice, got {other:?}"),
+        }
+        match source_code_slice("x\n") {
+            Doc::SourceCodeSlice(_, width) => assert_eq!(width, 0),
+            other => panic!("expected a source slice, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn source_code_slice_reindents_continuation_lines_under_indent() {
+        let doc = concat(vec![
+            text("header"),
+            indent(concat(vec![hard_line(), source_code_slice("v1\nv2\nv3")])),
+            hard_line(),
+            text("footer"),
+        ]);
+        assert_eq!(p(&doc, 80), "header\n    v1\n    v2\n    v3\nfooter\n");
+    }
+
+    #[test]
+    fn source_code_slice_tail_width_participates_in_fits() {
+        let doc = group(concat(vec![
+            source_code_slice("aa\nbbbb"),
+            line(),
+            text("c"),
+        ]));
+        assert_eq!(p(&doc, 6), "aa\nbbbb c\n");
+        assert_eq!(p(&doc, 5), "aa\nbbbb\nc\n");
+    }
+
+    #[test]
+    fn if_group_breaks_selects_layout_by_group_mode() {
+        let doc = group(concat(vec![
+            text("a"),
+            if_group_breaks(text(","), empty()),
+            line(),
+            text("b"),
+        ]));
+        assert_eq!(p(&doc, 80), "a b\n");
+        assert_eq!(p(&doc, 1), "a,\nb\n");
+    }
+
+    #[test]
+    fn if_group_breaks_flat_arm_forced_break_propagates_but_broken_arm_does_not() {
+        assert!(has_forced_break(&if_group_breaks(empty(), hard_line())));
+        assert!(!has_forced_break(&if_group_breaks(hard_line(), empty())));
+    }
+
+    #[test]
+    fn block_indent_frames_content_on_its_own_indented_line() {
+        let doc = concat(vec![text("{"), block_indent(text("body")), text("}")]);
+        assert_eq!(p(&doc, 80), "{\n    body\n}\n");
+    }
+
+    #[test]
+    fn doc_write_composes_format_values_in_order() {
+        let mut f = DocBuffer::new();
+        doc_write!(f, [text("a"), text(" = "), text("b")]);
+        assert_eq!(p(&group(f.finish()), 80), "a = b\n");
+    }
+
+    #[test]
+    fn format_rule_decouples_layout_from_data() {
+        struct AssignRule;
+        impl FormatRule<str> for AssignRule {
+            fn fmt(&self, item: &str, buffer: &mut DocBuffer) {
+                doc_write!(
+                    buffer,
+                    [text("x => \""), text(item.to_string()), text("\"")]
+                );
+            }
+        }
+
+        let mut f = DocBuffer::new();
+        f.write_with_rule(&AssignRule, "v");
+        assert_eq!(p(&f.finish(), 80), "x => \"v\"\n");
     }
 }

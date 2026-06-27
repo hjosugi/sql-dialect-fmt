@@ -1,0 +1,15 @@
+-- Representative COPY INTO load and unload statements.
+COPY INTO ANALYTICS.RAW_EVENTS
+FROM @EVENT_STAGE/incoming/
+FILE_FORMAT = (TYPE = 'JSON' STRIP_OUTER_ARRAY = TRUE)
+ON_ERROR = 'CONTINUE'
+PURGE = TRUE;
+
+COPY INTO @EXPORT_STAGE/orders/
+FROM (
+    SELECT order_id, customer_id, net_amount
+    FROM SALES.ORDERS
+    WHERE order_date = CURRENT_DATE()
+)
+FILE_FORMAT = (TYPE = 'PARQUET')
+HEADER = TRUE;

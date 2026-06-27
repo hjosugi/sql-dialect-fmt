@@ -52,8 +52,8 @@
 
 ## Phase 3 — フォーマッタ基盤 ✅
 *目的: Phase 2 までの構文を綺麗に出力する。SQL 規則の前に自前 Doc エンジンを立ち上げる。クレート [crates/snow-fmt-formatter/](crates/snow-fmt-formatter/)。*
-- ✅ 汎用 Doc エンジン `snow-fmt-formatter`（`FormatElement` 中核サブセット: `Text`/`Line(Soft/Space/Hard)`/`Group`/`Indent`/`LineSuffix`/`BreakParent`/`BestFitting`、`breakParent` 伝播）。`biome_formatter` 非依存 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs)。残: `SourceCodeSlice`
-- ✅ ビルダ（`text`/`concat`/`join`/`group`/`group_expanded`/`indent`/`line`/`soft_line`/`hard_line`/`line_suffix`/`space`/`empty`/`best_fitting`）＋ 幅対応プリンタ（Prettier 系 `fits`／flat-or-break）。残: `block_indent`/`if_group_breaks`／`Format`/`FormatRule` トレイト・`write!` マクロ
+- ✅ 汎用 Doc エンジン `snow-fmt-formatter`（`FormatElement` 中核サブセット: `Text`/`SourceCodeSlice`/`Line(Soft/Space/Hard)`/`Group`/`Indent`/`LineSuffix`/`BreakParent`/`BestFitting`/`IfBreak`、`breakParent` 伝播）。`biome_formatter` 非依存 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs)
+- ✅ ビルダ（`text`/`source_code_slice`/`concat`/`join`/`group`/`group_expanded`/`indent`/`block_indent`/`line`/`soft_line`/`hard_line`/`line_suffix`/`if_group_breaks`/`space`/`empty`/`best_fitting`）＋ 幅対応プリンタ（Prettier 系 `fits`／flat-or-break）＋ `DocBuffer`/`Format`/`FormatRule`/`doc_write!` の write-style composition layer
 - ✅ 幅対応プリンタ（行幅で `group` を1行/折返し決定）… [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `print`
 - ✅ SQL 規則の `SELECT` パイプライン: 文の区切り/終端、各句を改行、SELECT 列が幅超過で1列1行に展開、句内空白の正規化、キーワード大文字化 … [sql.rs](crates/snow-fmt-formatter/src/sql.rs)
 - ✅ 句の構造的整形: `JOIN` を1行ずつ（`FROM` 直下に整列）、`ORDER BY`/`GROUP BY` の項目を幅超過で1項目1行に折返し（`GROUP BY ALL` 等の項目なし形はそのまま）… [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_from`/`lower_keyword_item_list`
@@ -83,7 +83,7 @@
 - ✅ flow operator の文脈を公式ドキュメントで確認（任意の SQL statement chain、ステップ間にセミコロンなし、`FROM $n` で前ステップ参照） … <https://docs.snowflake.com/en/sql-reference/operators-flow>
 - ✅ 文チェーンを `FLOW_STMT` ノードでパース（投機的 wrapper を `Marker::abandon`/`Tombstone` で単文時に破棄）、`FROM $1` を table source として許可 … [stmt.rs](crates/snow-fmt-parser/src/grammar/stmt.rs) `statement_or_flow` / [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `table_ref`
 - ✅ 整形規則（各ステップを通常整形し、`->>` を継続行の先頭に。ステップ間にセミコロンを入れない） … [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_flow`
-- ✅ `SHOW` 始まりチェーンの回帰ガード（`lenient_stmt` が `->>` を飲み込むバグを修正し、`SHOW … ->> SELECT …` を `FLOW_STMT` として整形）。残: パイプ／非パイプ混在のさらなる matrix
+- ✅ `SHOW`/`DROP`/`ALTER`/`GRANT`/`REVOKE`/`CALL`/`COMMENT`/`COPY`/`CREATE TABLE`/`CREATE WAREHOUSE`/`CREATE SEMANTIC VIEW` 始まりのチェーン回帰ガード（各 statement parser が `->>` を飲み込むバグを `at_stmt_terminator` で防ぎ、`FLOW_STMT` として整形）
 
 ## Phase 6 — DML ✅
 - ✅ `INSERT`（単一 `INSERT [OVERWRITE] INTO t [(cols)] VALUES/<query>`、多テーブル `INSERT [OVERWRITE] {ALL|FIRST} (WHEN cond THEN INTO …)+ [ELSE INTO …] <query>` をパース＋構造的整形。新ノード `INTO_CLAUSE`/`INSERT_WHEN`、新キーワード `OVERWRITE`）… [dml.rs](crates/snow-fmt-parser/src/grammar/dml.rs) `multi_table_insert`
@@ -106,7 +106,7 @@
 - ✅ セッション `SET <var> = <expr>` / `SET (a, b) = (...)`、`EXECUTE IMMEDIATE <string|$$…$$|:var> [USING (...)]`（`SET_STMT`/`EXECUTE_STMT` ノード、新キーワード `IMMEDIATE`。式に `DOLLAR_STRING` を許可）。**コーパス clean 20→22件** … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `set_stmt`/`execute_stmt`
 - ✅ `CALL proc(args)`（プロシージャ呼び出し。`CALL_STMT` ノード、呼び出しは通常の call 式として整形＝引数オーバーフロー時は1引数1行、`INTO :var` 等の末尾は寛容保持）。fixture `case_033` … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `call_stmt`
 - ✅ トランザクション制御 `BEGIN`/`COMMIT`/`ROLLBACK`（`BEGIN TRANSACTION`/`BEGIN WORK`/`BEGIN;`、`COMMIT WORK`、`ROLLBACK TO SAVEPOINT …` 含む。`TRANSACTION_STMT`）。**バグ修正**: `COMMIT WORK`/`ROLLBACK TO SAVEPOINT …` の複数文分割を解消。fixture `case_036`/`case_037`。`BEGIN` はコンテキストキーワード `transaction`/`work` か直後 `;` でのみトランザクションと判定し、Scripting ブロック `BEGIN … END`（内部 `;` 区切り）は誤分割せず verbatim 維持 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `at_begin_transaction`
-- ✅ Snowflake Scripting ブロック本体の整形（トップレベル匿名ブロック）: `[DECLARE …] BEGIN … [EXCEPTION …] END` を構造化し、本体を1文1行・インデント。`IF`/`ELSEIF`/`ELSE`/`END IF`、`FOR`/`WHILE … DO … END`、`LOOP`/`END LOOP`、`REPEAT … UNTIL … END REPEAT`、`EXCEPTION … WHEN … THEN`、ネストブロックを構造的に整形。`LET`/`:=`/`RETURN`/その他は寛容文（`;` まで）として保持。本体内の SQL（`SELECT`/`INSERT`/… ）は通常の構造的整形に委譲。新キーワード `ELSEIF`/`WHILE`/`LOOP`/`REPEAT`/`UNTIL`/`DO`/`EXCEPTION`/`CURSOR`/`RESULTSET`、新ノード `BLOCK_STMT`/`DECLARE_SECTION`/`STMT_LIST`/`IF_STMT`/`LOOP_STMT`/`EXCEPTION_SECTION`/… 。**安全性**: 寛容文は `;` まで消費するので `LET x := (CASE WHEN … END)` の式内 `END` で誤分割しない。構文が崩れたブロックはパースエラー→**ブロック全体を verbatim**（無破壊）。`BEGIN … END` トランザクションとの曖昧性は維持。fixture `case_038`/`case_039`、parser で clean-parse/ノード種別/誤分割回避/malformed-verbatim を回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `block_stmt`/`if_stmt`/`loop_stmt` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_block`。残: `CASE` 文の pretty-print（現状はバランス consume でインライン保持）
+- ✅ Snowflake Scripting ブロック本体の整形（トップレベル匿名ブロック）: `[DECLARE …] BEGIN … [EXCEPTION …] END` を構造化し、本体を1文1行・インデント。`IF`/`ELSEIF`/`ELSE`/`END IF`、`CASE`/`WHEN`/`ELSE`/`END CASE`、`FOR`/`WHILE … DO … END`、`LOOP`/`END LOOP`、`REPEAT … UNTIL … END REPEAT`、`EXCEPTION … WHEN … THEN`、ネストブロックを構造的に整形。`LET`/`:=`/`RETURN`/その他は寛容文（`;` まで）として保持。本体内の SQL（`SELECT`/`INSERT`/… ）は通常の構造的整形に委譲。新キーワード `ELSEIF`/`WHILE`/`LOOP`/`REPEAT`/`UNTIL`/`DO`/`EXCEPTION`/`CURSOR`/`RESULTSET`、新ノード `BLOCK_STMT`/`DECLARE_SECTION`/`STMT_LIST`/`IF_STMT`/`CASE_STMT`/`CASE_STMT_WHEN`/`LOOP_STMT`/`EXCEPTION_SECTION`/… 。**安全性**: 寛容文は `;` まで消費するので `LET x := (CASE WHEN … END)` の式内 `END` で誤分割しない。構文が崩れたブロックはパースエラー→**ブロック全体を verbatim**（無破壊）。`BEGIN … END` トランザクションとの曖昧性は維持。fixture `case_038`/`case_039`、parser/formatter で clean-parse/ノード種別/CASE arm layout/誤分割回避/malformed-verbatim を回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `block_stmt`/`if_stmt`/`case_stmt`/`loop_stmt` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_block`/`lower_case_stmt`
 - 🚧 delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
   - ✅ **JavaScript**: Biome の `biome_js_formatter` を組み込み（top-level `return` は synthetic function body で処理、失敗時 verbatim）
   - ✅ **Python**: Ruff の `ruff_python_formatter` を組み込み（失敗時 verbatim）
@@ -129,7 +129,7 @@
 - ✅ 🔎 Cortex / AISQL 関数（`AI_COMPLETE` などの `AI_*`, `SNOWFLAKE.CORTEX.*(...)`）を LSP semantic token で `function` + `defaultLibrary` として認識（公式 docs 確認済み）… [semantic.rs](crates/snow-fmt-highlight/src/semantic.rs)
 - ✅ CLI `snow-fmt`（`--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、`--no-config`、`--line-width`/`--indent-width`/`--no-uppercase`/`--uppercase`、エンコーディング保持、error UX、`cargo install` 可、v0.1.0） … [crates/snow-fmt-cli/](crates/snow-fmt-cli/)
 - ✅ 複数ファイル**並列**整形（`rayon`）。処理は並列、stdout/stderr/check 表示は入力順で安定。Criterion ベンチマークは [benches/format.rs](crates/snow-fmt-formatter/benches/format.rs) で導入済み
-- ✅ 大規模コーパスでのべき等性・無破壊（ラウンドトリップ）回帰（内蔵 easy fixture 全 SQL + optional external corpus harness `SNOW_FMT_EXTERNAL_CORPUS`）。残: 公開可能な外部コーパスの継続運用
+- ✅ 大規模コーパスでのべき等性・無破壊（ラウンドトリップ）回帰（内蔵 easy fixture 全 SQL + always-on sample corpus + optional external corpus harness `SNOW_FMT_EXTERNAL_CORPUS`、docs/CI smoke つき）。残: 公開可能な外部コーパスの継続運用
 - ✅ エディタ拡張（VS Code）パッケージング（`editors/` を extension root とする `package.json` + `language-configuration.json`）
 - ✅ Snowsight/Chrome 拡張（`snow-fmt-wasm` を `wasm32-unknown-unknown` でビルドして同梱、worksheet editor 上のボタン/拡張アイコン/`Alt+Shift+F` から整形）… [snow-fmt-wasm](crates/snow-fmt-wasm/) / [extensions/chrome](extensions/chrome/) / [build script](scripts/build-chrome-extension.sh)
 
@@ -139,8 +139,8 @@
 **Phase 0–6 は完了**、Phase 7 は Semantic View を含む主要 DDL/object DDL/access control まで実用域、Phase 8 は主要 routine body delimiter/language を保守的に整形、Phase 9/10 は LSP/editor/CLI 並列/外部 corpus harness/Chrome+WASM まで実用域。コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。CLI `snow-fmt` v0.1.0 公開可。
 
 **残りの主な未着手（価値順）**:
-1. **Doc engine polish**: `SourceCodeSlice`、`block_indent` / `if_group_breaks`、`Format`/`FormatRule` トレイト・`write!` マクロ。
-2. **網羅強化**: パイプ／非パイプ混在 matrix、Semantic View/Preview object option の継続追随、外部コーパスの継続運用。
-3. **Scripting polish**: Snowflake Scripting `CASE` 文 pretty-print、必要なら `-- snow-fmt: off/on` の範囲制御など細部。
+1. **網羅強化**: Semantic View/Preview object option の継続追随、公開可能な外部コーパスの継続運用。
+2. **Routine body polish**: quoted body と Java/Scala formatter の限界ケース拡張。
+3. **Directive polish**: 必要なら `-- snow-fmt: off/on` の範囲制御など細部。
 
 回帰ゲートは `cargo test --workspace`（golden=insta、full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）＋ `cargo clippy --workspace --all-targets` ＋ `cargo fmt --all --check`。

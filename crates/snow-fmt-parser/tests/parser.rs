@@ -110,16 +110,30 @@ fn routine_bodies_cover_all_supported_languages_and_unquoted_scripting() {
 }
 
 #[test]
-fn show_statement_can_start_a_flow_chain() {
-    let p = parse("SHOW TABLES IN SCHEMA db.s ->> SELECT \"name\" FROM $1");
-    assert!(p.errors().is_empty(), "{:?}", p.errors());
-    assert!(
-        p.syntax()
-            .descendants()
-            .any(|node| node.kind() == SyntaxKind::FLOW_STMT),
-        "expected SHOW ->> SELECT to parse as a FLOW_STMT: {}",
-        p.syntax()
-    );
+fn statement_families_can_start_a_flow_chain() {
+    for sql in [
+        "SHOW TABLES IN SCHEMA db.s ->> SELECT \"name\" FROM $1",
+        "DROP TABLE t ->> SELECT * FROM $1",
+        "ALTER TABLE t ADD COLUMN c int ->> SELECT * FROM $1",
+        "GRANT SELECT ON TABLE t TO ROLE r ->> SELECT * FROM $1",
+        "REVOKE SELECT ON TABLE t FROM ROLE r ->> SELECT * FROM $1",
+        "CALL p(1) ->> SELECT * FROM $1",
+        "COMMENT ON TABLE t IS 'x' ->> SELECT * FROM $1",
+        "COPY INTO t FROM @s ->> SELECT * FROM $1",
+        "CREATE TABLE t (a int) ->> SELECT * FROM $1",
+        "CREATE WAREHOUSE wh WAREHOUSE_SIZE = 'XSMALL' ->> SELECT * FROM $1",
+        "CREATE SEMANTIC VIEW sv TABLES(orders AS t PRIMARY KEY(id)) ->> SELECT * FROM $1",
+    ] {
+        let p = parse(sql);
+        assert!(p.errors().is_empty(), "{sql}: {:?}", p.errors());
+        assert!(
+            p.syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::FLOW_STMT),
+            "expected FLOW_STMT for {sql}: {}",
+            p.syntax()
+        );
+    }
 }
 
 #[test]

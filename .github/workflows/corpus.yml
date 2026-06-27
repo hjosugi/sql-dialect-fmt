@@ -1,0 +1,19 @@
+name: Corpus
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  external-corpus:
+    name: External corpus (sample)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run external-corpus harness over the committed sample
+        env:
+          SNOW_FMT_EXTERNAL_CORPUS: crates/snow-fmt-formatter/tests/corpus_sample
+        run: cargo test -p snow-fmt-formatter --test external_corpus -- --ignored

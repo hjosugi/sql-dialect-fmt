@@ -104,6 +104,14 @@ fn block_produces_its_structural_node_kinds() {
     assert_has_node_kind("BEGIN RETURN 1; END", SyntaxKind::RETURN_STMT);
     assert_has_node_kind("BEGIN IF (a) THEN x := 1; END IF; END", SyntaxKind::IF_STMT);
     assert_has_node_kind(
+        "BEGIN CASE WHEN a THEN x := 1; ELSE x := 2; END CASE; END",
+        SyntaxKind::CASE_STMT,
+    );
+    assert_has_node_kind(
+        "BEGIN CASE WHEN a THEN x := 1; ELSE x := 2; END CASE; END",
+        SyntaxKind::CASE_STMT_WHEN,
+    );
+    assert_has_node_kind(
         "BEGIN FOR i IN 1 TO 5 DO x := i; END FOR; END",
         SyntaxKind::LOOP_STMT,
     );

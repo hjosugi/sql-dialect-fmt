@@ -320,6 +320,10 @@ pub enum SyntaxKind {
     RETURN_STMT,
     IF_STMT,
     LOOP_STMT,
+    /// A procedural `CASE … END [CASE]` statement inside a block, distinct from `CASE_EXPR`.
+    CASE_STMT,
+    /// One `WHEN <test> THEN <stmts>` arm of a procedural `CASE_STMT`.
+    CASE_STMT_WHEN,
     SCRIPT_STMT,
     COLUMN_DEF_LIST,
     COLUMN_DEF,
