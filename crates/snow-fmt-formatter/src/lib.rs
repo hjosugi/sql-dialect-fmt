@@ -106,10 +106,20 @@ impl FormatOptions {
 
 /// Format Snowflake SQL source text. Never panics; never drops content.
 ///
-/// Phase 3 scope: we only reflow input the parser fully accepts. If parsing reports any error
-/// (i.e. the grammar does not yet model some construct), the source is returned **unchanged** —
-/// trivially lossless and idempotent — rather than risking a mangled reflow of a fragmented tree.
+/// Phase 3 scope: we only reflow input the lexer and parser fully accept. If lexing or parsing
+/// reports any error (i.e. the grammar does not yet model some construct, or a token is
+/// unterminated), the source is returned **unchanged** — trivially lossless and idempotent — rather
+/// than risking a mangled reflow of a fragmented tree.
 pub fn format(source: &str, options: &FormatOptions) -> String {
+    let lexed = snow_fmt_lexer::tokenize(source);
+    if !lexed.errors.is_empty() {
+        return source.to_string();
+    }
+    if lexed.tokens.iter().any(|token| {
+        !token.kind.is_trivia() && multiline_token_has_line_trailing_space(token.text)
+    }) {
+        return source.to_string();
+    }
     let parse = snow_fmt_parser::parse(source);
     if !parse.errors().is_empty() {
         return source.to_string();
@@ -117,4 +127,9 @@ pub fn format(source: &str, options: &FormatOptions) -> String {
     let root = parse.syntax();
     let doc = sql::lower_source(&root, options.ctx());
     print(&doc, &options.print_options())
+}
+
+fn multiline_token_has_line_trailing_space(text: &str) -> bool {
+    text.lines()
+        .any(|line| line.ends_with(' ') || line.ends_with('\t'))
 }

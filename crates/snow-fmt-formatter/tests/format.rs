@@ -793,3 +793,30 @@ fn clean_input_stays_clean_after_formatting() {
         }
     }
 }
+
+#[test]
+fn lexically_invalid_input_is_verbatim() {
+    for sql in ["'", "\"", "$$body", "SELECT 'oops"] {
+        assert_eq!(fmt(sql), sql);
+    }
+}
+
+#[test]
+fn multiline_tokens_with_line_trailing_space_are_verbatim() {
+    let sql = "$$ \n$$ ";
+    assert_eq!(fmt(sql), sql);
+}
+
+#[test]
+fn statement_end_comments_format_idempotently() {
+    let once = fmt("desc t -- c\nx");
+    assert_eq!(once, "DESC t -- c\nx;\n");
+    assert_eq!(fmt(&once), once);
+}
+
+#[test]
+fn mid_statement_leading_comment_starts_on_its_own_line() {
+    let once = fmt("create select select\n-- y\nselect ");
+    assert_eq!(once, "CREATE SELECT SELECT\n-- y\nSELECT;\n");
+    assert_eq!(fmt(&once), once);
+}

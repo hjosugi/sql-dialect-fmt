@@ -41,15 +41,17 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
     let mut emitted = false;
     for stmt in root.children() {
         if emitted {
-            parts.push(text(";"));
             parts.push(hard_line());
             parts.push(hard_line());
         }
-        emitted = true;
-        parts.push(lower_stmt(&stmt, ctx));
-    }
-    if emitted {
+        let lowered = lower_stmt(&stmt, ctx);
+        parts.push(lowered.body);
         parts.push(text(";"));
+        for comment in lowered.end_comments {
+            parts.push(hard_line());
+            parts.push(text(comment.text));
+        }
+        emitted = true;
     }
 
     // Root-level (trailing) comments, kept verbatim each on its own line.
@@ -71,8 +73,10 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
 
 /// Lower one statement. Builds its comment attachment, lowers structurally, and — if any comment
 /// could not be placed onto an emitted token — falls back to an exact verbatim copy.
-fn lower_stmt(stmt: &SyntaxNode, ctx: Ctx) -> Doc {
-    let mut low = Lowerer::new(ctx, Comments::build(stmt));
+fn lower_stmt(stmt: &SyntaxNode, ctx: Ctx) -> LoweredStmt {
+    let mut comments = Comments::build(stmt);
+    let end_comments = comments.take_statement_end_comments(stmt);
+    let mut low = Lowerer::new(ctx, comments);
     // Hoist the statement's own leading comments above its first group, so a banner comment does
     // not force the first construct (e.g. the SELECT list) to explode.
     let prefix = low.statement_leading(stmt);
@@ -80,14 +84,20 @@ fn lower_stmt(stmt: &SyntaxNode, ctx: Ctx) -> Doc {
         SELECT_STMT => low.lower_select(stmt),
         _ => low.lower_node(stmt),
     };
-    if low.comments.all_placed() {
+    let body = if low.comments.all_placed() {
         concat(vec![prefix, body])
     } else {
         verbatim(stmt)
-    }
+    };
+    LoweredStmt { body, end_comments }
 }
 
 // ---- comment attachment ----
+
+struct LoweredStmt {
+    body: Doc,
+    end_comments: Vec<CommentInfo>,
+}
 
 /// A single comment, ready to render.
 struct CommentInfo {
@@ -176,6 +186,20 @@ impl Comments {
     fn all_placed(&self) -> bool {
         self.leading.is_empty() && self.trailing.is_empty()
     }
+
+    /// Pull comments attached to the final significant token out of the statement body. The source
+    /// has no semicolon token there, but the formatter synthesizes one. Emitting those comments
+    /// after that synthesized semicolon, each on its own line, keeps `format(format(x)) == format(x)`
+    /// for statement-end comments.
+    fn take_statement_end_comments(&mut self, stmt: &SyntaxNode) -> Vec<CommentInfo> {
+        let last = stmt
+            .descendants_with_tokens()
+            .filter_map(|el| el.into_token())
+            .filter(|t| !t.kind().is_trivia() && t.kind() != COMMA)
+            .last();
+        last.and_then(|token| self.trailing.remove(&offset(&token)))
+            .unwrap_or_default()
+    }
 }
 
 fn offset(token: &SyntaxToken) -> u32 {
@@ -191,6 +215,7 @@ struct Lowerer {
     comments: Comments,
     prev: Option<SyntaxKind>,
     prev_unary: bool,
+    line_comment_pending: bool,
 }
 
 impl Lowerer {
@@ -200,6 +225,7 @@ impl Lowerer {
             comments,
             prev: None,
             prev_unary: false,
+            line_comment_pending: false,
         }
     }
 
@@ -222,6 +248,7 @@ impl Lowerer {
     fn reset(&mut self) {
         self.prev = None;
         self.prev_unary = false;
+        self.line_comment_pending = false;
     }
 
     /// Resume spacing as if the previous significant token were `kind` (used after structurally
@@ -269,7 +296,18 @@ impl Lowerer {
         let trailing = self.comments.trailing.remove(&start).unwrap_or_default();
 
         let mut parts = Vec::new();
+        if self.line_comment_pending {
+            parts.push(hard_line());
+            self.prev = None;
+            self.prev_unary = false;
+            self.line_comment_pending = false;
+        }
         let has_leading = !leading.is_empty();
+        if has_leading && self.prev.is_some() {
+            parts.push(hard_line());
+            self.prev = None;
+            self.prev_unary = false;
+        }
         for comment in leading {
             parts.push(text(comment.text));
             parts.push(hard_line());
@@ -288,6 +326,7 @@ impl Lowerer {
                 // A line comment must end its line: defer it, and force the line to break.
                 parts.push(line_suffix(concat(vec![space(), text(comment.text)])));
                 parts.push(break_parent());
+                self.line_comment_pending = true;
             } else {
                 parts.push(space());
                 parts.push(text(comment.text));

@@ -11,49 +11,19 @@
 //!   keyword/identifier casing — never the meaningful token stream.
 //!
 //! The reparse-clean and token-preservation invariants are *conditioned* on the input being **well
-//! formed** — see [`well_formed`]: it must parse with no errors **and** lex with no errors. The
-//! idempotency invariant carries one additional exclusion (see [`known_nonidempotent_output`]).
+//! formed** — see [`well_formed`]: it must parse with no errors **and** lex with no errors.
 //! Rationale:
 //!   * `format` is intentionally identity on input the grammar cannot model (parse errors), so for
 //!     such input `format(s) == s` and the reparse/token assertions would be vacuous.
-//!   * `format` has a known idempotency bug on input that *parses* cleanly but contains an
-//!     **unterminated lexical token at end of input** (a lone `"`, a lone `'`, or an unterminated
-//!     `$$...` body). See `TODO(unterminated-token-idempotency)`; excluded by the lex-error half of
-//!     [`well_formed`].
-//!   * `format` has a second known idempotency bug where a trailing line/block comment in certain
-//!     single-line command statements (`DESC`/`DESCRIBE`/`SHOW`/`USE`...) is emitted **inline after
-//!     the synthesized `;`**, then relocated to its own line on the next pass. See
-//!     `TODO(comment-after-semicolon-idempotency)`; excluded narrowly by
-//!     [`known_nonidempotent_output`] *only for the idempotency assertion* — reparse-clean and
-//!     token-preservation still hold and are still asserted for those inputs.
+//!   * `format` is intentionally identity on input with lexer errors too (unterminated literals,
+//!     comments, or dollar bodies), so malformed tokens cannot swallow synthesized punctuation and
+//!     break idempotency.
 //!
-//! Panic-safety is asserted unconditionally (the `format` calls below cover every generated input).
+//! Panic-safety and idempotency are asserted unconditionally (the `format` calls below cover every
+//! generated input).
 //!
 //! Inputs come from three strategies (arbitrary Unicode, arbitrary ASCII, structured SQL token
 //! salad); case counts are capped so `cargo test` stays fast.
-//!
-//! TODO(unterminated-token-idempotency): On current main, `format` is **not** idempotent for inputs
-//! that parse cleanly but end in an unterminated lexical token. Minimal shrunk reproducers:
-//!   * `"\""`  (lone double quote)  → `format` once = `"\";\n"`, twice = `"\";\n;\n"`
-//!   * `"'"`   (lone single quote)  → once = `"';\n"`,   twice = `"';\n;\n"`
-//!   * `"$$"`  / `"$$a"` (open `$$` body) → once = `"$$;\n"`, twice = `"$$;\n;\n"`
-//! Root cause: the lexer emits an *unterminated* string / quoted-ident / dollar-string token that
-//! runs to EOF (and records a `LexError`, though `parse().errors()` stays empty). The formatter
-//! appends `;\n`, but that terminator is swallowed *inside* the still-open token, so the next pass
-//! sees a longer unterminated token and appends a second `;\n`. A fix belongs in `src/` (lexer or
-//! formatter), which this test crate does not own — so the harness excludes these via the lex-error
-//! guard rather than leaving the suite red.
-//!
-//! TODO(comment-after-semicolon-idempotency): On current main, `format` is **not** idempotent when a
-//! trailing comment in certain single-line command statements is emitted inline after the
-//! synthesized `;`. Minimal shrunk reproducer: `"desc t -- c\nx"` formats once to
-//! `"DESC t x; -- c\n"`, then twice to `"DESC t x;\n-- c\n"` (the comment moves onto its own line).
-//! Same shape for `DESCRIBE`/`SHOW`/`USE`. For some inputs the inline-after-`;` placement only
-//! appears on the *second* pass (e.g. `"create select select\n-- y\nselect "`), so the guard
-//! inspects both passes. Reparse-clean and token-preservation still hold; only idempotency breaks. A
-//! fix belongs in `src/` (the comment-placement rules), which this test crate does not own — so the
-//! harness skips *only the idempotency assertion* for outputs that place a comment inline after a
-//! `;` (see [`known_nonidempotent_output`]).
 
 use proptest::prelude::*;
 use snow_fmt_formatter::{format, FormatOptions};
@@ -149,35 +119,20 @@ fn well_formed(input: &str) -> bool {
     parse(input).errors().is_empty() && tokenize(input).errors.is_empty()
 }
 
-/// True if `formatted` exhibits the known non-idempotent shape: a comment emitted **inline after a
-/// `;`** (i.e. a `SEMICOLON` followed, with only inline whitespace and no newline in between, by a
-/// line or block comment). A correct formatter never does this — it puts trailing comments on their
-/// own line — so this precisely flags the `TODO(comment-after-semicolon-idempotency)` bug and lets
-/// the harness skip *only* the idempotency assertion for those outputs. Reparse-clean and token
-/// preservation are unaffected and stay asserted.
-fn known_nonidempotent_output(formatted: &str) -> bool {
-    let toks = tokenize(formatted).tokens;
-    for (i, tok) in toks.iter().enumerate() {
-        if tok.kind != SyntaxKind::SEMICOLON {
-            continue;
-        }
-        for next in &toks[i + 1..] {
-            match next.kind {
-                SyntaxKind::WHITESPACE => continue, // inline spaces/tabs (not newlines) are skipped
-                SyntaxKind::COMMENT | SyntaxKind::BLOCK_COMMENT => return true,
-                _ => break,
-            }
-        }
-    }
-    false
-}
-
-/// Panic-safety: just exercising `format` (twice, to mirror the idempotency path) over every input
-/// is enough — a panic anywhere surfaces as a shrunk failing case. No assertion needed beyond not
-/// unwinding.
-fn assert_format_never_panics(input: &str) {
+/// Panic-safety + idempotency over every input shape. A panic anywhere surfaces as a shrunk failing
+/// case; every generated input must also converge after one formatting pass.
+fn assert_format_total_invariants(input: &str) -> Result<(), TestCaseError> {
     let once = fmt(input);
-    let _ = fmt(&once);
+    let twice = fmt(&once);
+    prop_assert_eq!(
+        &twice,
+        &once,
+        "format is not idempotent for {:?}\n--- once ---\n{}\n--- twice ---\n{}",
+        input,
+        once,
+        twice
+    );
+    Ok(())
 }
 
 /// The strong invariants, asserted only for well-formed input: idempotency, reparse-clean, and
@@ -187,22 +142,6 @@ fn assert_format_strong_invariants(input: &str) -> Result<(), TestCaseError> {
         return Ok(());
     }
     let once = fmt(input);
-    let twice = fmt(&once);
-
-    // Idempotency: the layout converges in a single pass. Skipped only for the narrow, documented
-    // comment-after-`;` bug (TODO(comment-after-semicolon-idempotency)); reparse/token checks below
-    // still run for those inputs. The buggy inline-comment placement can surface on *either* pass
-    // (the comment migrates to after `;` on the second pass for some shapes), so we check both.
-    if !known_nonidempotent_output(&once) && !known_nonidempotent_output(&twice) {
-        prop_assert_eq!(
-            &twice,
-            &once,
-            "format is not idempotent for {:?}\n--- once ---\n{}\n--- twice ---\n{}",
-            input,
-            once,
-            twice
-        );
-    }
 
     // The formatted output must itself parse clean (valid SQL we can round-trip again).
     let reparse_errors = parse(&once).errors().to_vec();
@@ -236,17 +175,17 @@ proptest! {
 
     #[test]
     fn format_arbitrary_unicode_never_panics(s in ".{0,64}") {
-        assert_format_never_panics(&s);
+        assert_format_total_invariants(&s)?;
     }
 
     #[test]
     fn format_arbitrary_ascii_never_panics(s in gen::ascii_blob()) {
-        assert_format_never_panics(&s);
+        assert_format_total_invariants(&s)?;
     }
 
     #[test]
     fn format_token_salad_never_panics(s in gen::token_salad()) {
-        assert_format_never_panics(&s);
+        assert_format_total_invariants(&s)?;
     }
 
     // ---- idempotency + reparse-clean + token preservation, conditioned on well-formed input ----
