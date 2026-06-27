@@ -88,6 +88,14 @@ const CASES: &[&str] = &[
     "create or replace dynamic table dt target_lag = 'DOWNSTREAM' warehouse = w refresh_mode = auto as select a, b from t where a > 0",
     "create dynamic table dt (a, b) target_lag = '20 minutes' warehouse = w as select x, y from src",
     "create dynamic table dt target_lag = '1 hour' warehouse = w as with c as (select 1 as n) select n from c",
+    // ---- CREATE MASKING / ROW ACCESS POLICY: inline policy signature/body, clean parse ----
+    "create masking policy mask_email as (val STRING) returns STRING -> case when current_role() in ('ANALYST') then val else '***' end",
+    "create or replace masking policy mask_email as (val STRING) returns STRING -> val comment = 'mask'",
+    "create row access policy region_filter as (region STRING) returns BOOLEAN -> region = current_region()",
+    "create or alter row access policy region_filter as (id NUMBER) returns BOOLEAN -> true",
+    // ---- CREATE TAG: property region with allowed values and propagation ----
+    "create tag cost_center allowed_values 'sales', 'engineering' comment = 'owner'",
+    "create or alter tag classification propagate = ON_DEPENDENCY comment = 'classification'",
     // ---- GRANT: single / multi privileges, object types, WITH GRANT OPTION ----
     "grant select on table t to role r",
     "grant select, insert, update on table t to role analyst",
@@ -223,6 +231,24 @@ fn create_stream_source_on_its_own_line() {
         "CREATE STREAM s\n    \
            ON TABLE t\n    \
            APPEND_ONLY = TRUE;\n",
+    );
+}
+
+#[test]
+fn create_policy_stays_inline_but_upcases_policy_words() {
+    assert_eq!(
+        fmt("create masking policy mask_email as (val STRING) returns STRING -> val comment = 'mask'"),
+        "CREATE MASKING POLICY mask_email AS (val STRING) RETURNS STRING -> val COMMENT = 'mask';\n",
+    );
+}
+
+#[test]
+fn create_tag_stacks_allowed_values_and_comment() {
+    assert_eq!(
+        fmt("create tag cost_center allowed_values 'sales', 'engineering' comment = 'owner'"),
+        "CREATE TAG cost_center\n    \
+           ALLOWED_VALUES 'sales', 'engineering'\n    \
+           COMMENT = 'owner';\n",
     );
 }
 

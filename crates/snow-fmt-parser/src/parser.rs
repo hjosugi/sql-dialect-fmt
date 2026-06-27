@@ -95,6 +95,20 @@ pub(crate) enum ContextualKeyword {
     File,
     /// `CREATE FILE FORMAT …` — second word.
     Format,
+    /// `CREATE MASKING POLICY …`.
+    Masking,
+    /// `CREATE MASKING POLICY …` / `CREATE ROW ACCESS POLICY …`.
+    Policy,
+    /// `CREATE ROW ACCESS POLICY …` — middle word.
+    Access,
+    /// `CREATE TAG …`.
+    Tag,
+    /// `CREATE TAG … ALLOWED_VALUES ...`.
+    AllowedValues,
+    /// `CREATE TAG … PROPAGATE = ...`.
+    Propagate,
+    /// `CREATE MASKING POLICY … EXEMPT_OTHER_POLICIES = ...`.
+    ExemptOtherPolicies,
     // ---- Phase 7 GRANT / REVOKE vocabulary ----
     /// `… TO ROLE r` / `… FROM ROLE r`.
     Role,
@@ -179,6 +193,13 @@ impl ContextualKeyword {
             ContextualKeyword::Dynamic => "dynamic",
             ContextualKeyword::File => "file",
             ContextualKeyword::Format => "format",
+            ContextualKeyword::Masking => "masking",
+            ContextualKeyword::Policy => "policy",
+            ContextualKeyword::Access => "access",
+            ContextualKeyword::Tag => "tag",
+            ContextualKeyword::AllowedValues => "allowed_values",
+            ContextualKeyword::Propagate => "propagate",
+            ContextualKeyword::ExemptOtherPolicies => "exempt_other_policies",
             ContextualKeyword::Role => "role",
             ContextualKeyword::User => "user",
             ContextualKeyword::Share => "share",

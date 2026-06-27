@@ -329,7 +329,11 @@ fn create_stmt(p: &mut Parser) {
     p.bump(CREATE_KW);
     if p.at(OR_KW) {
         p.bump(OR_KW);
-        p.expect(REPLACE_KW);
+        if p.at(REPLACE_KW) {
+            p.bump(REPLACE_KW);
+        } else {
+            p.expect(ALTER_KW);
+        }
     }
     // Modifiers before the object kind (SECURE / TEMPORARY / TRANSIENT / MATERIALIZED / ...). Stop
     // at the object-kind word so the right sub-rule sees it; also stop at a query/body `AS` and the
@@ -352,6 +356,8 @@ fn create_stmt(p: &mut Parser) {
         create_table(p);
     } else if p.at(PROCEDURE_KW) || p.at(FUNCTION_KW) {
         create_routine(p);
+    } else if at_policy_object_kind(p) {
+        create_policy(p);
     } else if at_named_object_kind(p) {
         create_object(p);
     } else {
@@ -368,6 +374,7 @@ fn at_object_kind(p: &Parser) -> bool {
         || p.at(VIEW_KW)
         || p.at(PROCEDURE_KW)
         || p.at(FUNCTION_KW)
+        || at_policy_object_kind(p)
         || at_named_object_kind(p)
 }
 
@@ -383,6 +390,16 @@ fn at_named_object_kind(p: &Parser) -> bool {
         || p.nth_contextual(0, ContextualKeyword::Stream)
         || p.nth_contextual(0, ContextualKeyword::Dynamic)
         || p.nth_contextual(0, ContextualKeyword::File)
+        || p.nth_contextual(0, ContextualKeyword::Tag)
+}
+
+/// `CREATE MASKING POLICY` / `CREATE ROW ACCESS POLICY`.
+fn at_policy_object_kind(p: &Parser) -> bool {
+    (p.nth_contextual(0, ContextualKeyword::Masking)
+        && p.nth_contextual(1, ContextualKeyword::Policy))
+        || (p.at(ROW_KW)
+            && p.nth_contextual(1, ContextualKeyword::Access)
+            && p.nth_contextual(2, ContextualKeyword::Policy))
 }
 
 /// `CREATE [OR REPLACE] [modifiers] <kind> [IF NOT EXISTS] <name> <property>* [<clause>]* [AS <body>]`
@@ -428,12 +445,49 @@ fn object_kind_words(p: &mut Parser) {
         if p.at(TABLE_KW) {
             p.bump(TABLE_KW);
         }
+    } else if p.nth_contextual(0, ContextualKeyword::Tag) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
     } else if p.at_keyword() {
         // A reserved object keyword (TASK / WAREHOUSE / TABLE / …) — already up-cased by bump_any.
         p.bump_any();
     } else {
         // SCHEMA / DATABASE / STAGE / SEQUENCE / STREAM — contextual words, up-cased like keywords.
         p.bump_as(CONTEXTUAL_KEYWORD);
+    }
+}
+
+/// `CREATE [OR REPLACE|OR ALTER] {MASKING POLICY|ROW ACCESS POLICY} <name>
+/// AS (<arg> <type>[, ...]) RETURNS <type> -> <expr> [options...]`.
+///
+/// The signature and policy expression surface is intentionally kept as an inline token run: it is
+/// expression-like but open-ended, and semicolon-free in valid Snowflake DDL. This gets clean
+/// parsing, keyword casing, and lossless formatting without pretending to fully type-check the
+/// policy language.
+fn create_policy(p: &mut Parser) {
+    policy_kind_words(p);
+    if_exists_clause(p);
+    if p.at_name() {
+        name_ref(p);
+    }
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        bump_ddl_word(p);
+    }
+}
+
+fn policy_kind_words(p: &mut Parser) {
+    if p.nth_contextual(0, ContextualKeyword::Masking) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // MASKING
+        if p.nth_contextual(0, ContextualKeyword::Policy) {
+            p.bump_as(CONTEXTUAL_KEYWORD); // POLICY
+        }
+    } else {
+        p.bump(ROW_KW);
+        if p.nth_contextual(0, ContextualKeyword::Access) {
+            p.bump_as(CONTEXTUAL_KEYWORD); // ACCESS
+        }
+        if p.nth_contextual(0, ContextualKeyword::Policy) {
+            p.bump_as(CONTEXTUAL_KEYWORD); // POLICY
+        }
     }
 }
 
@@ -462,7 +516,12 @@ fn object_property_region(p: &mut Parser) {
 /// bare flag word. Always consumes at least one token.
 fn object_property(p: &mut Parser) {
     let m = p.start();
-    p.bump_any(); // the property name / flag word (kept verbatim; values are case-sensitive)
+    let is_allowed_values = p.nth_contextual(0, ContextualKeyword::AllowedValues);
+    if is_allowed_values {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    } else {
+        p.bump_any(); // the property name / flag word (kept verbatim; values are case-sensitive)
+    }
     if p.eat(EQ) {
         if p.at(L_PAREN) {
             balanced_parens(p); // KEY = ( sub-option = value, … ) — e.g. FILE_FORMAT = (TYPE = 'CSV')
@@ -473,6 +532,10 @@ fn object_property(p: &mut Parser) {
         while at_property_value_tail(p) {
             p.bump_any();
         }
+    } else if is_allowed_values {
+        while at_allowed_values_tail(p) {
+            p.bump_any();
+        }
     } else {
         // Bare option words like `START WITH 1` / `INCREMENT BY 1` where the `=` is omitted, or a
         // standalone flag (`NOORDER`). Absorb the immediate value tail so it stays on one line.
@@ -481,6 +544,22 @@ fn object_property(p: &mut Parser) {
         }
     }
     m.complete(p, OBJECT_PROPERTY);
+}
+
+/// Continuation of `CREATE TAG ... ALLOWED_VALUES 'a', 'b', ...`.
+fn at_allowed_values_tail(p: &Parser) -> bool {
+    if p.at(COMMA) {
+        return true;
+    }
+    let starts_new_property = p.nth_at(1, EQ);
+    !starts_new_property
+        && !p.at(SEMICOLON)
+        && !p.at(ON_KW)
+        && !p.at(AFTER_KW)
+        && !p.at(WHEN_KW)
+        && !at_create_body(p)
+        && !p.at_eof()
+        && (p.at(STRING) || p.at(INT_NUMBER) || p.at(FLOAT_NUMBER))
 }
 
 /// A continuation token of the current property's value: a `WITH`/`BY` connector or a literal/word
@@ -1077,6 +1156,13 @@ fn is_ddl_contextual_word(p: &Parser) -> bool {
         || p.nth_contextual(0, ContextualKeyword::Cascade)
         || p.nth_contextual(0, ContextualKeyword::Restrict)
         || p.nth_contextual(0, ContextualKeyword::Materialized)
+        || p.nth_contextual(0, ContextualKeyword::Masking)
+        || p.nth_contextual(0, ContextualKeyword::Policy)
+        || p.nth_contextual(0, ContextualKeyword::Access)
+        || p.nth_contextual(0, ContextualKeyword::Tag)
+        || p.nth_contextual(0, ContextualKeyword::AllowedValues)
+        || p.nth_contextual(0, ContextualKeyword::Propagate)
+        || p.nth_contextual(0, ContextualKeyword::ExemptOtherPolicies)
 }
 
 fn drop_stmt(p: &mut Parser) {

@@ -31,6 +31,37 @@ $$;
 }
 
 #[test]
+fn procedure_name_hover_summarizes_external_language_options() {
+    let sql = r#"
+CREATE OR REPLACE PROCEDURE train_model(src STRING)
+RETURNS STRING
+LANGUAGE SCALA
+RUNTIME_VERSION = '2.12'
+PACKAGES = ('com.snowflake:snowpark:latest', 'com.acme:ml:1.0')
+IMPORTS = ('@code/jars/lib.jar')
+HANDLER = 'Model.run'
+TARGET_PATH = '@code/jars/model.jar'
+AS $$
+class Model {}
+$$;
+"#;
+
+    let hover = hover_on(sql, "train_model");
+
+    assert_eq!(hover.kind, HoverKind::Procedure);
+    assert!(hover.body.contains("Language: `SCALA`."));
+    assert!(hover.body.contains("Handler: `'Model.run'`."));
+    assert!(hover.body.contains("Runtime: `'2.12'`."));
+    assert!(hover
+        .body
+        .contains("Packages: `('com.snowflake:snowpark:latest', 'com.acme:ml:1.0')`."));
+    assert!(hover.body.contains("Imports: `('@code/jars/lib.jar')`."));
+    assert!(hover
+        .body
+        .contains("Target path: `'@code/jars/model.jar'`."));
+}
+
+#[test]
 fn task_name_hover_summarizes_compute_schedule_and_condition() {
     let sql = r#"
 CREATE TASK load_events
@@ -70,7 +101,7 @@ fn task_properties_have_direct_hover() {
 
 #[test]
 fn procedure_properties_and_languages_have_direct_hover() {
-    let sql = "CREATE PROCEDURE p() RETURNS STRING LANGUAGE PYTHON RUNTIME_VERSION = '3.12' HANDLER = 'run' AS $$pass$$;";
+    let sql = "CREATE PROCEDURE p() RETURNS STRING LANGUAGE PYTHON RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') IMPORTS = ('@code/app.py') HANDLER = 'run' EXTERNAL_ACCESS_INTEGRATIONS = (net) SECRETS = ('cred'=my_secret) AS $$pass$$;";
 
     let returns = hover_on(sql, "RETURNS");
     assert_eq!(returns.kind, HoverKind::Property);
@@ -83,6 +114,33 @@ fn procedure_properties_and_languages_have_direct_hover() {
     let runtime = hover_on(sql, "RUNTIME_VERSION");
     assert_eq!(runtime.kind, HoverKind::Property);
     assert!(runtime.body.contains("runtime version"));
+
+    let packages = hover_on(sql, "PACKAGES");
+    assert_eq!(packages.kind, HoverKind::Property);
+    assert!(packages.body.contains("runtime packages"));
+
+    let imports = hover_on(sql, "IMPORTS");
+    assert_eq!(imports.kind, HoverKind::Property);
+    assert!(imports.body.contains("staged files"));
+
+    let external = hover_on(sql, "EXTERNAL_ACCESS_INTEGRATIONS");
+    assert_eq!(external.kind, HoverKind::Property);
+    assert!(external.body.contains("outbound network access"));
+
+    let secrets = hover_on(sql, "SECRETS");
+    assert_eq!(secrets.kind, HoverKind::Property);
+    assert!(secrets.body.contains("Snowflake secrets"));
+
+    let scala = hover_on("CREATE PROCEDURE p() LANGUAGE SCALA AS $$x$$;", "SCALA");
+    assert_eq!(scala.kind, HoverKind::Language);
+    assert!(scala.body.contains("Snowpark Scala"));
+
+    let sql_language = hover_on(
+        "CREATE PROCEDURE p() LANGUAGE SQL AS BEGIN RETURN 1; END",
+        "SQL",
+    );
+    assert_eq!(sql_language.kind, HoverKind::Language);
+    assert!(sql_language.body.contains("Snowflake Scripting"));
 }
 
 #[test]

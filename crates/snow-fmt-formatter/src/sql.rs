@@ -19,6 +19,10 @@ use biome_formatter::{IndentStyle, IndentWidth, LineWidth};
 use biome_js_formatter::{context::JsFormatOptions, format_range as format_js_range};
 use biome_js_parser::{parse as parse_js, JsParserOptions};
 use biome_js_syntax::{JsFileSource, TextRange, TextSize};
+use ruff_formatter::{
+    IndentStyle as PyIndentStyle, IndentWidth as PyIndentWidth, LineWidth as PyLineWidth,
+};
+use ruff_python_formatter::{format_module_source, PyFormatOptions};
 use snow_fmt_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use SyntaxKind::*;
 
@@ -542,6 +546,12 @@ impl Lowerer {
                         }
                         RoutineBodyLanguage::Javascript => {
                             format_embedded_javascript_dollar_body(token.text(), self.ctx)
+                        }
+                        RoutineBodyLanguage::Python => {
+                            format_embedded_python_dollar_body(token.text(), self.ctx)
+                        }
+                        RoutineBodyLanguage::Java | RoutineBodyLanguage::Scala => {
+                            format_embedded_brace_language_dollar_body(token.text(), self.ctx)
                         }
                         RoutineBodyLanguage::Other => None,
                     } {
@@ -1431,6 +1441,9 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
 enum RoutineBodyLanguage {
     Sql,
     Javascript,
+    Python,
+    Java,
+    Scala,
     Other,
 }
 
@@ -1455,6 +1468,12 @@ fn routine_body_language(node: &SyntaxNode) -> Option<RoutineBodyLanguage> {
                     || token.text().eq_ignore_ascii_case("javascript")
                 {
                     RoutineBodyLanguage::Javascript
+                } else if token.kind() == PYTHON_KW || token.text().eq_ignore_ascii_case("python") {
+                    RoutineBodyLanguage::Python
+                } else if token.kind() == JAVA_KW || token.text().eq_ignore_ascii_case("java") {
+                    RoutineBodyLanguage::Java
+                } else if token.kind() == SCALA_KW || token.text().eq_ignore_ascii_case("scala") {
+                    RoutineBodyLanguage::Scala
                 } else {
                     RoutineBodyLanguage::Other
                 },
@@ -1509,6 +1528,200 @@ fn format_javascript_body_once(source: &str, ctx: Ctx) -> Option<String> {
         None
     } else {
         Some(formatted.trim_end().to_string())
+    }
+}
+
+fn format_embedded_python_dollar_body(text: &str, ctx: Ctx) -> Option<String> {
+    let body = text.strip_prefix("$$")?.strip_suffix("$$")?;
+    let source = body.trim();
+    if source.is_empty() {
+        return None;
+    }
+
+    let formatted = format_python_body_once(source, ctx)?;
+    if format_python_body_once(&formatted, ctx)? != formatted {
+        return None;
+    }
+
+    Some(format!("$$\n{}\n$$", formatted.trim_end()))
+}
+
+fn format_python_body_once(source: &str, ctx: Ctx) -> Option<String> {
+    let line_width =
+        PyLineWidth::try_from(ctx.line_width.clamp(1, u16::MAX as usize) as u16).ok()?;
+    let indent_width =
+        PyIndentWidth::try_from(ctx.indent_width.clamp(1, u8::MAX as usize) as u8).ok()?;
+    let options = PyFormatOptions::default()
+        .with_indent_style(PyIndentStyle::Space)
+        .with_indent_width(indent_width)
+        .with_line_width(line_width);
+    let printed = format_module_source(source, options).ok()?;
+    let formatted = printed.as_code().trim();
+    if formatted.is_empty() {
+        None
+    } else {
+        Some(formatted.trim_end().to_string())
+    }
+}
+
+fn format_embedded_brace_language_dollar_body(text: &str, ctx: Ctx) -> Option<String> {
+    let body = text.strip_prefix("$$")?.strip_suffix("$$")?;
+    let source = body.trim();
+    if source.is_empty() {
+        return None;
+    }
+
+    let formatted = format_brace_language_body_once(source, ctx.indent_width)?;
+    if format_brace_language_body_once(&formatted, ctx.indent_width)? != formatted {
+        return None;
+    }
+
+    Some(format!("$$\n{}\n$$", formatted.trim_end()))
+}
+
+fn format_brace_language_body_once(source: &str, indent_width: usize) -> Option<String> {
+    if source.contains("\"\"\"") {
+        return None;
+    }
+
+    let mut rough = String::new();
+    let mut chars = source.chars().peekable();
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' | '\'' => {
+                rough.push(ch);
+                copy_quoted_literal(ch, &mut chars, &mut rough)?;
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                rough.push('/');
+                rough.push(chars.next()?);
+                for next in chars.by_ref() {
+                    rough.push(next);
+                    if next == '\n' {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                rough.push('/');
+                rough.push(chars.next()?);
+                let mut closed = false;
+                let mut prev = '\0';
+                for next in chars.by_ref() {
+                    rough.push(next);
+                    if prev == '*' && next == '/' {
+                        closed = true;
+                        break;
+                    }
+                    prev = next;
+                }
+                if !closed {
+                    return None;
+                }
+            }
+            '(' => {
+                paren_depth += 1;
+                rough.push(ch);
+            }
+            ')' => {
+                paren_depth = paren_depth.checked_sub(1)?;
+                rough.push(ch);
+            }
+            '[' => {
+                bracket_depth += 1;
+                rough.push(ch);
+            }
+            ']' => {
+                bracket_depth = bracket_depth.checked_sub(1)?;
+                rough.push(ch);
+            }
+            '{' => {
+                brace_depth += 1;
+                rough.push(ch);
+                push_newline_if_needed(&mut rough);
+            }
+            '}' => {
+                brace_depth = brace_depth.checked_sub(1)?;
+                ensure_newline_before(&mut rough);
+                rough.push(ch);
+                push_newline_if_needed(&mut rough);
+            }
+            ';' if paren_depth == 0 && bracket_depth == 0 => {
+                rough.push(ch);
+                push_newline_if_needed(&mut rough);
+            }
+            _ => rough.push(ch),
+        }
+    }
+
+    if paren_depth != 0 || bracket_depth != 0 || brace_depth != 0 {
+        return None;
+    }
+
+    let indent_unit = " ".repeat(indent_width.clamp(1, 16));
+    let mut indent = 0usize;
+    let mut lines = Vec::new();
+    for raw_line in rough.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('}') {
+            indent = indent.saturating_sub(1);
+        }
+        lines.push(format!("{}{}", indent_unit.repeat(indent), line));
+        if line.ends_with('{') {
+            indent += 1;
+        }
+    }
+
+    let formatted = lines.join("\n");
+    if formatted.is_empty() {
+        None
+    } else {
+        Some(formatted)
+    }
+}
+
+fn copy_quoted_literal(
+    quote: char,
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    out: &mut String,
+) -> Option<()> {
+    let mut escaped = false;
+    for ch in chars.by_ref() {
+        out.push(ch);
+        if escaped {
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else if ch == quote {
+            return Some(());
+        } else if ch == '\n' {
+            return None;
+        }
+    }
+    None
+}
+
+fn push_newline_if_needed(out: &mut String) {
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+}
+
+fn ensure_newline_before(out: &mut String) {
+    if out.trim_end().is_empty() {
+        return;
+    }
+    let trimmed_len = out.trim_end().len();
+    out.truncate(trimmed_len);
+    if !out.ends_with('\n') {
+        out.push('\n');
     }
 }
 
@@ -1593,6 +1806,7 @@ fn is_option_flag(word: &str) -> bool {
 /// live here.) Verified against docs.snowflake.com.
 const OPTION_KEYS: &[&str] = &[
     "allow_duplicate",
+    "allowed_values",
     "append_only",
     "auto_refresh",
     "auto_resume",
@@ -1624,6 +1838,7 @@ const OPTION_KEYS: &[&str] = &[
     "escape",
     "escape_unenclosed_field",
     "execute_as",
+    "exempt_other_policies",
     "external_volume",
     "field_delimiter",
     "field_optionally_enclosed_by",
@@ -1656,6 +1871,7 @@ const OPTION_KEYS: &[&str] = &[
     "parse_header",
     "pattern",
     "preserve_space",
+    "propagate",
     "purge",
     "query_acceleration_max_scale_factor",
     "record_delimiter",

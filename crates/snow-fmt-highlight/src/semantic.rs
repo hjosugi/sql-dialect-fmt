@@ -215,41 +215,89 @@ pub struct LineToken {
     pub modifiers: u32,
 }
 
-/// Scan `input` for `$$ … $$` bodies and tag each with the language from the nearest preceding
-/// `LANGUAGE <name>` keyword in the same statement. Bodies with no `LANGUAGE` clause default to
-/// [`InjectedLanguage::Sql`]. Runs off the lexical highlighter, so it never parses or panics.
+/// Scan `input` for embedded `$$ … $$` bodies and tag each with its language. Routine bodies use
+/// `LANGUAGE <name> ... AS $$...$$`; dynamic SQL uses `EXECUTE IMMEDIATE $$...$$`. Bodies after
+/// `AS $$...$$` with no `LANGUAGE` clause default to [`InjectedLanguage::Sql`]. Runs off the lexical
+/// highlighter, so it never parses or panics.
 pub fn detect_injections(input: &str) -> Vec<Injection> {
     let highlighted = highlight(input);
     let mut injections = Vec::new();
-    let mut pending: Option<InjectedLanguage> = None;
-    let mut saw_language_kw = false;
+    let mut language: Option<InjectedLanguage> = None;
+    let mut expect_language_name = false;
+    let mut saw_as_after_language = false;
+    let mut saw_as = false;
+    let mut saw_execute = false;
+    let mut saw_execute_immediate = false;
 
     for token in &highlighted.tokens {
         match token.kind {
             HighlightKind::Whitespace | HighlightKind::Comment => {}
             HighlightKind::DollarString => {
-                injections.push(Injection {
-                    language: pending.take().unwrap_or(InjectedLanguage::Sql),
-                    range: token.range.clone(),
-                });
-                saw_language_kw = false;
+                if saw_as_after_language || saw_as || saw_execute_immediate {
+                    injections.push(Injection {
+                        language: language.take().unwrap_or(InjectedLanguage::Sql),
+                        range: token.range.clone(),
+                    });
+                }
+                expect_language_name = false;
+                saw_as_after_language = false;
+                saw_as = false;
+                saw_execute = false;
+                saw_execute_immediate = false;
             }
             HighlightKind::Punctuation if token.text == ";" => {
                 // Statement boundary: a LANGUAGE clause does not carry across statements.
-                pending = None;
-                saw_language_kw = false;
+                language = None;
+                expect_language_name = false;
+                saw_as_after_language = false;
+                saw_as = false;
+                saw_execute = false;
+                saw_execute_immediate = false;
             }
             HighlightKind::Keyword if token.text.eq_ignore_ascii_case("language") => {
-                saw_language_kw = true;
+                expect_language_name = true;
+                saw_as_after_language = false;
+                saw_as = false;
+                saw_execute = false;
+                saw_execute_immediate = false;
             }
-            // The word right after LANGUAGE names the body language. It lexes as a keyword
-            // (javascript/python/java/scala/sql) or, defensively, as an identifier.
-            HighlightKind::Keyword | HighlightKind::Identifier if saw_language_kw => {
-                pending = Some(InjectedLanguage::from_language_word(token.text));
-                saw_language_kw = false;
+            HighlightKind::Keyword | HighlightKind::Identifier if expect_language_name => {
+                language = Some(InjectedLanguage::from_language_word(token.text));
+                expect_language_name = false;
+                saw_as_after_language = false;
+                saw_as = false;
+                saw_execute = false;
+                saw_execute_immediate = false;
+            }
+            HighlightKind::Keyword if token.text.eq_ignore_ascii_case("as") => {
+                saw_as_after_language = language.is_some();
+                saw_as = language.is_none();
+                expect_language_name = false;
+                saw_execute = false;
+                saw_execute_immediate = false;
+            }
+            HighlightKind::Keyword if token.text.eq_ignore_ascii_case("execute") => {
+                expect_language_name = false;
+                saw_as_after_language = false;
+                saw_as = false;
+                saw_execute = true;
+                saw_execute_immediate = false;
+            }
+            HighlightKind::Keyword
+                if token.text.eq_ignore_ascii_case("immediate") && saw_execute =>
+            {
+                expect_language_name = false;
+                saw_as_after_language = false;
+                saw_as = false;
+                saw_execute = false;
+                saw_execute_immediate = true;
             }
             _ => {
-                saw_language_kw = false;
+                expect_language_name = false;
+                saw_as_after_language = false;
+                saw_as = false;
+                saw_execute = false;
+                saw_execute_immediate = false;
             }
         }
     }
@@ -553,6 +601,7 @@ mod tests {
             ("PYTHON", InjectedLanguage::Python),
             ("Java", InjectedLanguage::Java),
             ("scala", InjectedLanguage::Scala),
+            ("SQL", InjectedLanguage::Sql),
         ] {
             let sql = format!("CREATE FUNCTION f() RETURNS INT LANGUAGE {word} AS $$x$$;");
             let injections = detect_injections(&sql);
@@ -563,12 +612,24 @@ mod tests {
 
     #[test]
     fn body_without_language_clause_defaults_to_sql() {
-        let sql = "EXECUTE IMMEDIATE $$ SELECT 1 $$;";
+        let sql = "CREATE PROCEDURE p() RETURNS STRING AS $$ BEGIN RETURN 'ok'; END $$; \
+                   EXECUTE IMMEDIATE $$ SELECT 1 $$;";
         let injections = detect_injections(sql);
-        assert_eq!(injections.len(), 1);
+        assert_eq!(injections.len(), 2);
         assert_eq!(injections[0].language, InjectedLanguage::Sql);
+        assert_eq!(injections[1].language, InjectedLanguage::Sql);
         assert_eq!(InjectedLanguage::Sql.scope(), "source.snowflake-sql");
         assert_eq!(InjectedLanguage::JavaScript.scope(), "source.js");
+    }
+
+    #[test]
+    fn non_body_dollar_strings_do_not_get_injected() {
+        let sql = "SELECT $$plain text$$ AS value; \
+                   CREATE PROCEDURE p() LANGUAGE PYTHON IMPORTS = ($$stage/file.py$$) AS $$body$$;";
+        let injections = detect_injections(sql);
+        assert_eq!(injections.len(), 1);
+        assert_eq!(injections[0].language, InjectedLanguage::Python);
+        assert_eq!(&sql[injections[0].range.clone()], "$$body$$");
     }
 
     #[test]

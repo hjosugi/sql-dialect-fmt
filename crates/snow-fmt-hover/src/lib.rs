@@ -13,6 +13,30 @@ pub const CREATE_PROCEDURE_DOCS: &str =
 pub const CREATE_TASK_DOCS: &str = "https://docs.snowflake.com/en/sql-reference/sql/create-task";
 pub const DATA_TYPES_DOCS: &str = "https://docs.snowflake.com/en/sql-reference/data-types";
 
+const ROUTINE_OPTION_STOPS: &[&str] = &[
+    "AS",
+    "ARTIFACT_REPOSITORY",
+    "CALLED",
+    "COMMENT",
+    "COPY",
+    "EXECUTE",
+    "EXTERNAL_ACCESS_INTEGRATIONS",
+    "HANDLER",
+    "IMMUTABLE",
+    "IMPORTS",
+    "LANGUAGE",
+    "MEMOIZABLE",
+    "NULL",
+    "PACKAGES",
+    "RETURNS",
+    "RUNTIME_VERSION",
+    "SECRETS",
+    "SECURE",
+    "STRICT",
+    "TARGET_PATH",
+    "VOLATILE",
+];
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hover {
     pub kind: HoverKind,
@@ -139,6 +163,21 @@ fn procedure_symbol_hover(
         ],
     );
     let language = value_after_keyword(source, tokens, object.keyword, object.end, "LANGUAGE");
+    let handler =
+        routine_option_after_keyword(source, tokens, object.keyword, object.end, "HANDLER");
+    let runtime = routine_option_after_keyword(
+        source,
+        tokens,
+        object.keyword,
+        object.end,
+        "RUNTIME_VERSION",
+    );
+    let packages =
+        routine_option_after_keyword(source, tokens, object.keyword, object.end, "PACKAGES");
+    let imports =
+        routine_option_after_keyword(source, tokens, object.keyword, object.end, "IMPORTS");
+    let target_path =
+        routine_option_after_keyword(source, tokens, object.keyword, object.end, "TARGET_PATH");
 
     let mut lines = vec![format!("Stored procedure `{name}`.")];
     if !args.is_empty() {
@@ -149,6 +188,21 @@ fn procedure_symbol_hover(
     }
     if let Some(language) = language {
         lines.push(format!("Language: `{language}`."));
+    }
+    if let Some(handler) = handler {
+        lines.push(format!("Handler: `{handler}`."));
+    }
+    if let Some(runtime) = runtime {
+        lines.push(format!("Runtime: `{runtime}`."));
+    }
+    if let Some(packages) = packages {
+        lines.push(format!("Packages: `{packages}`."));
+    }
+    if let Some(imports) = imports {
+        lines.push(format!("Imports: `{imports}`."));
+    }
+    if let Some(target_path) = target_path {
+        lines.push(format!("Target path: `{target_path}`."));
     }
     lines.push(String::from(
         "Snowflake resolves stored procedures by name plus argument types.",
@@ -344,6 +398,17 @@ fn value_after_keyword(
     (!value.is_empty()).then_some(value)
 }
 
+fn routine_option_after_keyword(
+    source: &str,
+    tokens: &[SpannedToken<'_>],
+    start: usize,
+    end: usize,
+    keyword: &str,
+) -> Option<String> {
+    clause_after_keyword(source, tokens, start, end, keyword, ROUTINE_OPTION_STOPS)
+        .map(|value| value.strip_prefix("= ").unwrap_or(&value).to_string())
+}
+
 fn clause_after_keyword(
     source: &str,
     tokens: &[SpannedToken<'_>],
@@ -410,23 +475,35 @@ fn is_clause_boundary(token: &SpannedToken<'_>) -> bool {
     ) || [
         "AS",
         "AFTER",
+        "ARTIFACT_REPOSITORY",
+        "CALLED",
         "COMMENT",
         "CONFIG",
+        "COPY",
         "ERROR_INTEGRATION",
         "EXECUTE",
+        "EXTERNAL_ACCESS_INTEGRATIONS",
         "FINALIZE",
         "HANDLER",
+        "IMMUTABLE",
         "IMPORTS",
         "LANGUAGE",
+        "MEMOIZABLE",
+        "NULL",
         "OVERLAP_POLICY",
         "PACKAGES",
         "RETURNS",
         "RUNTIME_VERSION",
         "SCHEDULE",
+        "SECRETS",
+        "SECURE",
+        "STRICT",
         "SUCCESS_INTEGRATION",
         "TASK_AUTO_RETRY_ATTEMPTS",
+        "TARGET_PATH",
         "USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE",
         "USER_TASK_TIMEOUT_MS",
+        "VOLATILE",
         "WAREHOUSE",
         "WHEN",
     ]
@@ -534,28 +611,35 @@ fn language_hover(token: &SpannedToken<'_>) -> Option<Hover> {
         StaticHover {
             kind: HoverKind::Language,
             title: "LANGUAGE JAVASCRIPT",
-            body: "Stored procedure handler body is JavaScript. SQL argument names can need careful case handling inside JavaScript.",
+            body: "JavaScript stored procedure body. The handler is the body itself; SQL argument names can need careful case handling inside JavaScript.",
             docs_url: Some(CREATE_PROCEDURE_DOCS),
         }
     } else if token.text.eq_ignore_ascii_case("PYTHON") {
         StaticHover {
             kind: HoverKind::Language,
             title: "LANGUAGE PYTHON",
-            body: "Snowpark Python stored procedure. HANDLER names the Python function; PACKAGES, IMPORTS, and RUNTIME_VERSION describe its runtime.",
+            body: "Snowpark Python stored procedure. HANDLER names the Python function; RUNTIME_VERSION pins Python; PACKAGES, IMPORTS, EXTERNAL_ACCESS_INTEGRATIONS, and SECRETS describe the runtime environment.",
             docs_url: Some(CREATE_PROCEDURE_DOCS),
         }
-    } else if token.text.eq_ignore_ascii_case("JAVA") || token.text.eq_ignore_ascii_case("SCALA") {
+    } else if token.text.eq_ignore_ascii_case("JAVA") {
         StaticHover {
             kind: HoverKind::Language,
-            title: "Snowpark JVM procedure language",
-            body: "Java and Scala stored procedures use a handler method, runtime version, packages, imports, and optionally a target path.",
+            title: "LANGUAGE JAVA",
+            body: "Java stored procedure. HANDLER names a class and method; RUNTIME_VERSION, PACKAGES, IMPORTS, and TARGET_PATH describe the JVM runtime and staged artifact.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        }
+    } else if token.text.eq_ignore_ascii_case("SCALA") {
+        StaticHover {
+            kind: HoverKind::Language,
+            title: "LANGUAGE SCALA",
+            body: "Snowpark Scala stored procedure. HANDLER names the Scala entry point; RUNTIME_VERSION, PACKAGES, IMPORTS, and TARGET_PATH describe the JVM runtime and staged artifact.",
             docs_url: Some(CREATE_PROCEDURE_DOCS),
         }
     } else if token.text.eq_ignore_ascii_case("SQL") {
         StaticHover {
             kind: HoverKind::Language,
             title: "LANGUAGE SQL",
-            body: "Snowflake Scripting stored procedure body. Use SQL procedural constructs such as DECLARE, BEGIN, RETURN, and EXCEPTION.",
+            body: "Snowflake Scripting stored procedure body. Use SQL procedural constructs such as DECLARE, BEGIN, RETURN, loops, and EXCEPTION handlers.",
             docs_url: Some(CREATE_PROCEDURE_DOCS),
         }
     } else {
@@ -600,6 +684,54 @@ fn property_hover(token: &SpannedToken<'_>) -> Option<Hover> {
             kind: HoverKind::Property,
             title: "RUNTIME_VERSION",
             body: "Pins the language runtime version for Java, Python, or Scala procedure handlers.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "TARGET_PATH",
+            body: "Stage path for the compiled Java or Scala procedure artifact. Use it when Snowflake should write the generated handler artifact to a stage.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "ARTIFACT_REPOSITORY",
+            body: "Selects an artifact repository for resolving supported external-language dependencies.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "EXTERNAL_ACCESS_INTEGRATIONS",
+            body: "Allows an external-language procedure to use one or more external access integrations for outbound network access.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "SECRETS",
+            body: "Maps Snowflake secrets to names the external-language handler can use at runtime.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "STRICT",
+            body: "Alias for RETURNS NULL ON NULL INPUT: Snowflake does not call the handler when any input argument is NULL.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "CALLED",
+            body: "Part of CALLED ON NULL INPUT: Snowflake calls the procedure even when an input argument is NULL.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "IMMUTABLE",
+            body: "Declares that the result depends only on inputs and not on database state or side effects.",
+            docs_url: Some(CREATE_PROCEDURE_DOCS),
+        },
+        StaticHover {
+            kind: HoverKind::Property,
+            title: "VOLATILE",
+            body: "Declares that the procedure can depend on state or side effects; this is the conservative behavior for procedural code.",
             docs_url: Some(CREATE_PROCEDURE_DOCS),
         },
         StaticHover {

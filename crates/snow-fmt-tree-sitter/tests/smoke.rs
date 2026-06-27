@@ -339,6 +339,9 @@ fn expression_nodes_group_calls_and_parentheses() {
 fn injection_query_tags_dollar_bodies_by_context() {
     let sql = "CREATE FUNCTION js() LANGUAGE JAVASCRIPT AS $$return 1;$$; \
                CREATE FUNCTION py() LANGUAGE PYTHON AS $$return 2$$; \
+               CREATE FUNCTION java() LANGUAGE JAVA AS $$class C {}$$; \
+               CREATE FUNCTION scala() LANGUAGE SCALA AS $$class C {}$$; \
+               CREATE FUNCTION sql_fn() LANGUAGE SQL AS $$SELECT 1$$; \
                EXECUTE IMMEDIATE $$ SELECT 3 $$;";
     let captures = injection_captures(sql);
     assert_eq!(
@@ -346,6 +349,9 @@ fn injection_query_tags_dollar_bodies_by_context() {
         vec![
             ("javascript".to_string(), "$$return 1;$$".to_string()),
             ("python".to_string(), "$$return 2$$".to_string()),
+            ("java".to_string(), "$$class C {}$$".to_string()),
+            ("scala".to_string(), "$$class C {}$$".to_string()),
+            ("sql".to_string(), "$$SELECT 1$$".to_string()),
             ("sql".to_string(), "$$ SELECT 3 $$".to_string()),
         ]
     );

@@ -15,7 +15,7 @@
 - **CST**: `rowan` の green/red ツリー。パーサは木を直接作らず **イベント列**（`Start`/`Token`/`Finish`/`Error`）を吐き、別パスで `GreenNodeBuilder` に流し込み、その際にトリビア（空白・コメント）を付与する（文法はクリーン、木はロスレス）。
 - **パーサ**: 手書き再帰下降 ＋ `Marker`/`CompletedMarker`（`complete`/`abandon`/`precede`）。**「パースは失敗しない」**＝ `(SyntaxNode, Vec<SyntaxError>)` を返し、未知トークンは `ERROR` ノード、`TokenSet`(FOLLOW集合)で回復、無限ループは fuel カウンタで防ぐ。式は Pratt parsing。参考: matklad *Resilient LL Parsing* / *Pratt parsing*。
 - **フォーマッタ**: **自前の汎用 Doc エンジン** `snow-fmt-formatter` を作る。`biome_formatter` には直接依存せず、その `FormatElement` 設計（Prettier → rome → biome/ruff の系譜）を模倣。SQL 固有の整形規則は別レイヤに分離。**magic trailing comma**（末尾カンマを「展開して」の意思表示として尊重）を看板機能に。
-- **埋め込み JS**: SQL 本体の Doc エンジンとは独立に、delimiter-aware body token（現行 Snowflake は `$$…$$`）の本体のみ `biome_js_formatter` で整形し、`markAsRoot`/`dedentToRoot` 方式で配置列へ再インデント。解析不能時は verbatim フォールバック。
+- **埋め込み言語**: SQL 本体の Doc エンジンとは独立に、delimiter-aware body token（現行 Snowflake は `$$…$$`）の本体のみ言語別サブフォーマッタで整形。SQL は自己再帰、JavaScript は `biome_js_formatter`、Python は `ruff_python_formatter`、Java/Scala は brace-aware lightweight formatter で処理し、解析不能時は verbatim フォールバック。
 - **テスト**: `insta` スナップショット ＋ **stability-check（べき等）** ＋ ロスレス往復 ＋ 実コーパスでの**類似度スコア**ゲート ＋ ファズ。フィクスチャは sqlparser-rs の Snowflake テスト（Apache-2.0）を流用。
 - **スタイル**: gofmt / zig fmt に倣い **opinionated・ほぼ設定なし**（`line-length`、必要なら `keyword-case` 程度）。
 
@@ -97,17 +97,19 @@
 - ✅ セッション/introspection 文 `USE`/`SHOW`/`DESCRIBE`(`DESC`)/`TRUNCATE`（`lenient_stmt` 共通ヘルパで寛容パース→新ノード `USE_STMT`/`SHOW_STMT`/`DESCRIBE_STMT`/`TRUNCATE_STMT`、インライン整形。新キーワード `USE`/`SHOW`/`DESCRIBE`/`TRUNCATE`。**バグ修正**: `USE ROLE r` が3文に分割され `;` が挿入されていた非ロスレス挙動を解消。`ORDER BY … DESC` は従来どおり）。fixture `case_034`、parser で回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `lenient_stmt`
 - ✅ `COMMENT ON <object> IS '…'`（オブジェクト注釈。`comment` は `ON` の直前でのみ効く**コンテキストキーワード**にして、頻出する `comment` 列名を誤ってキーワード化しない。`COMMENT_STMT` ノード、`CONTEXTUAL_KEYWORD` 化で大文字化）。fixture `case_035`、parser で衝突回避を回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `comment_stmt`
 - ✅ `UNDROP <object> <name>`（`UNDROP_STMT`、寛容インライン）。**バグ修正**: `UNDROP SCHEMA s` の複数文分割を解消。fixture `case_036`
-- ⏳ マスキング/行アクセスポリシー, タグ
+- ✅ `CREATE [OR REPLACE|OR ALTER] MASKING POLICY` / `ROW ACCESS POLICY` / `TAG`（policy は `AS (...) RETURNS ... -> ...` を clean parse + inline formatting、tag は `ALLOWED_VALUES`/`COMMENT`/`PROPAGATE` を property region として整形）。公式 docs で syntax 確認済み。object DDL matrix で parse/format/idempotency/token preservation を検証 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_policy`/`object_property`
+- ⏳ Semantic View、細かい object option のさらなる構造化（🔎 新しめは要ドキュメント確認）
 
 ## Phase 8 — 手続き・関数・埋め込み言語 🚧 ＜第2の差別化点＞
-- 🚧 `CREATE PROCEDURE`/`FUNCTION`（**骨格 + SQL/JS ボディ整形**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持。`LANGUAGE SQL AS $$ … $$` は内部 SQL/Scripting を同じ formatter で再帰整形し、`LANGUAGE JAVASCRIPT AS $$ … $$` は Biome (`biome_js_formatter`) に委譲。解析不能時は安全に元 token を保持。Python/Java/Scala と quoted body は現状 **verbatim**。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create_routine`。**コーパス clean 0→20件** に。残: UDTF の `TABLE(...)` 戻り、quoted body の扱い
+- 🚧 `CREATE PROCEDURE`/`FUNCTION`（**骨格 + SQL/JS/Python/Java/Scala ボディ整形**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持。`LANGUAGE SQL AS $$ … $$` は内部 SQL/Scripting を同じ formatter で再帰整形、`LANGUAGE JAVASCRIPT` は Biome (`biome_js_formatter`)、`LANGUAGE PYTHON` は Ruff (`ruff_python_formatter`)、Java/Scala は brace-aware lightweight formatter に委譲。解析不能時は安全に元 token を保持。quoted body は現状 **verbatim**。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create_routine`。残: UDTF の `TABLE(...)` 戻り、quoted body の扱い
 - ✅ セッション `SET <var> = <expr>` / `SET (a, b) = (...)`、`EXECUTE IMMEDIATE <string|$$…$$|:var> [USING (...)]`（`SET_STMT`/`EXECUTE_STMT` ノード、新キーワード `IMMEDIATE`。式に `DOLLAR_STRING` を許可）。**コーパス clean 20→22件** … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `set_stmt`/`execute_stmt`
 - ✅ `CALL proc(args)`（プロシージャ呼び出し。`CALL_STMT` ノード、呼び出しは通常の call 式として整形＝引数オーバーフロー時は1引数1行、`INTO :var` 等の末尾は寛容保持）。fixture `case_033` … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `call_stmt`
 - ✅ トランザクション制御 `BEGIN`/`COMMIT`/`ROLLBACK`（`BEGIN TRANSACTION`/`BEGIN WORK`/`BEGIN;`、`COMMIT WORK`、`ROLLBACK TO SAVEPOINT …` 含む。`TRANSACTION_STMT`）。**バグ修正**: `COMMIT WORK`/`ROLLBACK TO SAVEPOINT …` の複数文分割を解消。fixture `case_036`/`case_037`。`BEGIN` はコンテキストキーワード `transaction`/`work` か直後 `;` でのみトランザクションと判定し、Scripting ブロック `BEGIN … END`（内部 `;` 区切り）は誤分割せず verbatim 維持 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `at_begin_transaction`
 - ✅ Snowflake Scripting ブロック本体の整形（トップレベル匿名ブロック）: `[DECLARE …] BEGIN … [EXCEPTION …] END` を構造化し、本体を1文1行・インデント。`IF`/`ELSEIF`/`ELSE`/`END IF`、`FOR`/`WHILE … DO … END`、`LOOP`/`END LOOP`、`REPEAT … UNTIL … END REPEAT`、`EXCEPTION … WHEN … THEN`、ネストブロックを構造的に整形。`LET`/`:=`/`RETURN`/その他は寛容文（`;` まで）として保持。本体内の SQL（`SELECT`/`INSERT`/… ）は通常の構造的整形に委譲。新キーワード `ELSEIF`/`WHILE`/`LOOP`/`REPEAT`/`UNTIL`/`DO`/`EXCEPTION`/`CURSOR`/`RESULTSET`、新ノード `BLOCK_STMT`/`DECLARE_SECTION`/`STMT_LIST`/`IF_STMT`/`LOOP_STMT`/`EXCEPTION_SECTION`/… 。**安全性**: 寛容文は `;` まで消費するので `LET x := (CASE WHEN … END)` の式内 `END` で誤分割しない。構文が崩れたブロックはパースエラー→**ブロック全体を verbatim**（無破壊）。`BEGIN … END` トランザクションとの曖昧性は維持。fixture `case_038`/`case_039`、parser で clean-parse/ノード種別/誤分割回避/malformed-verbatim を回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `block_stmt`/`if_stmt`/`loop_stmt` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_block`。残: `CASE` 文の pretty-print（現状はバランス consume でインライン保持）
 - 🚧 delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
   - ✅ **JavaScript**: Biome の `biome_js_formatter` を組み込み（top-level `return` は synthetic function body で処理、失敗時 verbatim）
-  - ⏳ Python: 整形方針を決定（外部 ruff か、当面は無加工パススルー）
+  - ✅ **Python**: Ruff の `ruff_python_formatter` を組み込み（失敗時 verbatim）
+  - ✅ **Java / Scala**: brace-aware lightweight formatter（不均衡 brace/comment/string・triple string は verbatim）
   - ✅ ネストした SQL（`LANGUAGE SQL`）: `$$ … $$` body を自分自身で再帰整形
 
 ## Phase 9 — ハイライト + LSP 🚧
@@ -135,8 +137,8 @@
 **Phase 0–6 は完了**、Phase 7 は主要 DDL/object DDL/access control まで実用域、Phase 9 は LSP/diagnostics/editor grammar 基盤まで、Phase 8/10 が部分。コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。CLI `snow-fmt` v0.1.0 公開可。
 
 **残りの主な未着手（価値順）**:
-1. **Phase 8 埋め込み言語**: `$$…$$` の言語判定→サブフォーマッタ委譲（SQL 自己再帰・JS=Biome は完了、Python 方針決定）。トップレベル Snowflake Scripting と `LANGUAGE SQL` procedure/function body は構造化済み。Python/Java/Scala body と quoted body は現在 verbatim 保持で無破壊。
-2. **Phase 7 DDL の残り**: マスキング/行アクセスポリシー、タグ、Semantic View、細かい object option のさらなる構造化（🔎 新しめは要ドキュメント確認）。
+1. **Phase 8 埋め込み言語**: quoted body の扱い、UDTF の `RETURNS TABLE(...)` 周辺、Java/Scala formatter の限界ケース拡張。`$$…$$` は SQL/JS/Python/Java/Scala まで対応済みで、失敗時は verbatim 保持。
+2. **Phase 7 DDL の残り**: Semantic View、細かい object option のさらなる構造化（🔎 新しめは要ドキュメント確認）。
 3. **Phase 5/9 の網羅強化**: `->>` の `SHOW` chain など追加ゴールデン、Tree-sitter indents。
 4. **Phase 10**: `rayon` 並列、Cortex/AISQL 関数認識、VS Code 拡張、外部大規模コーパス。
 

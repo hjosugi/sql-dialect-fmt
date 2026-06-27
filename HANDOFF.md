@@ -17,7 +17,7 @@
 - **SQL 整形**: SELECT パイプライン、JOIN/ORDER BY/GROUP BY 構造化、CASE、サブクエリ/CTE、集合演算、**magic trailing comma**（看板機能）、**本物のコメント付与**（leading/trailing/dangling）。
 - **構文拡張（パーサ）**: 集約 `DISTINCT`、`WITHIN GROUP`、`PIVOT/UNPIVOT`、`GROUPING SETS/CUBE/ROLLUP`、`LATERAL FLATTEN`/テーブル関数/名前付き引数、`MATCH_RECOGNIZE`、`ASOF JOIN`、time travel `AT/BEFORE`、`IS [NOT] DISTINCT FROM`、`FROM VALUES`、`WITH` を query primary に。
 - **DML**: `INSERT`（単一/`OVERWRITE`/`ALL`/`FIRST`）, `UPDATE`, `DELETE`, `MERGE`。
-- **DDL**: `CREATE TABLE/VIEW/CTAS`, `DROP`, `ALTER`(寛容), `CREATE PROCEDURE/FUNCTION` 骨格（`LANGUAGE SQL` の `$$…$$` ボディは自己再帰整形、`LANGUAGE JAVASCRIPT` は Biome 委譲、Python/Java/Scala/quoted body は verbatim）。
+- **DDL**: `CREATE TABLE/VIEW/CTAS`, `DROP`, `ALTER`(寛容), masking/row access policy、tag、`CREATE PROCEDURE/FUNCTION` 骨格（`LANGUAGE SQL` の `$$…$$` ボディは自己再帰整形、`LANGUAGE JAVASCRIPT` は Biome、`LANGUAGE PYTHON` は Ruff、Java/Scala は brace-aware formatter 委譲。quoted body は verbatim）。
 - **COPY INTO**（ロード/アンロード、ステージパス verbatim、option key の key-position 大文字化）。
 - **CLI `snow-fmt`**: `--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、エンコーディング保持（v0.1.0、`cargo install` 可）。
 - **診断品質**: lexer/parser error span（token 全体、EOF zero-width）、人間向け `SyntaxKind::describe`、LSP diagnostics に lexer error も反映。
@@ -62,8 +62,8 @@
 設計の真実の源は **rowan CST**。tree-sitter は競合させず、エディタ向けの寛容・高速な認識層という役割分担。
 
 ## 3. 次の優先タスク（順番）
-1. **埋め込み言語の次段**: `$$…$$` body の言語判定は SQL 自己再帰 + JS Biome まで完了。次は Python 方針決定。Python/Java/Scala/quoted body は今は verbatim で無破壊。
-2. **DDL の残り**: マスキング/行アクセスポリシー、タグ、Semantic View、細かい object option の構造化。新しめの仕様は Snowflake 公式 docs で確認してから入れる。
+1. **埋め込み言語の次段**: `$$…$$` body の言語判定は SQL 自己再帰 + JS Biome + Python Ruff + Java/Scala brace-aware まで完了。次は quoted body の扱い、UDTF の `RETURNS TABLE(...)` 周辺、Java/Scala の限界ケース拡張。
+2. **DDL の残り**: Semantic View、細かい object option の構造化。新しめの仕様は Snowflake 公式 docs で確認してから入れる。
 3. **rich hover / spec 連携**: §4 の通り、まず keyword/function hover を `spec/seed/features.json` 由来にする。
 4. **editor 周辺**: tree-sitter indents、VS Code 拡張。
 5. **仕上げ**: `rayon` 並列、外部大規模コーパス、crates.io/GitHub Release。

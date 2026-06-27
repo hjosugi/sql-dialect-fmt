@@ -493,20 +493,55 @@ fn invalid_javascript_routine_body_stays_verbatim() {
 }
 
 #[test]
-fn python_and_scala_routine_bodies_stay_verbatim_for_now() {
+fn python_java_and_scala_routine_bodies_are_formatted_when_supported() {
     let py = "create procedure py_p() returns string language python RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' as $$\ndef main(session):\n    return 'ok'\n$$";
     let py_out = fmt(py);
     assert_eq!(
         py_out,
-        "CREATE PROCEDURE py_p () RETURNS string LANGUAGE PYTHON RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' AS $$\ndef main(session):\n    return 'ok'\n$$;\n"
+        "CREATE PROCEDURE py_p () RETURNS string LANGUAGE PYTHON RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' AS $$\ndef main(session):\n    return \"ok\"\n$$;\n"
     );
     assert_eq!(fmt(&py_out), py_out);
+
+    let java = "create function java_f(x int) returns int language java HANDLER = 'C.run' as $$ class C { public static int run(int x) { return x + 1; } } $$";
+    let java_out = fmt(java);
+    assert_eq!(
+        java_out,
+        "CREATE FUNCTION java_f (\n    x int\n) RETURNS int LANGUAGE JAVA HANDLER = 'C.run' AS $$\nclass C {\n    public static int run(int x) {\n        return x + 1;\n    }\n}\n$$;\n"
+    );
+    assert_eq!(fmt(&java_out), java_out);
 
     let scala = "create procedure scala_p() returns string language scala RUNTIME_VERSION = '2.12' PACKAGES = ('com.snowflake:snowpark:latest') HANDLER = 'Main.run' as $$\nclass Main { def run(session: com.snowflake.snowpark.Session): String = \"ok\" }\n$$";
     let scala_out = fmt(scala);
     assert_eq!(
         scala_out,
-        "CREATE PROCEDURE scala_p () RETURNS string LANGUAGE SCALA RUNTIME_VERSION = '2.12' PACKAGES = ('com.snowflake:snowpark:latest') HANDLER = 'Main.run' AS $$\nclass Main { def run(session: com.snowflake.snowpark.Session): String = \"ok\" }\n$$;\n"
+        "CREATE PROCEDURE scala_p () RETURNS string LANGUAGE SCALA RUNTIME_VERSION = '2.12' PACKAGES = ('com.snowflake:snowpark:latest') HANDLER = 'Main.run' AS $$\nclass Main {\n    def run(session: com.snowflake.snowpark.Session): String = \"ok\"\n}\n$$;\n"
+    );
+    assert_eq!(fmt(&scala_out), scala_out);
+}
+
+#[test]
+fn invalid_python_java_and_scala_routine_bodies_stay_verbatim() {
+    let py = "create function py_f() returns string language python as $$ def f(: $$";
+    let py_out = fmt(py);
+    assert_eq!(
+        py_out,
+        "CREATE FUNCTION py_f () RETURNS string LANGUAGE PYTHON AS $$ def f(: $$;\n"
+    );
+    assert_eq!(fmt(&py_out), py_out);
+
+    let java = "create function java_f() returns string language java as $$ class C { $$";
+    let java_out = fmt(java);
+    assert_eq!(
+        java_out,
+        "CREATE FUNCTION java_f () RETURNS string LANGUAGE JAVA AS $$ class C { $$;\n"
+    );
+    assert_eq!(fmt(&java_out), java_out);
+
+    let scala = "create function scala_f() returns string language scala as $$ class C { $$";
+    let scala_out = fmt(scala);
+    assert_eq!(
+        scala_out,
+        "CREATE FUNCTION scala_f () RETURNS string LANGUAGE SCALA AS $$ class C { $$;\n"
     );
     assert_eq!(fmt(&scala_out), scala_out);
 }

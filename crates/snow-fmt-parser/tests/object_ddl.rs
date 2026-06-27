@@ -101,6 +101,26 @@ fn create_dynamic_table_keeps_query_body_structural() {
 }
 
 #[test]
+fn create_policy_and_tag_shapes_parse_clean() {
+    for sql in [
+        "CREATE MASKING POLICY mask_email AS (val STRING) RETURNS STRING -> CASE WHEN CURRENT_ROLE() IN ('ANALYST') THEN val ELSE '***' END",
+        "CREATE OR REPLACE MASKING POLICY mask_email AS (val STRING) RETURNS STRING -> val COMMENT = 'mask'",
+        "CREATE ROW ACCESS POLICY region_filter AS (region STRING) RETURNS BOOLEAN -> region = CURRENT_REGION()",
+        "CREATE OR ALTER ROW ACCESS POLICY region_filter AS (id NUMBER) RETURNS BOOLEAN -> TRUE",
+        "CREATE TAG cost_center ALLOWED_VALUES 'sales', 'engineering' COMMENT = 'owner'",
+        "CREATE OR ALTER TAG classification PROPAGATE = ON_DEPENDENCY COMMENT = 'classification'",
+    ] {
+        clean(sql);
+        assert_has_node_kind(sql, SyntaxKind::CREATE_STMT);
+    }
+
+    assert_has_node_kind(
+        "CREATE TAG cost_center ALLOWED_VALUES 'sales', 'engineering' COMMENT = 'owner'",
+        SyntaxKind::OBJECT_PROPERTY,
+    );
+}
+
+#[test]
 fn grant_shapes_parse_and_expose_grant_nodes() {
     for sql in [
         "GRANT SELECT ON TABLE t TO ROLE r",
@@ -168,6 +188,8 @@ fn broken_and_partial_input_round_trips_without_panic() {
         "GRANT SELECT ON TABLE t TO",
         "REVOKE GRANT OPTION FOR",
         "CREATE DYNAMIC TABLE dt TARGET_LAG = '1 minute' WAREHOUSE = w AS",
+        "CREATE MASKING POLICY p AS (v STRING) RETURNS STRING ->",
+        "CREATE TAG t ALLOWED_VALUES 'a',",
     ] {
         // round-trip (tolerating diagnostics); the helper panics if the tree loses bytes.
         recovers(s);
