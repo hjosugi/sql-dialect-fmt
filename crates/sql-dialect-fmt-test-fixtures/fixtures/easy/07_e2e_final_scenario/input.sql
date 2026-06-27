@@ -1,16 +1,16 @@
 -- 00_bootstrap.sql
 -- Requires a role that can create a database and an X-SMALL warehouse.
 create or replace warehouse FORMATTER_TEST_WH WAREHOUSE_SIZE = 'XSMALL' AUTO_SUSPEND = 60 AUTO_RESUME = True INITIALLY_SUSPENDED = True Comment = 'Temporary warehouse for Snowflake formatter E2E tests';
-create or replace database SNOWFLAKE_FORMATTER_LAB comment = 'Disposable multilingual formatter and procedure scenario';
-create or replace schema SNOWFLAKE_FORMATTER_LAB.RAW;
-Create Or Replace Schema SNOWFLAKE_FORMATTER_LAB.CORE;
-create or replace schema SNOWFLAKE_FORMATTER_LAB.MART;
-Create Or Replace Schema SNOWFLAKE_FORMATTER_LAB.OPS;
-create or replace schema SNOWFLAKE_FORMATTER_LAB.UTIL;
+create or replace database SQL_DIALECT_FMT_LAB comment = 'Disposable multilingual formatter and procedure scenario';
+create or replace schema SQL_DIALECT_FMT_LAB.RAW;
+Create Or Replace Schema SQL_DIALECT_FMT_LAB.CORE;
+create or replace schema SQL_DIALECT_FMT_LAB.MART;
+Create Or Replace Schema SQL_DIALECT_FMT_LAB.OPS;
+create or replace schema SQL_DIALECT_FMT_LAB.UTIL;
 Use Warehouse FORMATTER_TEST_WH;
-use database SNOWFLAKE_FORMATTER_LAB;
+use database SQL_DIALECT_FMT_LAB;
 Use Schema OPS;
-alter SESSION set TIMEZONE = 'Asia/Tokyo', WEEK_START = 1, TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3 TZH:TZM', QUERY_TAG = 'snowflake-formatter-torture-suite/e2e';
+alter SESSION set TIMEZONE = 'Asia/Tokyo', WEEK_START = 1, TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3 TZH:TZM', QUERY_TAG = 'sql-dialect-fmt-torture-suite/e2e';
 -- 01_schema.sql
 Create Or Replace Table OPS.PIPELINE_RUNS (run_id VARCHAR not null, batch_id VARCHAR, pipeline_name VARCHAR not null, status VARCHAR Not Null, started_at TIMESTAMP_LTZ not null, finished_at TIMESTAMP_LTZ, details variant, PRIMARY KEY (run_id) Not ENFORCED);
 Create Or Replace Table OPS.ERROR_LOG (error_id VARCHAR default UUID_STRING(), run_id VARCHAR, batch_id VARCHAR, component VARCHAR, error_type VARCHAR, error_code NUMBER, error_state VARCHAR, error_message VARCHAR, context variant, created_at TIMESTAMP_LTZ Default CURRENT_TIMESTAMP());
@@ -413,7 +413,7 @@ const sqlText = `
         bytes,
         created,
         last_altered
-    FROM SNOWFLAKE_FORMATTER_LAB.INFORMATION_SCHEMA.TABLES
+    FROM SQL_DIALECT_FMT_LAB.INFORMATION_SCHEMA.TABLES
     WHERE table_schema ILIKE ?
     ORDER BY table_schema, table_name
 `;
