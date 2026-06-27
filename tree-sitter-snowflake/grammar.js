@@ -328,6 +328,8 @@ module.exports = grammar({
     ))),
 
     punctuation: _ => token(choice(
+      '(',
+      ')',
       '[',
       ']',
       '{',

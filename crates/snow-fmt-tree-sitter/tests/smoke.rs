@@ -336,6 +336,12 @@ fn expression_nodes_group_calls_and_parentheses() {
 }
 
 #[test]
+fn unbalanced_parentheses_still_tokenize_for_mid_edit_sql() {
+    assert_parse_ok_named("unbalanced open paren", "SELECT (");
+    assert_parse_ok_named("unbalanced close paren", "SELECT )");
+}
+
+#[test]
 fn injection_query_tags_dollar_bodies_by_context() {
     let sql = "CREATE FUNCTION js() LANGUAGE JAVASCRIPT AS $$return 1;$$; \
                CREATE FUNCTION py() LANGUAGE PYTHON AS $$return 2$$; \
