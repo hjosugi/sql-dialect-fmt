@@ -6,7 +6,7 @@
 
 use std::cell::Cell;
 
-use snow_fmt_syntax::{keyword_kind, Dialect, SyntaxKind};
+use snow_fmt_syntax::{keyword_kind_for, Dialect, SyntaxKind};
 
 use crate::event::Event;
 use crate::input::Input;
@@ -276,11 +276,22 @@ impl<'a> Parser<'a> {
         self.input.kind(self.pos + n)
     }
 
+    /// Whether `text` is a *reserved* keyword in this parser's [`Dialect`], and its kind if so.
+    ///
+    /// The single point where keyword reservation is resolved for the active dialect: every
+    /// keyword decision (`at`, `at_name`, `at_keyword`, `nth_at`, `current_remapped`) routes through
+    /// here, so a Snowflake-only word like `TASK`/`FLATTEN` is a plain identifier under Databricks
+    /// while Snowflake reservation (the default) is unchanged.
+    #[inline]
+    fn keyword_kind(&self, text: &str) -> Option<SyntaxKind> {
+        keyword_kind_for(text, self.dialect)
+    }
+
     /// Is the current token `kind`? Keyword kinds match a raw `IDENT` whose text is that keyword.
     pub(crate) fn at(&self, kind: SyntaxKind) -> bool {
         if kind.is_keyword() {
             self.nth(0) == SyntaxKind::IDENT
-                && keyword_kind(self.input.text(self.pos)) == Some(kind)
+                && self.keyword_kind(self.input.text(self.pos)) == Some(kind)
         } else {
             self.nth(0) == kind
         }
@@ -290,9 +301,9 @@ impl<'a> Parser<'a> {
     pub(crate) fn at_name(&self) -> bool {
         match self.nth(0) {
             SyntaxKind::QUOTED_IDENT => true,
-            SyntaxKind::IDENT => {
-                keyword_kind(self.input.text(self.pos)).is_none_or(is_identifier_compatible_keyword)
-            }
+            SyntaxKind::IDENT => self
+                .keyword_kind(self.input.text(self.pos))
+                .is_none_or(is_identifier_compatible_keyword),
             _ => false,
         }
     }
@@ -306,7 +317,7 @@ impl<'a> Parser<'a> {
     /// Is the current token a (reserved-spelled) keyword word? Used to recognize a keyword used as a
     /// function name (`first(x)`, `last(x)`), the complement of [`Self::at_name`].
     pub(crate) fn at_keyword(&self) -> bool {
-        self.nth(0) == SyntaxKind::IDENT && keyword_kind(self.input.text(self.pos)).is_some()
+        self.nth(0) == SyntaxKind::IDENT && self.keyword_kind(self.input.text(self.pos)).is_some()
     }
 
     /// Is the token `n` ahead a given [`ContextualKeyword`]: a bare `IDENT` whose text matches
@@ -325,7 +336,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn nth_at(&self, n: usize, kind: SyntaxKind) -> bool {
         if kind.is_keyword() {
             self.nth(n) == SyntaxKind::IDENT
-                && keyword_kind(self.input.text(self.pos + n)) == Some(kind)
+                && self.keyword_kind(self.input.text(self.pos + n)) == Some(kind)
         } else {
             self.nth(n) == kind
         }
@@ -336,7 +347,8 @@ impl<'a> Parser<'a> {
     fn current_remapped(&self) -> SyntaxKind {
         let raw = self.input.kind(self.pos);
         if raw == SyntaxKind::IDENT {
-            keyword_kind(self.input.text(self.pos)).unwrap_or(SyntaxKind::IDENT)
+            self.keyword_kind(self.input.text(self.pos))
+                .unwrap_or(SyntaxKind::IDENT)
         } else {
             raw
         }

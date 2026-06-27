@@ -11,7 +11,8 @@
 //!
 //! ## Modules
 //! * `kind` — the [`SyntaxKind`] enum plus its `u16` conversions and predicates.
-//! * `keyword` — case-insensitive recognition of keyword text ([`keyword_kind`]).
+//! * `keyword` — case-insensitive recognition of keyword text ([`keyword_kind`]) plus its
+//!   dialect-aware reservation ([`keyword_kind_for`], [`KeywordDialect`]).
 //! * `dialect` — the [`Dialect`] runtime selector threaded through lexer, parser, and formatter.
 //! * `lang` — `rowan` lossless-tree integration, behind the `rowan` feature.
 
@@ -25,7 +26,7 @@ mod kind;
 mod lang;
 
 pub use dialect::Dialect;
-pub use keyword::keyword_kind;
+pub use keyword::{keyword_kind, keyword_kind_for, KeywordDialect};
 pub use kind::SyntaxKind;
 
 #[cfg(feature = "rowan")]
