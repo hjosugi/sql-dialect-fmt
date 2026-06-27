@@ -51,37 +51,41 @@ fi
 
 item="publishers/$CHROME_PUBLISHER_ID/items/$CHROME_EXTENSION_ID"
 
-echo "Uploading Chrome Web Store package for $item"
-upload_response="$(
-  api -X POST \
-  -H "Content-Type: application/zip" \
-  --data-binary "@$ZIP_PATH" \
-  "https://chromewebstore.googleapis.com/upload/v2/$item:upload"
-)"
-upload_state="$(json_get uploadState <<< "$upload_response")"
+if [ "${CHROME_SKIP_UPLOAD:-false}" = "true" ]; then
+  echo "Skipping Chrome Web Store package upload; publishing the existing draft for $item"
+else
+  echo "Uploading Chrome Web Store package for $item"
+  upload_response="$(
+    api -X POST \
+    -H "Content-Type: application/zip" \
+    --data-binary "@$ZIP_PATH" \
+    "https://chromewebstore.googleapis.com/upload/v2/$item:upload"
+  )"
+  upload_state="$(json_get uploadState <<< "$upload_response")"
 
-for _ in $(seq 1 "${CHROME_UPLOAD_POLL_ATTEMPTS:-20}"); do
-  case "$upload_state" in
-    UPLOAD_SUCCESS)
-      break
-      ;;
-    UPLOAD_IN_PROGRESS)
-      echo "Upload is still processing; polling fetchStatus"
-      sleep "${CHROME_UPLOAD_POLL_SECONDS:-15}"
-      status_response="$(api "https://chromewebstore.googleapis.com/v2/$item:fetchStatus")"
-      upload_state="$(json_get uploadState <<< "$status_response")"
-      ;;
-    *)
-      echo "::error::Chrome Web Store upload failed or returned unexpected state: $upload_state" >&2
-      echo "$upload_response" >&2
-      exit 1
-      ;;
-  esac
-done
+  for _ in $(seq 1 "${CHROME_UPLOAD_POLL_ATTEMPTS:-20}"); do
+    case "$upload_state" in
+      UPLOAD_SUCCESS)
+        break
+        ;;
+      UPLOAD_IN_PROGRESS)
+        echo "Upload is still processing; polling fetchStatus"
+        sleep "${CHROME_UPLOAD_POLL_SECONDS:-15}"
+        status_response="$(api "https://chromewebstore.googleapis.com/v2/$item:fetchStatus")"
+        upload_state="$(json_get uploadState <<< "$status_response")"
+        ;;
+      *)
+        echo "::error::Chrome Web Store upload failed or returned unexpected state: $upload_state" >&2
+        echo "$upload_response" >&2
+        exit 1
+        ;;
+    esac
+  done
 
-if [ "$upload_state" = "UPLOAD_IN_PROGRESS" ]; then
-  echo "::error::Chrome Web Store upload did not finish before timeout" >&2
-  exit 1
+  if [ "$upload_state" = "UPLOAD_IN_PROGRESS" ]; then
+    echo "::error::Chrome Web Store upload did not finish before timeout" >&2
+    exit 1
+  fi
 fi
 
 publish_body='{"publishType":"DEFAULT_PUBLISH","blockOnWarnings":true}'

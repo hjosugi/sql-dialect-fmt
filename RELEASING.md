@@ -107,7 +107,8 @@ Published to crates.io (in dependency order):
    cli / lsp / wasm** (with `encoding` published any time before `cli`, and `wasm`
    any time after `formatter`).
 
-8. **Store publishing** is automated after one-time store setup.
+8. **Store publishing** is automated after one-time store setup. Follow
+   [docs/STORE_PUBLISHING.md](docs/STORE_PUBLISHING.md) for the exact no-decision setup runbook.
 
    The `Extension Packages` workflow always packages the Chrome zip and VSIX on `v*.*.*` tags.
    It can also publish to the stores automatically on tag push once the repository variables below
