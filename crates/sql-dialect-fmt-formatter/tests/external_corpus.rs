@@ -29,8 +29,6 @@ use sql_dialect_fmt_syntax::SyntaxKind;
 
 const EXTERNAL_CORPUS_ENV: &str = "SQL_DIALECT_FMT_EXTERNAL_CORPUS";
 const EXTERNAL_CORPUS_LIMIT_ENV: &str = "SQL_DIALECT_FMT_EXTERNAL_CORPUS_LIMIT";
-const LEGACY_EXTERNAL_CORPUS_ENV: &str = "SNOW_FMT_EXTERNAL_CORPUS";
-const LEGACY_EXTERNAL_CORPUS_LIMIT_ENV: &str = "SNOW_FMT_EXTERNAL_CORPUS_LIMIT";
 
 /// A single offending file and the invariant it broke, formatted for a clear test failure.
 #[derive(Debug)]
@@ -200,18 +198,11 @@ fn external_corpus_preserves_formatter_invariants() {
 
 fn external_corpus_roots() -> std::ffi::OsString {
     env::var_os(EXTERNAL_CORPUS_ENV)
-        .or_else(|| env::var_os(LEGACY_EXTERNAL_CORPUS_ENV))
-        .unwrap_or_else(|| {
-            panic!(
-                "{EXTERNAL_CORPUS_ENV} must point at SQL files/directories \
-                 ({LEGACY_EXTERNAL_CORPUS_ENV} is still accepted for compatibility)"
-            )
-        })
+        .unwrap_or_else(|| panic!("{EXTERNAL_CORPUS_ENV} must point at SQL files/directories"))
 }
 
 fn external_corpus_limit() -> usize {
     env::var(EXTERNAL_CORPUS_LIMIT_ENV)
-        .or_else(|_| env::var(LEGACY_EXTERNAL_CORPUS_LIMIT_ENV))
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(usize::MAX)

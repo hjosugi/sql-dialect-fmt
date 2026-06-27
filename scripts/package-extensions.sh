@@ -15,8 +15,11 @@ rustup target add wasm32-unknown-unknown >/dev/null
 
 (
   cd "$ROOT_DIR/extensions/chrome"
-  zip -qr "$DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip" . \
-    -x "vendor/snow_fmt_wasm.wasm"
+  zip -qr "$DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip" \
+    manifest.json \
+    README.md \
+    src \
+    vendor/sql_dialect_fmt_wasm.wasm
 )
 
 (

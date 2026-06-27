@@ -48,9 +48,9 @@ preserved, and `format(format(x)) == format(x)`.
   `rowan` language definition shared across the toolchain.
 - **Encoding** (`sql-dialect-fmt-encoding`): byte-to-text decoding/re-encoding helpers so
   the CLI preserves the input's original encoding and line endings.
-- **CLI** (`sql-dialect-fmt`): the `sql-dialect-fmt` binary (plus `sql-dialect-fmt`
-  compatibility alias) with `--write`, `--check`, stdin/stdout, `--dialect`,
-  and `--line-width` / `--indent-width` / `--no-uppercase` options.
+- **CLI** (`sql-dialect-fmt`): the `sql-dialect-fmt` binary with `--write`, `--check`,
+  stdin/stdout, `--dialect`, and `--line-width` / `--indent-width` / `--no-uppercase`
+  options.
 - **LSP** (`sql-dialect-fmt-lsp`): Language Server providing formatting, semantic tokens,
   diagnostics, hover, folding ranges, and first-pass lint warnings over stdio.
 - **Conformance generator** (`scripts/conformance-report.py`): mines `.sql` files and SQL

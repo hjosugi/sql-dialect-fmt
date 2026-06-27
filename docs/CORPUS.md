@@ -52,8 +52,7 @@ SQL_DIALECT_FMT_EXTERNAL_CORPUS=/path/to/sqls \
 recursed for `*.sql` files case-insensitively. Relative paths are resolved from Cargo's test working
 directory and, if needed, from the workspace root so CI can pass `crates/...` paths directly.
 `SQL_DIALECT_FMT_EXTERNAL_CORPUS_LIMIT` caps the number of files for quick smoke runs, and non-UTF-8
-files are skipped. The legacy `SNOW_FMT_EXTERNAL_CORPUS` and `SNOW_FMT_EXTERNAL_CORPUS_LIMIT` names
-are still accepted for compatibility.
+files are skipped.
 
 The wrapper script supports local paths, the committed sample corpus, and downloaded archives:
 
