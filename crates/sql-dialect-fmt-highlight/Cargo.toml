@@ -16,6 +16,6 @@ sql-dialect-fmt-lexer = { path = "../sql-dialect-fmt-lexer", version = "0.1.0" }
 sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "0.1.0" }
 
 [dev-dependencies]
-sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures", version = "0.1.0" }
-sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support", version = "0.1.0" }
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
+sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
 serde_json = "1"
