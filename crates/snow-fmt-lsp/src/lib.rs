@@ -489,8 +489,8 @@ mod tests {
             .map(|t| t.name().to_string())
             .collect();
         assert_eq!(advertised, expected);
-        // It includes `namespace` (index 8) — the type the old LSP legend was missing.
-        assert_eq!(advertised.last().map(String::as_str), Some("namespace"));
+        // It includes `function` (currently the last appended type) for Cortex/AISQL recognition.
+        assert_eq!(advertised.last().map(String::as_str), Some("function"));
 
         // Likewise the modifier legend mirrors the highlighter's.
         let mods: Vec<String> = token_modifiers()

@@ -62,6 +62,14 @@ fn standalone_dot_followed_by_number_does_not_merge_into_float() {
 }
 
 #[test]
+fn adjacent_operator_tokens_do_not_merge() {
+    assert_eq!(fmt("desc - > "), "DESC - >;\n");
+    assert_eq!(fmt("desc - - "), "DESC - -;\n");
+    assert_eq!(fmt("desc : = "), "DESC: =;\n");
+    assert_eq!(fmt("desc | > "), "DESC | >;\n");
+}
+
+#[test]
 fn verbatim_statement_with_leading_trivia_is_idempotent() {
     let out = fmt("cluster 'abc' ->>-- c\n'abc' ");
     assert_eq!(fmt(&out), out);
@@ -502,7 +510,8 @@ fn single_quoted_routine_bodies_are_formatted_when_safe() {
     );
     assert_eq!(fmt(&js_out), js_out);
 
-    let py = "create function py_f() returns string language python as 'def f():\n    return ''ok'''";
+    let py =
+        "create function py_f() returns string language python as 'def f():\n    return ''ok'''";
     let py_out = fmt(py);
     assert_eq!(
         py_out,
@@ -998,6 +1007,17 @@ fn statement_end_comments_format_idempotently() {
     let once = fmt("desc t -- c\nx");
     assert_eq!(once, "DESC t -- c\nx;\n");
     assert_eq!(fmt(&once), once);
+}
+
+#[test]
+fn statement_end_directives_stay_on_the_code_line() {
+    let noqa = fmt("select a -- noqa: LT01");
+    assert_eq!(noqa, "SELECT a; -- noqa: LT01\n");
+    assert_eq!(fmt(&noqa), noqa);
+
+    let snow_fmt = fmt("select a -- snow-fmt: skip");
+    assert_eq!(snow_fmt, "SELECT a; -- snow-fmt: skip\n");
+    assert_eq!(fmt(&snow_fmt), snow_fmt);
 }
 
 #[test]

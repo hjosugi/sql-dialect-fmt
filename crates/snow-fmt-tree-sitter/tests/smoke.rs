@@ -292,8 +292,8 @@ fn highlight_and_support_queries_compile() {
     Query::new(&language, snow_fmt_tree_sitter::INJECTIONS_QUERY)
         .expect("injections query compiles");
     Query::new(&language, snow_fmt_tree_sitter::FOLDS_QUERY).expect("folds query compiles");
-    let indents = Query::new(&language, snow_fmt_tree_sitter::INDENTS_QUERY)
-        .expect("indents query compiles");
+    let indents =
+        Query::new(&language, snow_fmt_tree_sitter::INDENTS_QUERY).expect("indents query compiles");
 
     let names = highlights.capture_names();
     for required in [

@@ -392,10 +392,7 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                         break;
                     }
                 }
-                cmds.push(Cmd {
-                    doc: chosen,
-                    ..cmd
-                });
+                cmds.push(Cmd { doc: chosen, ..cmd });
             }
             Doc::LineSuffix(inner) => line_suffixes.push(Cmd { doc: inner, ..cmd }),
             Doc::BreakParent => {}

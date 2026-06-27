@@ -340,7 +340,10 @@ pub fn resolve_tokens(input: &str) -> Vec<ResolvedToken> {
 
 fn is_cortex_or_aisql_function_token(tokens: &[HighlightToken<'_>], index: usize) -> bool {
     let token = &tokens[index];
-    if !matches!(token.kind, HighlightKind::Identifier | HighlightKind::Keyword) {
+    if !matches!(
+        token.kind,
+        HighlightKind::Identifier | HighlightKind::Keyword
+    ) {
         return false;
     }
     if next_significant(tokens, index).is_none_or(|next| tokens[next].text != "(") {
@@ -380,7 +383,12 @@ fn prev_significant(tokens: &[HighlightToken<'_>], index: usize) -> Option<usize
         .iter()
         .enumerate()
         .rev()
-        .find(|(_, token)| !matches!(token.kind, HighlightKind::Whitespace | HighlightKind::Comment))
+        .find(|(_, token)| {
+            !matches!(
+                token.kind,
+                HighlightKind::Whitespace | HighlightKind::Comment
+            )
+        })
         .map(|(index, _)| index)
 }
 
@@ -389,7 +397,12 @@ fn next_significant(tokens: &[HighlightToken<'_>], index: usize) -> Option<usize
         .iter()
         .enumerate()
         .skip(index + 1)
-        .find(|(_, token)| !matches!(token.kind, HighlightKind::Whitespace | HighlightKind::Comment))
+        .find(|(_, token)| {
+            !matches!(
+                token.kind,
+                HighlightKind::Whitespace | HighlightKind::Comment
+            )
+        })
         .map(|(index, _)| index)
 }
 

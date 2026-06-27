@@ -10,3 +10,4 @@ cc 07981d9b4702538222577c08b91ea05f2f6ad457a71b086bf4b3654f0bb3c739 # shrinks to
 cc 5f7bcc0e12d2a8ec8c5bda3192fbbd5fa75a0ac3c2502ac6d0d1208adb205d2f # shrinks to s = "exists = + select$$(a(a$$ and null cluster select "
 cc 342e1ab4d1bf58ae35d13ae044cb9a7b16d54ac7a14630127aa37f24d7b5e2a1 # shrinks to s = "desc . 42 "
 cc e117bb7eef86bb01a10b13a6e8a65901f810f53229b0eb0c28382cf5c15c30ba # shrinks to s = "cluster 'abc' ->>-- c\n'abc' "
+cc 1290ebbc034c1483e1519d9ddbab54dab9293804c5a2d96f50172af63d519ec3 # shrinks to s = "create - > "

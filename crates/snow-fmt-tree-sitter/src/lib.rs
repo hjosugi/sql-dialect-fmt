@@ -34,8 +34,7 @@ pub const INJECTIONS_QUERY: &str =
 pub const FOLDS_QUERY: &str = include_str!("../../../tree-sitter-snowflake/queries/folds.scm");
 
 /// Indentation query for editors that consume Tree-sitter `@indent` / `@dedent` captures.
-pub const INDENTS_QUERY: &str =
-    include_str!("../../../tree-sitter-snowflake/queries/indents.scm");
+pub const INDENTS_QUERY: &str = include_str!("../../../tree-sitter-snowflake/queries/indents.scm");
 
 /// Construct an owned [`Language`] from the grammar function.
 pub fn language() -> Language {

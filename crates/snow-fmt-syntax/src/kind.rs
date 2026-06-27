@@ -362,9 +362,9 @@ pub enum SyntaxKind {
     TASK_AFTER,      // a task's `AFTER <pred> [, <pred>]*` predecessor list
     SEMANTIC_VIEW_CLAUSE, // a top-level `CREATE SEMANTIC VIEW` clause (`TABLES (...)`, `METRICS (...)`, ...)
     SEMANTIC_VIEW_ITEM,   // one top-level item inside a semantic-view parenthesized clause
-    PRIV_LIST,       // the privilege list of a GRANT/REVOKE (`SELECT, INSERT` / `ALL PRIVILEGES`)
-    GRANT_TARGET,    // the `ON <object_type> <object_name>` securable of a GRANT/REVOKE
-    GRANTEE,         // the `[ROLE|USER] <name>` recipient of a GRANT/REVOKE
+    PRIV_LIST, // the privilege list of a GRANT/REVOKE (`SELECT, INSERT` / `ALL PRIVILEGES`)
+    GRANT_TARGET, // the `ON <object_type> <object_name>` securable of a GRANT/REVOKE
+    GRANTEE,   // the `[ROLE|USER] <name>` recipient of a GRANT/REVOKE
 
     #[doc(hidden)]
     __LAST,

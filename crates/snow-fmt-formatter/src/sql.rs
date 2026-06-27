@@ -47,8 +47,10 @@ pub(crate) struct Ctx {
 /// statement lowering. Trivia trailing the final statement — including a comment-only file — lands
 /// as direct token children of the root; those comments are re-emitted here so nothing is dropped.
 pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
+    let source = root.text().to_string();
     let mut parts = Vec::new();
     let mut emitted = false;
+    let mut last_stmt_end = None;
     for stmt in root.children() {
         if emitted {
             parts.push(hard_line());
@@ -58,10 +60,16 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
         parts.push(lowered.body);
         parts.push(text(";"));
         for comment in lowered.end_comments {
-            parts.push(hard_line());
-            parts.push(text(comment.text));
+            if comment.is_line && comment.is_directive {
+                parts.push(space());
+                parts.push(text(comment.text));
+            } else {
+                parts.push(hard_line());
+                parts.push(text(comment.text));
+            }
         }
         emitted = true;
+        last_stmt_end = Some(stmt.text_range().end());
     }
 
     // Root-level (trailing) comments, kept verbatim each on its own line.
@@ -72,7 +80,19 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
         .filter(|t| t.kind().is_comment())
     {
         if need_break {
-            parts.push(hard_line());
+            let same_line_as_last_stmt = is_directive_comment(token.text())
+                && last_stmt_end.is_some_and(|end| {
+                    let end: usize = end.into();
+                    let start: usize = token.text_range().start().into();
+                    source
+                        .get(end..start)
+                        .is_some_and(|between| !between.contains(['\n', '\r']))
+                });
+            if same_line_as_last_stmt {
+                parts.push(space());
+            } else {
+                parts.push(hard_line());
+            }
         }
         parts.push(text(token.text().trim_end().to_string()));
         need_break = true;
@@ -115,6 +135,9 @@ struct CommentInfo {
     text: String,
     /// A `--`/`//` line comment (must end its line) vs a `/* */` block comment (can sit inline).
     is_line: bool,
+    /// Line-level tool directives such as `-- noqa` and `-- snow-fmt:` must stay associated with
+    /// the code line they annotate when the formatter synthesizes a statement terminator.
+    is_directive: bool,
 }
 
 /// Comments of one statement, keyed by the start offset of the significant token they attach to.
@@ -151,6 +174,7 @@ impl Comments {
                 let info = CommentInfo {
                     text: token.text().trim_end().to_string(),
                     is_line: kind == COMMENT,
+                    is_directive: is_directive_comment(token.text()),
                 };
                 match last_significant {
                     Some(anchor) if !newline_since => {
@@ -217,6 +241,21 @@ fn offset(token: &SyntaxToken) -> u32 {
     token.text_range().start().into()
 }
 
+fn is_directive_comment(text: &str) -> bool {
+    let Some(body) = text
+        .trim_start()
+        .strip_prefix("--")
+        .or_else(|| text.trim_start().strip_prefix("//"))
+    else {
+        return false;
+    };
+    let lower = body.trim_start().to_ascii_lowercase();
+    lower.starts_with("noqa")
+        || lower.starts_with("snow-fmt:")
+        || lower.starts_with("snowfmt:")
+        || lower.starts_with("fmt:")
+}
+
 // ---- the lowerer ----
 
 /// A cursor that walks a subtree in document order, tracking the previous significant token (for
@@ -243,6 +282,7 @@ impl Lowerer {
     /// The separator (a space or nothing) that belongs before a token of kind `cur`.
     fn sep_before(&self, cur: SyntaxKind) -> Doc {
         match self.prev {
+            Some(prev) if must_separate_to_preserve_tokens(prev, cur) => space(),
             Some(prev) if !self.prev_unary && needs_space(prev, cur) => space(),
             _ => empty(),
         }
@@ -510,14 +550,12 @@ impl Lowerer {
             return self.lower_create_routine(node);
         }
         // Properties / clauses that stack one-per-line, indented under the CREATE header.
-        let has_props = node
-            .children()
-            .any(|c| {
-                matches!(
-                    c.kind(),
-                    OBJECT_PROPERTY | STREAM_SOURCE | TASK_AFTER | SEMANTIC_VIEW_CLAUSE
-                )
-            });
+        let has_props = node.children().any(|c| {
+            matches!(
+                c.kind(),
+                OBJECT_PROPERTY | STREAM_SOURCE | TASK_AFTER | SEMANTIC_VIEW_CLAUSE
+            )
+        });
         if has_props {
             return self.lower_create_object(node);
         }
@@ -1580,7 +1618,10 @@ const ROUTINE_HEADER_WORDS: &[&str] = &[
 ];
 
 fn body_token_content(text: &str) -> Option<String> {
-    if let Some(body) = text.strip_prefix("$$").and_then(|body| body.strip_suffix("$$")) {
+    if let Some(body) = text
+        .strip_prefix("$$")
+        .and_then(|body| body.strip_suffix("$$"))
+    {
         return Some(body.to_string());
     }
     decode_single_quoted_string(text)
@@ -1590,7 +1631,10 @@ fn render_body_token(original: &str, formatted: &str) -> Option<String> {
     if original.starts_with("$$") {
         Some(format!("$$\n{formatted}\n$$"))
     } else if original.starts_with('\'') {
-        Some(format!("'\n{}\n'", encode_single_quoted_string_body(formatted)))
+        Some(format!(
+            "'\n{}\n'",
+            encode_single_quoted_string_body(formatted)
+        ))
     } else {
         None
     }
@@ -1939,10 +1983,9 @@ fn format_embedded_sql_body_token(text: &str, ctx: Ctx) -> Option<String> {
 }
 
 fn is_sql_scripting_body(source: &str) -> bool {
-    source
-        .split_whitespace()
-        .next()
-        .is_some_and(|word| word.eq_ignore_ascii_case("begin") || word.eq_ignore_ascii_case("declare"))
+    source.split_whitespace().next().is_some_and(|word| {
+        word.eq_ignore_ascii_case("begin") || word.eq_ignore_ascii_case("declare")
+    })
 }
 
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.
@@ -2164,6 +2207,25 @@ fn needs_space(prev: SyntaxKind, cur: SyntaxKind) -> bool {
         return false;
     }
     true
+}
+
+fn must_separate_to_preserve_tokens(prev: SyntaxKind, cur: SyntaxKind) -> bool {
+    matches!(
+        (prev, cur),
+        (MINUS, GT)
+            | (MINUS, MINUS)
+            | (EQ, GT)
+            | (LT, EQ)
+            | (LT, GT)
+            | (GT, EQ)
+            | (COLON, EQ)
+            | (COLON, COLON)
+            | (PIPE, GT)
+            | (PIPE, PIPE)
+            | (BANG, EQ)
+            | (SLASH, SLASH)
+            | (SLASH, STAR)
+    )
 }
 
 /// Token kinds that end a value expression — used to tell a binary `-`/`+` (after a value) from a

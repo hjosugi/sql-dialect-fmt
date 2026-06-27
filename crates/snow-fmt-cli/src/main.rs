@@ -361,10 +361,10 @@ fn collect_parse_error_messages(source: &[u8], file: Option<&Path>) -> Vec<Strin
     errors
         .iter()
         .map(|error| {
-        let (line, col) = line_col(text, error.offset);
+            let (line, col) = line_col(text, error.offset);
             format!(
-            "snow-fmt: parse error in {where_}:{line}:{col}: {}",
-            error.message
+                "snow-fmt: parse error in {where_}:{line}:{col}: {}",
+                error.message
             )
         })
         .collect()

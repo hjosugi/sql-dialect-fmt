@@ -49,8 +49,7 @@ fn external_corpus_preserves_formatter_invariants() {
             file.display()
         );
 
-        let clean_input =
-            tokenize(&source).errors.is_empty() && parse(&source).errors().is_empty();
+        let clean_input = tokenize(&source).errors.is_empty() && parse(&source).errors().is_empty();
         if clean_input {
             assert!(
                 parse(&formatted).errors().is_empty(),
