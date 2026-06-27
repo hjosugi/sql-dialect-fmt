@@ -27,4 +27,3 @@ sql-dialect-fmt-formatter = { path = "../sql-dialect-fmt-formatter", version = "
 sql-dialect-fmt-highlight = { path = "../sql-dialect-fmt-highlight", version = "1.0.0" }
 sql-dialect-fmt-hover = { path = "../sql-dialect-fmt-hover", version = "1.0.0" }
 sql-dialect-fmt-parser = { path = "../sql-dialect-fmt-parser", version = "1.0.0" }
-sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0", features = ["rowan"] }

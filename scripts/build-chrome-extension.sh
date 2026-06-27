@@ -7,7 +7,6 @@ EXT_VENDOR="$ROOT_DIR/extensions/chrome/vendor"
 
 cargo build --release -p sql-dialect-fmt-wasm --target wasm32-unknown-unknown
 mkdir -p "$EXT_VENDOR"
-rm -f "$EXT_VENDOR/snow_fmt_wasm.wasm"
 cp "$WASM_OUT" "$EXT_VENDOR/sql_dialect_fmt_wasm.wasm"
 
 echo "Chrome extension is ready at: $ROOT_DIR/extensions/chrome"

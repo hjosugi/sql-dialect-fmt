@@ -46,3 +46,19 @@ proptest = "1"
 [[bench]]
 name = "format"
 harness = false
+
+[package.metadata.cargo-machete]
+ignored = [
+    "biome_console",
+    "biome_deserialize",
+    "biome_diagnostics",
+    "biome_js_factory",
+    "biome_json_factory",
+    "biome_json_parser",
+    "biome_json_syntax",
+    "biome_parser",
+    "biome_rowan",
+    "biome_text_edit",
+    "biome_text_size",
+    "biome_unicode_table",
+]
