@@ -1,6 +1,6 @@
 # Security Policy
 
-snow-fmt is a developer tool that parses and formats source text. Please report
+sql-dialect-fmt is a developer tool that parses and formats source text. Please report
 security issues privately when possible.
 
 ## Reporting

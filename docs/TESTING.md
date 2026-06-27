@@ -23,7 +23,7 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 
 Shared helpers:
 
-- put mechanical invariants in `snow-fmt-test-support`
+- put mechanical invariants in `sql-dialect-fmt-test-support`
 - keep individual test files focused on named case tables and expected behavior
 - prefer context-bearing helpers for fixture loops so failures name the fixture
 
@@ -71,9 +71,9 @@ Tree-sitter:
 ## Fixture Policy
 
 `cargo test --workspace` must be self-contained. Keep stable, curated examples in
-`crates/snow-fmt-test-fixtures`.
+`crates/sql-dialect-fmt-test-fixtures`.
 
-Curated SQL fixtures are stored in `snow-fmt-test-fixtures` and exposed through
+Curated SQL fixtures are stored in `sql-dialect-fmt-test-fixtures` and exposed through
 `EASY_CASES`. This corpus is the always-on minimum gate, not the whole quality
 bar. The current minimum count is kept in `MINIMUM_EMBEDDED_EASY_CASES` so new
 fixtures do not require updating every consumer test:
@@ -91,7 +91,7 @@ Broader generated corpora should stay outside the repository. Use the CLI
 fixture directories.
 
 Formatter corpus checks have one additional always-on layer:
-`crates/snow-fmt-formatter/tests/corpus_sample/`. These files are committed in
+`crates/sql-dialect-fmt-formatter/tests/corpus_sample/`. These files are committed in
 formatter-canonical form and are checked by `external_corpus.rs` for
 idempotency, significant-token preservation, and clean reparse. Larger local or
 private corpora should use `SNOW_FMT_EXTERNAL_CORPUS`; see `docs/CORPUS.md`.

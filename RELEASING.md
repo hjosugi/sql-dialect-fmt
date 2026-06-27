@@ -11,21 +11,21 @@ Published to crates.io (in dependency order):
 
 | order | crate | depends on |
 | --- | --- | --- |
-| 1 | `snow-fmt-syntax` | — |
-| 2 | `snow-fmt-lexer` | syntax |
-| 3 | `snow-fmt-parser` | syntax, lexer |
-| 4 | `snow-fmt-formatter` | syntax, parser |
-| 5 | `snow-fmt-highlight` | syntax, lexer |
-| 6 | `snow-fmt-hover` | syntax, lexer |
-| 7 | `snow-fmt-encoding` | — |
+| 1 | `sql-dialect-fmt-syntax` | — |
+| 2 | `sql-dialect-fmt-lexer` | syntax |
+| 3 | `sql-dialect-fmt-parser` | syntax, lexer |
+| 4 | `sql-dialect-fmt-formatter` | syntax, parser |
+| 5 | `sql-dialect-fmt-highlight` | syntax, lexer |
+| 6 | `sql-dialect-fmt-hover` | syntax, lexer |
+| 7 | `sql-dialect-fmt-encoding` | — |
 | 8 | `sql-dialect-fmt` | encoding, formatter |
-| 9 | `snow-fmt-lsp` | formatter, highlight, hover, parser, syntax |
+| 9 | `sql-dialect-fmt-lsp` | formatter, highlight, hover, parser, syntax |
 
 **Not published** (`publish = false`):
 
-- `snow-fmt-test-fixtures` — embedded golden fixtures used only by tests.
-- `snow-fmt-test-support` — shared assertion helpers used only by tests.
-- `snow-fmt-tree-sitter` — its `build.rs` compiles the bundled tree-sitter C
+- `sql-dialect-fmt-test-fixtures` — embedded golden fixtures used only by tests.
+- `sql-dialect-fmt-test-support` — shared assertion helpers used only by tests.
+- `sql-dialect-fmt-tree-sitter` — its `build.rs` compiles the bundled tree-sitter C
   parser/scanner from `../../tree-sitter-snowflake`, which lives outside the crate
   directory and is therefore not included in the `cargo package` tarball, so
   `cargo publish` verification cannot rebuild it.
@@ -52,9 +52,9 @@ Published to crates.io (in dependency order):
 4. **Dry-run packaging** of each publishable crate, in dependency order:
 
    ```sh
-   cargo publish --dry-run -p snow-fmt-syntax
-   cargo publish --dry-run -p snow-fmt-parser
-   cargo publish --dry-run -p snow-fmt-formatter
+   cargo publish --dry-run -p sql-dialect-fmt-syntax
+   cargo publish --dry-run -p sql-dialect-fmt-parser
+   cargo publish --dry-run -p sql-dialect-fmt-formatter
    cargo publish --dry-run -p sql-dialect-fmt
    # (and the rest below)
    ```
@@ -73,15 +73,15 @@ Published to crates.io (in dependency order):
    version must be indexed before publishing a dependent crate:
 
    ```sh
-   cargo publish -p snow-fmt-syntax
-   cargo publish -p snow-fmt-lexer
-   cargo publish -p snow-fmt-parser
-   cargo publish -p snow-fmt-formatter
-   cargo publish -p snow-fmt-highlight
-   cargo publish -p snow-fmt-hover
-   cargo publish -p snow-fmt-encoding
+   cargo publish -p sql-dialect-fmt-syntax
+   cargo publish -p sql-dialect-fmt-lexer
+   cargo publish -p sql-dialect-fmt-parser
+   cargo publish -p sql-dialect-fmt-formatter
+   cargo publish -p sql-dialect-fmt-highlight
+   cargo publish -p sql-dialect-fmt-hover
+   cargo publish -p sql-dialect-fmt-encoding
    cargo publish -p sql-dialect-fmt
-   cargo publish -p snow-fmt-lsp
+   cargo publish -p sql-dialect-fmt-lsp
    ```
 
    The canonical order is **syntax → lexer → parser → formatter → highlight → hover →

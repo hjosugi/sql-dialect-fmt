@@ -1,6 +1,6 @@
 # Architecture
 
-snow-fmt is split into small layers so contributors can work on one concern at a
+sql-dialect-fmt is split into small layers so contributors can work on one concern at a
 time. The formatter is not implemented yet; the current base is the language
 front-end and editor-facing metadata.
 
@@ -20,17 +20,17 @@ front-end and editor-facing metadata.
 source SQL
   |
   v
-snow-fmt-encoding     bytes -> UTF-8 text, or opaque bytes when unsafe
+sql-dialect-fmt-encoding     bytes -> UTF-8 text, or opaque bytes when unsafe
   |
   v
-snow-fmt-lexer        lossless tokens + lexical diagnostics
+sql-dialect-fmt-lexer        lossless tokens + lexical diagnostics
   |
-  +--> snow-fmt-highlight    lexical token classification
+  +--> sql-dialect-fmt-highlight    lexical token classification
   |
-  +--> snow-fmt-hover        editor hover summaries
+  +--> sql-dialect-fmt-hover        editor hover summaries
   |
   v
-snow-fmt-parser       resilient rowan CST
+sql-dialect-fmt-parser       resilient rowan CST
   |
   v
 future formatter/LSP  Doc IR, semantic tokens, diagnostics
@@ -41,18 +41,18 @@ Tree-sitter directly. It is intentionally permissive and token-centric.
 
 ## Syntax and Lexer
 
-`snow-fmt-encoding` owns the CLI/file boundary. It detects UTF-8, UTF-8 with
+`sql-dialect-fmt-encoding` owns the CLI/file boundary. It detects UTF-8, UTF-8 with
 BOM, and UTF-16 LE/BE with BOM, and can encode edited text back to the original
 encoding. Invalid or unsupported byte streams stay opaque and round-trip as
 bytes; formatter layers must not guess an encoding and rewrite them.
 
-`snow-fmt-syntax` owns the shared vocabulary:
+`sql-dialect-fmt-syntax` owns the shared vocabulary:
 
 - token and node kinds in `SyntaxKind`
 - case-insensitive keyword lookup
 - rowan language glue
 
-`snow-fmt-lexer` is hand-written. It should remain boring and predictable:
+`sql-dialect-fmt-lexer` is hand-written. It should remain boring and predictable:
 
 - one pass over bytes
 - no regex on the hot path
@@ -70,7 +70,7 @@ lexer states. See [docs/research/delimiter-strategy.md](research/delimiter-strat
 
 ## Parser
 
-`snow-fmt-parser` builds a rowan CST through events. The parser should never
+`sql-dialect-fmt-parser` builds a rowan CST through events. The parser should never
 turn bad SQL into a panic. Unknown or incomplete input should become errors in
 the tree while preserving source bytes.
 
@@ -83,10 +83,10 @@ Use parser tests for:
 
 ## Editor Features
 
-`snow-fmt-highlight` starts from the lexer so it can work before the full parser
+`sql-dialect-fmt-highlight` starts from the lexer so it can work before the full parser
 knows every Snowflake construct.
 
-`snow-fmt-hover` is LSP-agnostic. It returns a small `Hover` model with a byte
+`sql-dialect-fmt-hover` is LSP-agnostic. It returns a small `Hover` model with a byte
 range, title, body, kind, and optional docs URL. The future LSP server should
 adapt this model instead of duplicating hover text.
 
@@ -96,8 +96,8 @@ features such as folding, injections, or selection.
 
 ## Adding Snowflake Syntax
 
-1. Add or confirm token support in `snow-fmt-lexer`.
-2. Add keyword/type classification in `snow-fmt-syntax` or `snow-fmt-highlight`.
+1. Add or confirm token support in `sql-dialect-fmt-lexer`.
+2. Add keyword/type classification in `sql-dialect-fmt-syntax` or `sql-dialect-fmt-highlight`.
 3. Add parser support only when structure matters.
 4. Add hover/query support if it improves editor feedback.
 5. Add focused tests and include a Snowflake docs link in the PR.

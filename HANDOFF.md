@@ -1,4 +1,4 @@
-# snow-fmt 引き継ぎ (HANDOFF) — 2026-06-27
+# sql-dialect-fmt 引き継ぎ (HANDOFF) — 2026-06-27
 
 > 「きれいに再開する」ための引き継ぎメモ。**現状を緑のまま固定**し、次タスクを優先順位つきで残す。
 > 関連: [README.md](README.md) / [ROADMAP.md](ROADMAP.md) / [docs/research/](docs/research/) /
@@ -11,7 +11,7 @@
 - **再開時はまず上記を再実行して緑を確認してから着手。**
 
 ## 0.5 このセッションの成果（Phase 3 → 4/6/7/8 横断）
-**フォーマッタ `snow-fmt-formatter` をゼロから構築**し、CLI まで実用化した。
+**フォーマッタ `sql-dialect-fmt-formatter` をゼロから構築**し、CLI まで実用化した。
 
 - **Doc IR エンジン**（`Text`/`Line(Soft/Space/Hard)`/`Group`/`Indent`/`LineSuffix`/`BreakParent`/`group_expanded`）＋幅対応プリンタ（Wadler→Prettier 系 `fits`）。
 - **SQL 整形**: SELECT パイプライン、JOIN/ORDER BY/GROUP BY 構造化、CASE、サブクエリ/CTE、集合演算、**magic trailing comma**（看板機能）、**本物のコメント付与**（leading/trailing/dangling）。
@@ -19,7 +19,7 @@
 - **DML**: `INSERT`（単一/`OVERWRITE`/`ALL`/`FIRST`）, `UPDATE`, `DELETE`, `MERGE`。
 - **DDL**: `CREATE TABLE/VIEW/CTAS`, `DROP`, `ALTER`(寛容), masking/row access policy、tag、`CREATE PROCEDURE/FUNCTION` 骨格（`RETURNS TABLE (...)` と `RETURNS ... NOT NULL` を含め、`LANGUAGE SQL` の `$$…$$` ボディは自己再帰整形、`LANGUAGE JAVASCRIPT` は Biome、`LANGUAGE PYTHON` は Ruff、Java/Scala は brace-aware formatter 委譲。quoted body は verbatim）。
 - **COPY INTO**（ロード/アンロード、ステージパス verbatim、option key の key-position 大文字化）。
-- **CLI `snow-fmt`**: `--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、エンコーディング保持（v0.1.0、`cargo install` 可）。
+- **CLI `sql-dialect-fmt`**: `--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`sql-dialect-fmt.toml` discovery、エンコーディング保持（v0.1.0、`cargo install` 可）。
 - **診断品質**: lexer/parser error span（token 全体、EOF zero-width）、人間向け `SyntaxKind::describe`、LSP diagnostics に lexer error も反映。
 - **無破壊・べき等・トークン/コメント保存**を内蔵 easy corpus 全件 + `proptest`（Unicode/ASCII/token-salad）で機械ガード。
 - **コーパス clean パース 0 → 38 / 77**（残りは安全に無変更パススルー）。
@@ -40,24 +40,24 @@
 ## 1. ゴール（ユーザー指示の要約）
 - **最高の Snowflake SQL 解析器**を作る。最新の論文・実装も参照し「完璧な解析」を目指す。
 - **すべてのクエリを最終的にパース**（まず最頻出クエリを完全対応）。高速に動くこと。
-- **rich な hover** も可能なら出せるように（`snow-fmt-hover` を充実させる）。
+- **rich な hover** も可能なら出せるように（`sql-dialect-fmt-hover` を充実させる）。
 - 例外的ケース（Unicode 例: 長芋、長い入力、改行差分 LF/CRLF/CR/混在、壊れた SQL）を網羅的にテスト。
 - Snowflake 最新仕様を継続追跡（`spec/`、ローカル SQLite、cargo build には入れない、修正は手動でよい）。
 
 ## 2. クレート構成と役割
 | crate | 役割 | 状態 |
 |---|---|---|
-| `snow-fmt-syntax` | `SyntaxKind`・`keyword_kind`・`T!`・rowan `Language` | ✅ 中核 |
-| `snow-fmt-lexer` | ロスレス手書きレキサ（`->>`=FLOW_PIPE, `|>`, `::`, `$$..$$`, コメント3種, エスケープ） | ✅ 中核 |
-| `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/DML/DDL/プロシージャ骨格/Snowflake 拡張。**決して失敗しない**・ロスレス・span 付き診断 | ✅ Phase 1–8 部分 |
-| `snow-fmt-formatter` | 汎用 Doc IR エンジン ＋ SQL 整形規則（上記 §0.5）。べき等・無破壊（lexer/parser error はパススルー、未配置コメントは文単位 verbatim） | ✅ Phase 3 + 実用 |
-| `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
-| `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
-| `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル、statement/folds、軽量 expression、context-aware injections まで） | 🚧 初期+ |
-| `sql-dialect-fmt` | 実用 CLI（互換 `snow-fmt` alias あり。`--write`/`--check`/stdin、複数ファイル/ディレクトリ、`snow-fmt.toml`、`--dialect snowflake|databricks`、エンコーディング保持）。v0.1.0 | ✅ |
-| `snow-fmt-encoding` | 文字コード/改行ユーティリティ | 🚧 |
-| `snow-fmt-test-fixtures` | easy-test-cases を `include_str!` で内蔵（外部 `easy-test-cases/` 無しでも `cargo test` 通る） | ✅ |
-| `snow-fmt-test-support` | テスト共有ユーティリティ | ✅ |
+| `sql-dialect-fmt-syntax` | `SyntaxKind`・`keyword_kind`・`T!`・rowan `Language` | ✅ 中核 |
+| `sql-dialect-fmt-lexer` | ロスレス手書きレキサ（`->>`=FLOW_PIPE, `|>`, `::`, `$$..$$`, コメント3種, エスケープ） | ✅ 中核 |
+| `sql-dialect-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/DML/DDL/プロシージャ骨格/Snowflake 拡張。**決して失敗しない**・ロスレス・span 付き診断 | ✅ Phase 1–8 部分 |
+| `sql-dialect-fmt-formatter` | 汎用 Doc IR エンジン ＋ SQL 整形規則（上記 §0.5）。べき等・無破壊（lexer/parser error はパススルー、未配置コメントは文単位 verbatim） | ✅ Phase 3 + 実用 |
+| `sql-dialect-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
+| `sql-dialect-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
+| `sql-dialect-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル、statement/folds、軽量 expression、context-aware injections まで） | 🚧 初期+ |
+| `sql-dialect-fmt` | 実用 CLI（`--write`/`--check`/stdin、複数ファイル/ディレクトリ、`sql-dialect-fmt.toml`、`--dialect snowflake|databricks`、エンコーディング保持）。v0.1.0 | ✅ |
+| `sql-dialect-fmt-encoding` | 文字コード/改行ユーティリティ | 🚧 |
+| `sql-dialect-fmt-test-fixtures` | easy-test-cases を `include_str!` で内蔵（外部 `easy-test-cases/` 無しでも `cargo test` 通る） | ✅ |
+| `sql-dialect-fmt-test-support` | テスト共有ユーティリティ | ✅ |
 
 設計の真実の源は **rowan CST**。tree-sitter は競合させず、エディタ向けの寛容・高速な認識層という役割分担。
 
@@ -69,12 +69,12 @@
 5. **仕上げ**: `rayon` 並列、外部大規模コーパス、crates.io/GitHub Release。
 
 ## 4. rich hover の設計案
-- LSP `textDocument/hover` を `snow-fmt-hover` で実装。CST 上の位置 → 最小ノードを特定し、種別ごとに内容を返す:
+- LSP `textDocument/hover` を `sql-dialect-fmt-hover` で実装。CST 上の位置 → 最小ノードを特定し、種別ごとに内容を返す:
   - 関数呼び出し: シグネチャ・説明（**知識源は `spec/` の features.json / SQLite を流用**できる。関数表を spec に追加）。
   - キーワード: 構文スニペット（`spec/seed/features.json` の `syntax` フィールドが使える）。
   - 識別子: 修飾名・別名解決（将来）。型キャスト先・semi-structured パスの説明。
 - まず「キーワード/関数のホバー（spec 由来の syntax + status + doc URL）」から始めると、spec トラッカーと
-  自然に連携して rich になる。LSP 本体（`snow-fmt-lsp`）は別 crate で後追い。
+  自然に連携して rich になる。LSP 本体（`sql-dialect-fmt-lsp`）は別 crate で後追い。
 
 ## 5. 「完璧な解析」のための参照（最新研究・実装）
 - 回復的構文解析: matklad *Resilient LL Parsing*（2023）/ *Simple but Powerful Pratt Parsing*（2020）。
@@ -105,8 +105,8 @@ python3 spec/snowflake_spec.py changes    # 変更履歴
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets
-cargo test -p snow-fmt-syntax --features rowan
+cargo test -p sql-dialect-fmt-syntax --features rowan
 cargo fmt --all
 # フォーマッタのゴールデンは insta インラインスナップショット。整形を意図的に変えたら:
-cargo insta test --accept -p snow-fmt-formatter   # 要: cargo install cargo-insta
+cargo insta test --accept -p sql-dialect-fmt-formatter   # 要: cargo install cargo-insta
 ```

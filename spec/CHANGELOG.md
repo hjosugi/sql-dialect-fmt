@@ -1,10 +1,10 @@
 # Snowflake spec change log
 
-Human-readable notes on Snowflake SQL surface changes that matter to snow-fmt. The machine log
+Human-readable notes on Snowflake SQL surface changes that matter to sql-dialect-fmt. The machine log
 lives in the SQLite DB (`python3 spec/snowflake_spec.py changes`); this file is the curated summary.
 
 ## 2026-06-21 — initial seed
-- Seeded `spec/seed/features.json` from snow-fmt's ROADMAP + prior-art research (curated, not a
+- Seeded `spec/seed/features.json` from sql-dialect-fmt's ROADMAP + prior-art research (curated, not a
   live crawl — refresh from docs.snowflake.com on the next pass).
 - Parser coverage at seed time: **Phase 1–2** — SELECT + all single-select clauses, JOINs,
   subqueries/derived tables, set operations, CTEs, compound predicates, and window functions.

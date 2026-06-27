@@ -1,4 +1,4 @@
-# snow-fmt for Snowsight
+# sql-dialect-fmt for Snowsight
 
 Chrome extension that formats the active Snowsight SQL editor with the repository's Rust
 formatter compiled to WebAssembly.
@@ -11,8 +11,8 @@ From the repository root:
 ./scripts/build-chrome-extension.sh
 ```
 
-This builds `snow-fmt-wasm` for `wasm32-unknown-unknown` and copies the compiled module to
-`extensions/chrome/vendor/snow_fmt_wasm.wasm`.
+This builds `sql-dialect-fmt-wasm` for `wasm32-unknown-unknown` and copies the compiled module to
+`extensions/chrome/vendor/sql_dialect_fmt_wasm.wasm`.
 
 ## Install Locally
 
@@ -25,7 +25,7 @@ This builds `snow-fmt-wasm` for `wasm32-unknown-unknown` and copies the compiled
 
 Open Snowsight, focus a worksheet editor, then use one of:
 
-- the floating `snow-fmt` button
+- the floating `sql-dialect-fmt` button
 - the extension action button
 - `Alt+Shift+F`
 

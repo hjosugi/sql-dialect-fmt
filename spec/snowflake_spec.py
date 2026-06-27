@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""snow-fmt Snowflake spec tracker.
+"""sql-dialect-fmt Snowflake spec tracker.
 
 A tiny, dependency-free (stdlib `sqlite3`) store for the Snowflake SQL surface and how it
 changes over time. It lives OUTSIDE the Cargo workspace (this `spec/` dir is not a `crates/*`
@@ -166,7 +166,7 @@ def cmd_snapshot(args) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="snow-fmt Snowflake spec tracker")
+    ap = argparse.ArgumentParser(description="sql-dialect-fmt Snowflake spec tracker")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init")
     p = sub.add_parser("import")

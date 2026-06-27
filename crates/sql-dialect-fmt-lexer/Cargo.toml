@@ -1,0 +1,21 @@
+[package]
+name = "sql-dialect-fmt-lexer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Hand-written, lossless, error-resilient lexer for Snowflake SQL (sql-dialect-fmt toolchain)."
+
+[dependencies]
+sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "0.1.0" }
+
+[dev-dependencies]
+# Let integration tests call into the syntax crate directly (e.g. keyword_kind).
+sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "0.1.0" }
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures", version = "0.1.0" }
+sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support", version = "0.1.0" }

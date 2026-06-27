@@ -4,11 +4,11 @@ chrome.action.onClicked.addListener((tab) => {
   if (!tab.id) {
     return;
   }
-  chrome.tabs.sendMessage(tab.id, { type: "snow-fmt:run" }).catch(() => {});
+  chrome.tabs.sendMessage(tab.id, { type: "sql-dialect-fmt:run" }).catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || message.type !== "snow-fmt:format") {
+  if (!message || message.type !== "sql-dialect-fmt:format") {
     return false;
   }
 
@@ -33,11 +33,11 @@ async function formatSql(source, options = {}) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const input = encoder.encode(source);
-  const inputPtr = api.snow_fmt_alloc(input.length);
+  const inputPtr = api.sql_dialect_fmt_alloc(input.length);
 
   try {
     new Uint8Array(api.memory.buffer, inputPtr, input.length).set(input);
-    const status = api.snow_fmt_format(
+    const status = api.sql_dialect_fmt_format(
       inputPtr,
       input.length,
       normalizeInteger(options.lineWidth, 100),
@@ -49,21 +49,21 @@ async function formatSql(source, options = {}) {
       throw new Error(`Formatter failed with status ${status}.`);
     }
 
-    const resultPtr = api.snow_fmt_result_ptr();
-    const resultLen = api.snow_fmt_result_len();
+    const resultPtr = api.sql_dialect_fmt_result_ptr();
+    const resultLen = api.sql_dialect_fmt_result_len();
     return decoder.decode(new Uint8Array(api.memory.buffer, resultPtr, resultLen));
   } finally {
-    api.snow_fmt_dealloc(inputPtr, input.length);
-    api.snow_fmt_clear_result();
+    api.sql_dialect_fmt_dealloc(inputPtr, input.length);
+    api.sql_dialect_fmt_clear_result();
   }
 }
 
 async function loadWasm() {
   if (!wasmInstancePromise) {
     wasmInstancePromise = (async () => {
-      const response = await fetch(chrome.runtime.getURL("vendor/snow_fmt_wasm.wasm"));
+      const response = await fetch(chrome.runtime.getURL("vendor/sql_dialect_fmt_wasm.wasm"));
       if (!response.ok) {
-        throw new Error(`Failed to load snow_fmt_wasm.wasm: HTTP ${response.status}`);
+        throw new Error(`Failed to load sql_dialect_fmt_wasm.wasm: HTTP ${response.status}`);
       }
       const bytes = await response.arrayBuffer();
       const module = await WebAssembly.compile(bytes);

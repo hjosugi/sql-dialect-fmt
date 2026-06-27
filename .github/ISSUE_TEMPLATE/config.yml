@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Questions and design discussion
-    url: https://github.com/hjosugi/snow-fmt/discussions
+    url: https://github.com/hjosugi/sql-dialect-fmt/discussions
     about: Use discussions for broad design questions or early ideas.

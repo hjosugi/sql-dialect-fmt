@@ -2249,11 +2249,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
-name = "snow-fmt-encoding"
+name = "sql-dialect-fmt"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "serde",
+ "sql-dialect-fmt-encoding",
+ "sql-dialect-fmt-formatter",
+ "sql-dialect-fmt-parser",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "sql-dialect-fmt-encoding"
 version = "0.1.0"
 
 [[package]]
-name = "snow-fmt-formatter"
+name = "sql-dialect-fmt-formatter"
 version = "0.1.0"
 dependencies = [
  "biome_console",
@@ -2277,116 +2290,103 @@ dependencies = [
  "proptest",
  "ruff_formatter",
  "ruff_python_formatter",
- "snow-fmt-lexer",
- "snow-fmt-parser",
- "snow-fmt-syntax",
- "snow-fmt-test-fixtures",
- "snow-fmt-test-support",
+ "sql-dialect-fmt-lexer",
+ "sql-dialect-fmt-parser",
+ "sql-dialect-fmt-syntax",
+ "sql-dialect-fmt-test-fixtures",
+ "sql-dialect-fmt-test-support",
 ]
 
 [[package]]
-name = "snow-fmt-highlight"
+name = "sql-dialect-fmt-highlight"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "snow-fmt-lexer",
- "snow-fmt-syntax",
- "snow-fmt-test-fixtures",
- "snow-fmt-test-support",
+ "sql-dialect-fmt-lexer",
+ "sql-dialect-fmt-syntax",
+ "sql-dialect-fmt-test-fixtures",
+ "sql-dialect-fmt-test-support",
 ]
 
 [[package]]
-name = "snow-fmt-hover"
+name = "sql-dialect-fmt-hover"
 version = "0.1.0"
 dependencies = [
- "snow-fmt-lexer",
- "snow-fmt-syntax",
+ "sql-dialect-fmt-lexer",
+ "sql-dialect-fmt-syntax",
 ]
 
 [[package]]
-name = "snow-fmt-lexer"
+name = "sql-dialect-fmt-lexer"
 version = "0.1.0"
 dependencies = [
- "snow-fmt-syntax",
- "snow-fmt-test-fixtures",
- "snow-fmt-test-support",
+ "sql-dialect-fmt-syntax",
+ "sql-dialect-fmt-test-fixtures",
+ "sql-dialect-fmt-test-support",
 ]
 
 [[package]]
-name = "snow-fmt-lsp"
+name = "sql-dialect-fmt-lsp"
 version = "0.1.0"
 dependencies = [
  "lsp-server",
  "lsp-types",
  "serde",
  "serde_json",
- "snow-fmt-formatter",
- "snow-fmt-highlight",
- "snow-fmt-hover",
- "snow-fmt-parser",
- "snow-fmt-syntax",
+ "sql-dialect-fmt-formatter",
+ "sql-dialect-fmt-highlight",
+ "sql-dialect-fmt-hover",
+ "sql-dialect-fmt-parser",
+ "sql-dialect-fmt-syntax",
 ]
 
 [[package]]
-name = "snow-fmt-parser"
+name = "sql-dialect-fmt-parser"
 version = "0.1.0"
 dependencies = [
  "proptest",
  "rowan",
- "snow-fmt-lexer",
- "snow-fmt-syntax",
- "snow-fmt-test-fixtures",
- "snow-fmt-test-support",
+ "sql-dialect-fmt-lexer",
+ "sql-dialect-fmt-syntax",
+ "sql-dialect-fmt-test-fixtures",
+ "sql-dialect-fmt-test-support",
 ]
 
 [[package]]
-name = "snow-fmt-syntax"
+name = "sql-dialect-fmt-syntax"
 version = "0.1.0"
 dependencies = [
  "rowan",
 ]
 
 [[package]]
-name = "snow-fmt-test-fixtures"
+name = "sql-dialect-fmt-test-fixtures"
 version = "0.1.0"
 
 [[package]]
-name = "snow-fmt-test-support"
+name = "sql-dialect-fmt-test-support"
 version = "0.1.0"
 dependencies = [
- "snow-fmt-highlight",
- "snow-fmt-lexer",
- "snow-fmt-parser",
+ "sql-dialect-fmt-highlight",
+ "sql-dialect-fmt-lexer",
+ "sql-dialect-fmt-parser",
 ]
 
 [[package]]
-name = "snow-fmt-tree-sitter"
+name = "sql-dialect-fmt-tree-sitter"
 version = "0.1.0"
 dependencies = [
  "cc",
- "snow-fmt-test-fixtures",
+ "sql-dialect-fmt-test-fixtures",
  "tree-sitter",
  "tree-sitter-language",
 ]
 
 [[package]]
-name = "snow-fmt-wasm"
+name = "sql-dialect-fmt-wasm"
 version = "0.1.0"
 dependencies = [
- "snow-fmt-formatter",
-]
-
-[[package]]
-name = "sql-dialect-fmt"
-version = "0.1.0"
-dependencies = [
- "rayon",
- "serde",
- "snow-fmt-encoding",
- "snow-fmt-formatter",
- "snow-fmt-parser",
- "tempfile",
- "toml",
+ "sql-dialect-fmt-formatter",
 ]
 
 [[package]]

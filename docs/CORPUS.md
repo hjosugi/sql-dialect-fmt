@@ -9,13 +9,13 @@ hold for every input:
 3. `format(format(x)) == format(x)`.
 4. Formatting clean input yields output that reparses cleanly.
 
-The checks live in `crates/snow-fmt-formatter/tests/external_corpus.rs`. The same `check_file`
+The checks live in `crates/sql-dialect-fmt-formatter/tests/external_corpus.rs`. The same `check_file`
 function backs both the always-on sample corpus and the opt-in external corpus, so the two paths do
 not drift.
 
 ## Always-On Sample Corpus
 
-`crates/snow-fmt-formatter/tests/corpus_sample/` holds a small curated set of `.sql` files:
+`crates/sql-dialect-fmt-formatter/tests/corpus_sample/` holds a small curated set of `.sql` files:
 
 | File | Covers |
 | --- | --- |
@@ -33,7 +33,7 @@ Regenerate the samples after an intentional formatting change with:
 
 ```sh
 cargo run -p sql-dialect-fmt --bin sql-dialect-fmt -- --write --no-config \
-  crates/snow-fmt-formatter/tests/corpus_sample
+  crates/sql-dialect-fmt-formatter/tests/corpus_sample
 ```
 
 Keep this set small and representative. Broad generated or private corpora belong behind the
@@ -45,7 +45,7 @@ Point the harness at one or more local files or directories:
 
 ```sh
 SNOW_FMT_EXTERNAL_CORPUS=/path/to/sqls \
-  cargo test -p snow-fmt-formatter --test external_corpus -- --ignored
+  cargo test -p sql-dialect-fmt-formatter --test external_corpus -- --ignored
 ```
 
 `SNOW_FMT_EXTERNAL_CORPUS` accepts a path-list of files and directories. Directories are recursed

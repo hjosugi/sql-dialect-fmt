@@ -1,6 +1,6 @@
 # spec/ — Snowflake spec tracker (local, **not part of the build**)
 
-This directory records the Snowflake SQL surface snow-fmt targets and how it changes over time.
+This directory records the Snowflake SQL surface sql-dialect-fmt targets and how it changes over time.
 It lives **outside the Cargo workspace** (it is not a `crates/*` member), so it never affects
 `cargo build`. The local SQLite DB is git-ignored; the seed JSON, changelog, and script are kept.
 

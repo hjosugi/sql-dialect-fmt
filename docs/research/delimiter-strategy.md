@@ -17,7 +17,7 @@ Sources:
 - Snowflake Scripting client delimiters:
   https://docs.snowflake.com/en/developer-guide/snowflake-scripting/running-examples
 
-snow-fmt therefore treats `$$...$$` as one lossless body token. Single-quoted
+sql-dialect-fmt therefore treats `$$...$$` as one lossless body token. Single-quoted
 procedure bodies remain ordinary SQL strings at the lexer layer; the parser can
 later decide that a string after `AS` is a procedure body.
 
@@ -42,7 +42,7 @@ later decide that a string after `AS` is a procedure body.
   instead of guessing new syntax into the core parser.
   Source: https://arxiv.org/abs/2603.16155
 
-## snow-fmt Rule
+## sql-dialect-fmt Rule
 
 The lexer owns body delimiter recognition. It exposes:
 

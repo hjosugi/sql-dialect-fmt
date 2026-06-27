@@ -1,6 +1,6 @@
 (() => {
-  const BRIDGE_SOURCE = "snow-fmt:bridge";
-  const PAGE_SOURCE = "snow-fmt:page";
+  const BRIDGE_SOURCE = "sql-dialect-fmt:bridge";
+  const PAGE_SOURCE = "sql-dialect-fmt:page";
 
   if (window.__snowFmtBridgeInstalled) {
     return;
@@ -30,7 +30,7 @@
     try {
       const target = findActiveTarget();
       if (!target) {
-        respond(requestId, { ok: false, error: "Focus a Snowsight SQL editor, then run snow-fmt again." });
+        respond(requestId, { ok: false, error: "Focus a Snowsight SQL editor, then run sql-dialect-fmt again." });
         return;
       }
 
@@ -135,7 +135,7 @@
         read: () => (useSelection ? model.getValueInRange(range) : model.getValue()),
         write: (text) => {
           editor.pushUndoStop?.();
-          editor.executeEdits("snow-fmt", [{ range, text, forceMoveMarkers: true }]);
+          editor.executeEdits("sql-dialect-fmt", [{ range, text, forceMoveMarkers: true }]);
           editor.pushUndoStop?.();
           editor.focus?.();
         }

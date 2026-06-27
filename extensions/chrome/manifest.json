@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "snow-fmt for Snowsight",
+  "name": "sql-dialect-fmt for Snowsight",
   "version": "0.1.0",
-  "description": "Format Snowflake SQL in Snowsight with snow-fmt.",
+  "description": "Format Snowflake SQL in Snowsight with sql-dialect-fmt.",
   "minimum_chrome_version": "102",
   "permissions": ["activeTab"],
   "host_permissions": [
@@ -14,7 +14,7 @@
     "service_worker": "src/background.js"
   },
   "action": {
-    "default_title": "Format with snow-fmt"
+    "default_title": "Format with sql-dialect-fmt"
   },
   "content_scripts": [
     {

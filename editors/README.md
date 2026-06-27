@@ -24,9 +24,9 @@ statement structure — covering:
 - **File types:** `.sql`, `.snowsql`
 
 The keyword and type word lists are kept in lock-step with the formatter's own
-lexer/highlighter by tests in `snow-fmt-highlight` (`tests/textmate.rs`): every word the
+lexer/highlighter by tests in `sql-dialect-fmt-highlight` (`tests/textmate.rs`): every word the
 grammar scopes as a keyword or type must be classified the same way by
-`snow_fmt_highlight::classify`, so the grammar can't drift from the rest of the toolchain.
+`sql_dialect_fmt_highlight::classify`, so the grammar can't drift from the rest of the toolchain.
 
 ### VS Code extension package
 
@@ -56,9 +56,9 @@ contribute:
 
 ## Semantic tokens (LSP)
 
-For LSP-based editors, `snow-fmt-highlight::semantic` maps the lexical highlighter onto the
+For LSP-based editors, `sql-dialect-fmt-highlight::semantic` maps the lexical highlighter onto the
 standard LSP semantic-token legend (`keyword`, `type`, `variable`, `string`, `number`,
 `parameter`, `operator`, `comment`, `namespace`) plus `documentation` / `defaultLibrary`
 modifiers, and exposes `$$ … $$` embedded-language regions as `Injection`s (JavaScript,
-Python, Java, Scala, or SQL, picked from the `LANGUAGE` clause). The `snow-fmt-lsp` server
+Python, Java, Scala, or SQL, picked from the `LANGUAGE` clause). The `sql-dialect-fmt-lsp` server
 delta-encodes these for `textDocument/semanticTokens/full`.

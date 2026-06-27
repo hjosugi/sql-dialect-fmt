@@ -1,5 +1,5 @@
-const BRIDGE_SOURCE = "snow-fmt:bridge";
-const PAGE_SOURCE = "snow-fmt:page";
+const BRIDGE_SOURCE = "sql-dialect-fmt:bridge";
+const PAGE_SOURCE = "sql-dialect-fmt:page";
 const DEFAULT_OPTIONS = {
   lineWidth: 100,
   indentWidth: 4,
@@ -13,7 +13,7 @@ injectBridge();
 installToolbar();
 
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type === "snow-fmt:run") {
+  if (message?.type === "sql-dialect-fmt:run") {
     runFormatter();
   }
 });
@@ -48,7 +48,7 @@ async function runFormatter() {
     }
 
     const response = await chrome.runtime.sendMessage({
-      type: "snow-fmt:format",
+      type: "sql-dialect-fmt:format",
       source: target.text,
       options: DEFAULT_OPTIONS
     });
@@ -62,7 +62,7 @@ async function runFormatter() {
       throw new Error(write.error || "Could not update the editor.");
     }
 
-    showToast(response.formatted === target.text ? "Already formatted." : "Formatted with snow-fmt.");
+    showToast(response.formatted === target.text ? "Already formatted." : "Formatted with sql-dialect-fmt.");
   } catch (error) {
     showToast(error instanceof Error ? error.message : String(error));
   } finally {
@@ -118,18 +118,18 @@ function injectBridge() {
 }
 
 function installToolbar() {
-  if (document.querySelector(".snow-fmt-toolbar")) {
+  if (document.querySelector(".sql-dialect-fmt-toolbar")) {
     return;
   }
 
   const toolbar = document.createElement("div");
-  toolbar.className = "snow-fmt-toolbar";
+  toolbar.className = "sql-dialect-fmt-toolbar";
 
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "snow-fmt-button";
-  button.textContent = "snow-fmt";
-  button.title = "Format active Snowsight editor with snow-fmt (Alt+Shift+F)";
+  button.className = "sql-dialect-fmt-button";
+  button.textContent = "sql-dialect-fmt";
+  button.title = "Format active Snowsight editor with sql-dialect-fmt (Alt+Shift+F)";
   button.addEventListener("click", runFormatter);
 
   toolbar.append(button);
@@ -137,27 +137,27 @@ function installToolbar() {
 }
 
 function setButtonBusy(busy) {
-  const button = document.querySelector(".snow-fmt-button");
+  const button = document.querySelector(".sql-dialect-fmt-button");
   if (!button) {
     return;
   }
   button.disabled = busy;
-  button.textContent = busy ? "Formatting" : "snow-fmt";
+  button.textContent = busy ? "Formatting" : "sql-dialect-fmt";
 }
 
 function showToast(message) {
-  const toolbar = document.querySelector(".snow-fmt-toolbar");
+  const toolbar = document.querySelector(".sql-dialect-fmt-toolbar");
   if (!toolbar) {
     return;
   }
 
-  const existing = toolbar.querySelector(".snow-fmt-toast");
+  const existing = toolbar.querySelector(".sql-dialect-fmt-toast");
   if (existing) {
     existing.remove();
   }
 
   const toast = document.createElement("div");
-  toast.className = "snow-fmt-toast";
+  toast.className = "sql-dialect-fmt-toast";
   toast.textContent = message;
   toolbar.prepend(toast);
   window.setTimeout(() => toast.remove(), 3600);

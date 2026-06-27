@@ -16,10 +16,10 @@ preserved, and `format(format(x)) == format(x)`.
 
 ### Added
 
-- **Lossless lexer** (`snow-fmt-lexer`): hand-written, error-resilient tokenizer
+- **Lossless lexer** (`sql-dialect-fmt-lexer`): hand-written, error-resilient tokenizer
   covering Snowflake operators (`|>`, `->>`, `::`, `$$…$$` dollar-quoted bodies),
   all three comment styles, and string escapes; byte-exact round-trip.
-- **Error-resilient parser** (`snow-fmt-parser`): event-based recursive-descent
+- **Error-resilient parser** (`sql-dialect-fmt-parser`): event-based recursive-descent
   parser producing a lossless `rowan` CST. Never panics, never fails.
   - SELECT pipeline, `JOIN` / `ORDER BY` / `GROUP BY`, `CASE`, subqueries / CTEs,
     set operations.
@@ -34,27 +34,27 @@ preserved, and `format(format(x)) == format(x)`.
   - `COPY INTO` (load / unload, stage paths preserved verbatim).
   - Databricks dialect slice: backtick identifiers, `LATERAL VIEW`, Delta table
     options, `VERSION` / `TIMESTAMP AS OF`, and higher-order-function lambdas.
-- **Formatter** (`snow-fmt-formatter`): generic Wadler/Prettier-style Doc IR engine
+- **Formatter** (`sql-dialect-fmt-formatter`): generic Wadler/Prettier-style Doc IR engine
   with a width-aware printer, plus Snowflake formatting rules built on the CST.
   Headline feature: **magic trailing comma**. Real comment attachment
   (leading / trailing / dangling). East Asian Width aware line measurement.
-- **Highlighter** (`snow-fmt-highlight`): lexical token classification
+- **Highlighter** (`sql-dialect-fmt-highlight`): lexical token classification
   (keyword / type / string / comment / operator / variable) with byte ranges.
-- **Hover** (`snow-fmt-hover`): editor-ready hover text for Snowflake types,
+- **Hover** (`sql-dialect-fmt-hover`): editor-ready hover text for Snowflake types,
   procedures, and tasks.
-- **Syntax core** (`snow-fmt-syntax`): `SyntaxKind`, keyword recognition, and the
+- **Syntax core** (`sql-dialect-fmt-syntax`): `SyntaxKind`, keyword recognition, and the
   `rowan` language definition shared across the toolchain.
-- **Encoding** (`snow-fmt-encoding`): byte-to-text decoding/re-encoding helpers so
+- **Encoding** (`sql-dialect-fmt-encoding`): byte-to-text decoding/re-encoding helpers so
   the CLI preserves the input's original encoding and line endings.
-- **CLI** (`sql-dialect-fmt`): the `sql-dialect-fmt` binary (plus `snow-fmt`
+- **CLI** (`sql-dialect-fmt`): the `sql-dialect-fmt` binary (plus `sql-dialect-fmt`
   compatibility alias) with `--write`, `--check`, stdin/stdout, `--dialect`,
   and `--line-width` / `--indent-width` / `--no-uppercase` options.
-- **LSP** (`snow-fmt-lsp`): Language Server providing formatting, semantic tokens,
+- **LSP** (`sql-dialect-fmt-lsp`): Language Server providing formatting, semantic tokens,
   and diagnostics over stdio.
 
 ### Notes
 
-- `snow-fmt-tree-sitter`, `snow-fmt-test-fixtures`, and `snow-fmt-test-support` are
+- `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/snow-fmt/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v0.1.0...HEAD

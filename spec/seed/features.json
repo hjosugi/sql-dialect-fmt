@@ -2,7 +2,7 @@
   "snowflake_spec_version": "2026-06 seed (curated from ROADMAP + prior-art; refresh from docs.snowflake.com)",
   "source_base": "https://docs.snowflake.com/en/sql-reference",
   "coverage_legend": {
-    "parse": "snow-fmt parser handles it (Phase 1-2)",
+    "parse": "sql-dialect-fmt parser handles it (Phase 1-2)",
     "partial": "lexed/partially handled",
     "todo": "not yet parsed"
   },

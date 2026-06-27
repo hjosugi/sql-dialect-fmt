@@ -1,6 +1,6 @@
 # tree-sitter-snowflake
 
-Tree-sitter grammar for Snowflake SQL in `snow-fmt`.
+Tree-sitter grammar for Snowflake SQL in `sql-dialect-fmt`.
 
 This grammar is deliberately token-centric. Snowflake changes quickly, and the
 lossless Rust CST parser remains the formatter source of truth. The Tree-sitter
@@ -29,7 +29,7 @@ npm test
 ```
 
 The generated C parser is consumed by the Rust wrapper crate:
-`crates/snow-fmt-tree-sitter`.
+`crates/sql-dialect-fmt-tree-sitter`.
 
 ## Publishing Shape
 
@@ -37,7 +37,7 @@ This directory can be published as the `tree-sitter-snowflake` grammar package
 for editors and tooling that consume Tree-sitter grammars directly.
 
 The Rust workspace exposes the same generated parser through
-`snow-fmt-tree-sitter`, which is the crate to publish for Rust/LSP consumers.
+`sql-dialect-fmt-tree-sitter`, which is the crate to publish for Rust/LSP consumers.
 Editor plugins should be thin adapters on top of this grammar:
 
 - Neovim/Helix/Zed: grammar + `queries/*.scm`

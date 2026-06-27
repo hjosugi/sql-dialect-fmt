@@ -15,5 +15,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Run external-corpus harness over the committed sample
         env:
-          SNOW_FMT_EXTERNAL_CORPUS: crates/snow-fmt-formatter/tests/corpus_sample
-        run: cargo test -p snow-fmt-formatter --test external_corpus -- --ignored
+          SNOW_FMT_EXTERNAL_CORPUS: crates/sql-dialect-fmt-formatter/tests/corpus_sample
+        run: cargo test -p sql-dialect-fmt-formatter --test external_corpus -- --ignored

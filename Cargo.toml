@@ -6,10 +6,10 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/hjosugi/snow-fmt"
-homepage = "https://github.com/hjosugi/snow-fmt"
+repository = "https://github.com/hjosugi/sql-dialect-fmt"
+homepage = "https://github.com/hjosugi/sql-dialect-fmt"
 readme = "README.md"
-authors = ["snow-fmt contributors"]
+authors = ["sql-dialect-fmt contributors"]
 keywords = ["snowflake", "sql", "formatter", "parser"]
 categories = ["development-tools", "parser-implementations"]
 

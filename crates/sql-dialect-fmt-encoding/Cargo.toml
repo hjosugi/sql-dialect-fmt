@@ -1,0 +1,14 @@
+[package]
+name = "sql-dialect-fmt-encoding"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Byte-to-text decoding and re-encoding helpers for sql-dialect-fmt."
+
+[dependencies]

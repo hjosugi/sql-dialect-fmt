@@ -1,16 +1,16 @@
 {
   "name": "tree-sitter-snowflake",
   "version": "0.0.0",
-  "description": "Tree-sitter grammar for Snowflake SQL used by snow-fmt editor integrations.",
+  "description": "Tree-sitter grammar for Snowflake SQL used by sql-dialect-fmt editor integrations.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hjosugi/snow-fmt.git",
+    "url": "git+https://github.com/hjosugi/sql-dialect-fmt.git",
     "directory": "tree-sitter-snowflake"
   },
   "bugs": {
-    "url": "https://github.com/hjosugi/snow-fmt/issues"
+    "url": "https://github.com/hjosugi/sql-dialect-fmt/issues"
   },
-  "homepage": "https://github.com/hjosugi/snow-fmt/tree/main/tree-sitter-snowflake#readme",
+  "homepage": "https://github.com/hjosugi/sql-dialect-fmt/tree/main/tree-sitter-snowflake#readme",
   "keywords": [
     "tree-sitter",
     "snowflake",

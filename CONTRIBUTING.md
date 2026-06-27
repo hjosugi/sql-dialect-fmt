@@ -1,4 +1,4 @@
-# Contributing to snow-fmt
+# Contributing to sql-dialect-fmt
 
 Thanks for helping make Snowflake SQL tooling better. This project is young, so
 small, careful changes are especially valuable.
@@ -27,18 +27,18 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 ```
 
 `cargo test --workspace` must stay self-contained. Stable SQL fixtures belong in
-`crates/snow-fmt-test-fixtures`; generated or large local corpora should stay
+`crates/sql-dialect-fmt-test-fixtures`; generated or large local corpora should stay
 outside the repository and can be passed to the CLI with `--fixtures`.
 
 ## Project Shape
 
-- `snow-fmt-syntax`: shared `SyntaxKind`, keyword lookup, rowan language type.
-- `snow-fmt-encoding`: file byte decoding/re-encoding boundary.
-- `snow-fmt-lexer`: lossless, allocation-light tokenizer.
-- `snow-fmt-parser`: resilient CST parser. Parsing should not panic on broken SQL.
-- `snow-fmt-highlight`: lexical highlight classification.
-- `snow-fmt-hover`: editor/LSP-ready hover strings for Snowflake concepts.
-- `snow-fmt-tree-sitter`: Rust bindings for the generated Tree-sitter grammar.
+- `sql-dialect-fmt-syntax`: shared `SyntaxKind`, keyword lookup, rowan language type.
+- `sql-dialect-fmt-encoding`: file byte decoding/re-encoding boundary.
+- `sql-dialect-fmt-lexer`: lossless, allocation-light tokenizer.
+- `sql-dialect-fmt-parser`: resilient CST parser. Parsing should not panic on broken SQL.
+- `sql-dialect-fmt-highlight`: lexical highlight classification.
+- `sql-dialect-fmt-hover`: editor/LSP-ready hover strings for Snowflake concepts.
+- `sql-dialect-fmt-tree-sitter`: Rust bindings for the generated Tree-sitter grammar.
 - `tree-sitter-snowflake`: grammar package and editor queries.
 
 For the longer map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

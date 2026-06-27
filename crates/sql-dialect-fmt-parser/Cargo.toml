@@ -1,0 +1,22 @@
+[package]
+name = "sql-dialect-fmt-parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Error-resilient, event-based recursive-descent parser building a lossless rowan CST for Snowflake SQL."
+
+[dependencies]
+sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "0.1.0", features = ["rowan"] }
+sql-dialect-fmt-lexer = { path = "../sql-dialect-fmt-lexer", version = "0.1.0" }
+rowan = "0.15"
+
+[dev-dependencies]
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures", version = "0.1.0" }
+sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support", version = "0.1.0" }
+proptest = "1"

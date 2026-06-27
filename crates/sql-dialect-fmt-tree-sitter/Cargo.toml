@@ -1,0 +1,21 @@
+[package]
+name = "sql-dialect-fmt-tree-sitter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust bindings for the bundled tree-sitter-snowflake grammar."
+# Not published: build.rs compiles the bundled tree-sitter C parser/scanner from
+# ../../tree-sitter-snowflake (outside this crate dir), so the generated `cargo package`
+# tarball cannot find parser.c and `cargo publish` verification fails to build.
+publish = false
+
+[dependencies]
+tree-sitter = "0.26.9"
+tree-sitter-language = "0.1.7"
+
+[dev-dependencies]
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures", version = "0.1.0" }
+
+[build-dependencies]
+cc = "1.2"

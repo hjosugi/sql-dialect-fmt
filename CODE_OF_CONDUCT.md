@@ -1,6 +1,6 @@
 # Code of Conduct
 
-snow-fmt should be a calm, practical place to build language tooling together.
+sql-dialect-fmt should be a calm, practical place to build language tooling together.
 
 ## Expected Behavior
 
