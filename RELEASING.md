@@ -19,7 +19,7 @@ Published to crates.io (in dependency order):
 | 6 | `sql-dialect-fmt-hover` | syntax, lexer |
 | 7 | `sql-dialect-fmt-encoding` | — |
 | 8 | `sql-dialect-fmt` | encoding, formatter |
-| 9 | `sql-dialect-fmt-lsp` | formatter, highlight, hover, parser, syntax |
+| 9 | `sql-dialect-fmt-lsp` | formatter, highlight, hover, parser |
 | 10 | `sql-dialect-fmt-wasm` | formatter |
 
 **Not published** (`publish = false`):
@@ -107,14 +107,60 @@ Published to crates.io (in dependency order):
    cli / lsp / wasm** (with `encoding` published any time before `cli`, and `wasm`
    any time after `formatter`).
 
-8. **Store publishing** is manual-dispatch and credential-gated:
+8. **Store publishing** is automated after one-time store setup.
 
-   - VS Code Marketplace requires `VSCE_PAT`.
-   - Chrome Web Store requires `CHROME_EXTENSION_ID`, `CHROME_CLIENT_ID`,
-     `CHROME_CLIENT_SECRET`, and `CHROME_REFRESH_TOKEN`.
+   The `Extension Packages` workflow always packages the Chrome zip and VSIX on `v*.*.*` tags.
+   It can also publish to the stores automatically on tag push once the repository variables below
+   are enabled.
 
-   Run the `Extension Packages` workflow with `publish=true` only after the initial store listing,
-   publisher identity, privacy disclosures, and permissions review are ready in the store consoles.
+   One-time VS Code Marketplace setup:
+
+   - Create/verify the Marketplace publisher used by `editors/package.json`.
+   - Prefer Microsoft Entra ID workload identity for new automation. Configure
+     `VSCE_AUTH_MODE=azure` plus `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and
+     optional `AZURE_SUBSCRIPTION_ID` as repository variables or secrets, and grant that managed
+     identity Contributor access to the Marketplace publisher.
+   - For the simpler PAT path, set secret `VSCE_PAT` and leave `VSCE_AUTH_MODE` unset or `pat`.
+     Global Azure DevOps PATs retire on 2026-12-01, so treat this as the short path rather than the
+     long-term one.
+   - Enable automatic VS Code publishing with repository variable
+     `VSCODE_MARKETPLACE_AUTO_PUBLISH=true`, or set `EXTENSIONS_AUTO_PUBLISH=true` to publish both
+     stores from tag pushes.
+
+   One-time Chrome Web Store setup:
+
+   - Register the developer account, create the item, and complete the first listing/privacy/
+     distribution fields in the Chrome Web Store dashboard.
+   - Enable the Chrome Web Store API in a Google Cloud project, configure OAuth consent, and create
+     an OAuth client/refresh token with Chrome Web Store scope.
+   - Set variables `CHROME_PUBLISHER_ID` and `CHROME_EXTENSION_ID`.
+   - Set secrets `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, and `CHROME_REFRESH_TOKEN`.
+   - Enable automatic Chrome publishing with repository variable `CHROME_WEBSTORE_AUTO_PUBLISH=true`,
+     or set `EXTENSIONS_AUTO_PUBLISH=true` to publish both stores from tag pushes.
+
+   To minimize GitHub UI work after the store-side setup is done, export the credentials locally
+   and let the helper write repository variables/secrets with `gh`:
+
+   ```sh
+   # PAT path, both stores, tag-push auto-publish enabled.
+   export VSCE_PAT=...
+   export CHROME_PUBLISHER_ID=...
+   export CHROME_EXTENSION_ID=...
+   export CHROME_CLIENT_ID=...
+   export CHROME_CLIENT_SECRET=...
+   export CHROME_REFRESH_TOKEN=...
+   scripts/configure-extension-publishing.sh --target all --vscode-auth pat
+
+   # Long-term VS Code auth path. Run instead of the PAT command after the Entra identity
+   # has been authorized as a Marketplace publisher contributor.
+   export AZURE_CLIENT_ID=...
+   export AZURE_TENANT_ID=...
+   export AZURE_SUBSCRIPTION_ID=... # optional
+   scripts/configure-extension-publishing.sh --target vscode --vscode-auth azure
+   ```
+
+   Manual fallback remains available from the `Extension Packages` workflow: choose `publish=true`
+   and `publish_target=all|vscode|chrome`.
 
 ## Notes
 

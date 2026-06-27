@@ -136,7 +136,7 @@
 - ✅ エディタ拡張（VS Code）パッケージング（`editors/` を extension root とする `package.json` + `language-configuration.json`）
 - ✅ Snowsight/Chrome 拡張（`sql-dialect-fmt-wasm` を `wasm32-unknown-unknown` でビルドして同梱、worksheet editor 上のボタン/拡張アイコン/`Alt+Shift+F` から整形）… [sql-dialect-fmt-wasm](crates/sql-dialect-fmt-wasm/) / [extensions/chrome](extensions/chrome/) / [build script](scripts/build-chrome-extension.sh)
 - ✅ GitHub Release asset: CLI tarball + sha256、Chrome zip、VS Code VSIX を `v*.*.*` release に同梱。旧 `snow-fmt-*` asset は除去済み
-- ✅ VS Code Marketplace / Chrome Web Store publish workflow: manual dispatch で package artifact を作成し、`VSCE_PAT` / Chrome Web Store OAuth secrets がある場合のみ本公開。初回 listing/審査は各 store 側の管理画面で完了させる
+- ✅ VS Code Marketplace / Chrome Web Store publish workflow: tag push で package artifact を作成し、repo variable で opt-in すれば store publish まで自動実行。VS Code は `VSCE_PAT` または Entra ID workload identity、Chrome は Web Store API OAuth credentials を使用。repo secret/variable は [configure-extension-publishing.sh](scripts/configure-extension-publishing.sh) で投入可。初回 listing/審査情報入力だけは各 store 側の管理画面で完了させる
 - ✅ 公式仕様由来の conformance generator（Future Tech Blog の `uroborosql-fmt` / `postgresql-cst-parser` 型の発想を Snowflake 向けに翻訳）: local path / archive から `.sql` と SQL fenced block を抽出し、外部 corpus harness に流して parser/formatter conformance report を生成。将来、機械可読な公式 grammar が得られるなら Pure Rust CST parser 生成の候補にする … [scripts/conformance-report.py](scripts/conformance-report.py)
 
 ---
@@ -145,7 +145,7 @@
 **v1.0.0 到達**。Phase 0–10 の 1.0 scope は完了: コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。Databricks mode は LATERAL VIEW / Delta DDL options / VERSION・TIMESTAMP AS OF / lambda / backtick identifier を dialect mode で実装済み。LSP/editor/CLI/Chrome+WASM/VSIX/GitHub Release/外部 corpus/conformance report まで 1.0 配布面を整備済み。
 
 **1.0 後の継続タスク（リリース blocker ではない）**:
-1. **Store 運用**: Chrome Web Store / VS Code Marketplace は workflow 済み。初回 listing・審査・publisher 権限・OAuth/PAT secrets を repo に設定したら本公開できる。
+1. **Store 運用**: Chrome Web Store / VS Code Marketplace は workflow 済み。初回 listing・審査・publisher 権限を済ませ、OAuth/PAT または Entra ID 設定を helper で repo に入れたら tag push で本公開できる。
 2. **仕様追随**: Snowflake Preview option / Semantic View / Cortex-AISQL の追加は conformance generator と外部 corpus の継続運用で追う。
 3. **Directive polish**: 必要なら `-- sql-dialect-fmt: off/on` の範囲制御など細部。
 4. **研究開発**: もし機械可読な公式 grammar が得られた場合のみ、Pure Rust CST parser 生成の feasibility を再評価。
