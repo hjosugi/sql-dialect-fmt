@@ -52,19 +52,19 @@
 
 ## Phase 3 — フォーマッタ基盤 ✅
 *目的: Phase 2 までの構文を綺麗に出力する。SQL 規則の前に自前 Doc エンジンを立ち上げる。クレート [crates/snow-fmt-formatter/](crates/snow-fmt-formatter/)。*
-- ✅ 汎用 Doc エンジン `snow-fmt-formatter`（`FormatElement` 中核サブセット: `Text`/`Line(Soft/Space/Hard)`/`Group`/`Indent`、`breakParent` 伝播）。`biome_formatter` 非依存 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs)。残: `SourceCodeSlice`/`LineSuffix`/`BestFitting`
-- ✅ ビルダ（`text`/`concat`/`join`/`group`/`indent`/`line`/`soft_line`/`hard_line`/`space`/`empty`）＋ 幅対応プリンタ（Prettier 系 `fits`／flat-or-break）。残: `block_indent`/`line_suffix`/`if_group_breaks`/`best_fitting`／`Format`/`FormatRule` トレイト・`write!` マクロ
+- ✅ 汎用 Doc エンジン `snow-fmt-formatter`（`FormatElement` 中核サブセット: `Text`/`Line(Soft/Space/Hard)`/`Group`/`Indent`/`LineSuffix`/`BreakParent`、`breakParent` 伝播）。`biome_formatter` 非依存 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs)。残: `SourceCodeSlice`/`BestFitting`
+- ✅ ビルダ（`text`/`concat`/`join`/`group`/`group_expanded`/`indent`/`line`/`soft_line`/`hard_line`/`line_suffix`/`space`/`empty`）＋ 幅対応プリンタ（Prettier 系 `fits`／flat-or-break）。残: `block_indent`/`if_group_breaks`/`best_fitting`／`Format`/`FormatRule` トレイト・`write!` マクロ
 - ✅ 幅対応プリンタ（行幅で `group` を1行/折返し決定）… [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `print`
 - ✅ SQL 規則の `SELECT` パイプライン: 文の区切り/終端、各句を改行、SELECT 列が幅超過で1列1行に展開、句内空白の正規化、キーワード大文字化 … [sql.rs](crates/snow-fmt-formatter/src/sql.rs)
 - ✅ 句の構造的整形: `JOIN` を1行ずつ（`FROM` 直下に整列）、`ORDER BY`/`GROUP BY` の項目を幅超過で1項目1行に折返し（`GROUP BY ALL` 等の項目なし形はそのまま）… [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_from`/`lower_keyword_item_list`
 - ✅ 式の構造的整形: `CASE`（収まれば1行、溢れたら `WHEN`/`ELSE` を1アーム1行・`END` をデデント。単純 CASE のオペランド対応）… [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_case`
 - ✅ サブクエリ／CTE の構造的整形: 括弧サブクエリは収まれば1行・溢れたら本文をインデント（多句 SELECT は hard_line で強制改行）。`WITH [RECURSIVE]` は CTE を1つ1行、本文を再帰整形 … [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_subquery`/`lower_with_query`
 - ✅ 集合演算（`UNION [ALL] / EXCEPT / INTERSECT / MINUS`）: 各クエリと演算子をそれぞれ別行に、連鎖はフラット化 … [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_set_op`
-- ✅ コメント付与（leading/trailing/dangling）: コメントを有意トークンに帰属（前トークンと同じ行＝trailing、改行後＝次トークンの leading、行コメントは `line_suffix`＋`break_parent` で行末へ）。各コメントを1度だけ出力し、**帰属先トークンを実際に描画できないコメントが1つでも残ればその文だけ verbatim にフォールバック**（無破壊を機械保証）。Doc エンジンに `line_suffix`/`break_parent` を追加 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs) / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `Comments`。残: ディレクティブ（`-- noqa`/`-- snow-fmt:`）の幅計算除外、リーディング文コメントが SELECT を展開させる微調整
+- ✅ コメント付与（leading/trailing/dangling）: コメントを有意トークンに帰属（前トークンと同じ行＝trailing、改行後＝次トークンの leading、行コメントは `line_suffix`＋`break_parent` で行末へ）。各コメントを1度だけ出力し、**帰属先トークンを実際に描画できないコメントが1つでも残ればその文だけ verbatim にフォールバック**（無破壊を機械保証）。文頭 leading コメントは header group の外へ hoist、寛容文中の行コメントも次トークン前で改行確定して idempotent。Doc エンジンに `line_suffix`/`break_parent` を追加 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs) / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `Comments`。残: ディレクティブ（`-- noqa`/`-- snow-fmt:`）の幅計算除外
 - ✅ **magic trailing comma**（看板機能）: SELECT 列・関数引数 (`ARG_LIST`)・`VALUES` 行・列リスト (`COLUMN_LIST`)・`IN (...)`（`EXPR_LIST` を親の括弧と束ねて構造化）で実装済み（作者の末尾カンマ＝「展開固定」と解釈し幅に関わらず展開。展開したコレクションは祖先グループも改行させる＝Black 流。既存カンマを保持しトークンは合成しない＝無破壊）。Doc エンジンに**伝播する `group_expanded`**（Prettier `shouldBreak`）を追加 … [doc.rs](crates/snow-fmt-formatter/src/doc.rs) `group_expanded` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `bracketed`/`lower_in_expr`
-- 🚧 設定は最小（`line-length`・インデント幅・`keyword-case`）。`FormatOptions { line_width, indent_width, uppercase_keywords }` 実装済み。opinionated・ほぼ設定なし
-- ✅ テスト: **stability-check（べき等 `format(format(x))==format(x)`）** ＋ ラウンドトリップ（有意トークン列の保存）＋ クリーン入力の再パース無エラー、内蔵 easy fixture 全 SQL で検証。複数行ゴールデンは **`insta` インラインスナップショット**（`cargo insta test --accept` で更新） … [tests/format.rs](crates/snow-fmt-formatter/tests/format.rs)
-- 📝 Phase 3 のスコープ境界: パーサが**完全に受理した入力のみ整形**し、`ParseError` が出る入力は無変更パススルー（無破壊・べき等を機械的に保証）。Phase 2 文法の拡張に従ってカバレッジが自動的に広がる
+- ✅ 設定は最小（`line-length`・インデント幅・`keyword-case`）。`FormatOptions { line_width, indent_width, uppercase_keywords }` 実装済み。opinionated・ほぼ設定なし
+- ✅ テスト: **stability-check（べき等 `format(format(x))==format(x)`）** ＋ ラウンドトリップ（有意トークン列の保存）＋ クリーン入力の再パース無エラー、内蔵 easy fixture 全 SQL で検証。複数行ゴールデンは **`insta` インラインスナップショット**（`cargo insta test --accept` で更新）。さらに parser/formatter の `proptest` property harness で Unicode/ASCII/token-salad の panic-safety・lossless CST・idempotency・token preservation を回帰ガード … [tests/format.rs](crates/snow-fmt-formatter/tests/format.rs) / [formatter proptest](crates/snow-fmt-formatter/tests/proptest_invariants.rs) / [parser proptest](crates/snow-fmt-parser/tests/proptest_invariants.rs)
+- 📝 Phase 3 のスコープ境界: lexer とパーサが**完全に受理した入力のみ整形**し、`LexError`/`ParseError` が出る入力は無変更パススルー（無破壊・べき等を機械的に保証）。複数行 token 内の行末空白など、Doc printer の global trim が token 内部へ干渉しうる入力も無変更に倒す。Phase 2 文法の拡張に従ってカバレッジが自動的に広がる
 
 ## Phase 4 — Snowflake 固有のクエリ構文 ✅
 *目的: 汎用 SQL フォーマッタが取りこぼす部分を制覇。*
@@ -75,7 +75,7 @@
 - ✅ `PIVOT` / `UNPIVOT`（`<table> PIVOT(<agg>(col) FOR col IN (…))` を `table_ref` の後置として `PIVOT_CLAUSE` ノードで対応）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `pivot_clause` / 新キーワード `FOR`
 - ✅ `GROUP BY ALL` / `CUBE(...)` / `ROLLUP(...)`（関数呼び出しとして整形）/ `GROUPING SETS ((...), ...)`（`GROUPING(col)` 関数と衝突しない **contextual keyword**（text ベース判定）で `GROUPING_SETS` ノードに）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grouping_element` / [parser.rs](crates/snow-fmt-parser/src/parser.rs) `nth_contextual`
 - ✅ `SAMPLE`/`TABLESAMPLE`（`[method] (n [ROWS]) [REPEATABLE/SEED(...)]` を `table_ref` 後置で寛容保持）, `MATCH_RECOGNIZE`（✅ 本体を構造化: PARTITION/ORDER/MEASURES/PER MATCH/AFTER MATCH SKIP/PATTERN/SUBSET/DEFINE を1句1行・contextual 大文字化・`PATTERN(...)` は verbatim）, ✅ `CONNECT BY`/`START WITH`（`PRIOR` 前置・`NOCYCLE`、各句1行）。`PIVOT` の `IN (val AS alias, ...)` も対応
-- 🚧 `ASOF JOIN`（✅ `a ASOF JOIN b MATCH_CONDITION (...) [ON ...]`）, Time Travel `AT`/`BEFORE`（✅ `t AT (TIMESTAMP|OFFSET|STATEMENT => ...)`、`table_ref` 後置・寛容保持）。contextual keyword `asof`/`match_condition`/`at`/`before` のエイリアス誤食いを `at_alias_blocker` で回避 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `join`/`time_travel`/`at_alias_blocker`。✅ `CHANGES ( INFORMATION => … ) {AT|BEFORE}(…) [END(…)]`（`table_ref` 後置）
+- ✅ `ASOF JOIN`（`a ASOF JOIN b MATCH_CONDITION (...) [ON ...]`）, Time Travel `AT`/`BEFORE`（`t AT (TIMESTAMP|OFFSET|STATEMENT => ...)`、`table_ref` 後置・寛容保持）。contextual keyword `asof`/`match_condition`/`at`/`before` のエイリアス誤食いを `at_alias_blocker` で回避 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `join`/`time_travel`/`at_alias_blocker`。✅ `CHANGES ( INFORMATION => … ) {AT|BEFORE}(…) [END(…)]`（`table_ref` 後置）
 
 ## Phase 5 — フロー/パイプ構文 `->>` ✅
 *目的: 既存ツールがほぼ未対応の差別化点。*
@@ -83,19 +83,17 @@
 - ✅ flow operator の文脈を公式ドキュメントで確認（任意の SQL statement chain、ステップ間にセミコロンなし、`FROM $n` で前ステップ参照） … <https://docs.snowflake.com/en/sql-reference/operators-flow>
 - ✅ 文チェーンを `FLOW_STMT` ノードでパース（投機的 wrapper を `Marker::abandon`/`Tombstone` で単文時に破棄）、`FROM $1` を table source として許可 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `statement_or_flow`/`table_ref`
 - ✅ 整形規則（各ステップを通常整形し、`->>` を継続行の先頭に。ステップ間にセミコロンを入れない） … [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_flow`
-- 🔧 残: SHOW 始まりのチェーン（`SHOW` 文未対応のため現状は素通し）、パイプ／非パイプ混在の網羅
+- 🔧 残: パイプ／非パイプ混在と `SHOW` 始まりチェーンの追加ゴールデン網羅
 
 ## Phase 6 — DML ✅
 - ✅ `INSERT`（単一 `INSERT [OVERWRITE] INTO t [(cols)] VALUES/<query>`、多テーブル `INSERT [OVERWRITE] {ALL|FIRST} (WHEN cond THEN INTO …)+ [ELSE INTO …] <query>` をパース＋構造的整形。新ノード `INTO_CLAUSE`/`INSERT_WHEN`、新キーワード `OVERWRITE`）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `multi_table_insert`
 - ✅ `UPDATE`（`SET`/`FROM`/`WHERE`）, `DELETE`（`USING`/`WHERE`）, `MERGE`（`WHEN [NOT] MATCHED [AND] THEN UPDATE/DELETE/INSERT`）をパース＋構造的整形（各句1行）… パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_clausal`（INSERT/UPDATE/DELETE/MERGE/COPY/CREATE 共通）。新ノード `INSERT_STMT`/`UPDATE_STMT`/`DELETE_STMT`/`MERGE_STMT`/`SET_CLAUSE`/`ASSIGNMENT`/`MERGE_WHEN`、新キーワード `MATCHED`
-- ✅ `COPY INTO`（ロード/アンロード両形。`COPY INTO <target> FROM <source>` ＋各オプション (`FILE_FORMAT = (...)`, `PATTERN`, `ON_ERROR`, `PARTITION BY (...)` 等) を1行ずつ。ステージパス `@stage/path` は verbatim 保持）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `copy_stmt` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_copy`。新ノード `COPY_STMT`/`COPY_LOCATION`/`COPY_OPTION`。**コーパス 32→34**
+- ✅ `COPY INTO`（ロード/アンロード両形。`COPY INTO <target> FROM <source>` ＋各オプション (`FILE_FORMAT = (...)`, `PATTERN`, `ON_ERROR`, `PARTITION BY (...)` 等) を1行ずつ。ステージパス `@stage/path` は verbatim 保持。認識済み option key は key position のみ大文字化し、値/識別子は不変）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `copy_stmt` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_copy`/`lower_option_node`。新ノード `COPY_STMT`/`COPY_LOCATION`/`COPY_OPTION`。**コーパス 32→34**
 
 ## Phase 7 — DDL 🚧
-- 🚧 `CREATE [OR REPLACE] TABLE`（`AS SELECT`(CTAS)・列定義 `( ... )` を寛容パース＋整形済み。残: `CLONE`, 制約の構造化, `CLUSTER BY` 等オプションの構造化）, `DROP`（`IF EXISTS`/`CASCADE`）, `ALTER`（寛容にトークン列としてパース→インライン整形）… パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_stmt`/`drop_stmt`/`alter_stmt` / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create`。新ノード `CREATE_STMT`/`DROP_STMT`/`ALTER_STMT`/`COLUMN_DEF_LIST`/`COLUMN_DEF`、新キーワード `DROP`/`ALTER`
-- 🚧 `CREATE [OR REPLACE] [SECURE] [MATERIALIZED] VIEW [(cols)] [options] AS <query>` をパース＋整形（修飾子・オプションは寛容にトークン保持）
-- 🚧 ボディ無し `CREATE`（`SCHEMA`/`DATABASE`/`WAREHOUSE`/`SEQUENCE`/`STAGE`/`FILE FORMAT`/`ROLE`…）は `create_other` で寛容パース→インライン整形。`AS <body>`（`CREATE TASK … AS <dml>` 等）を検出したら素通し（verbatim）にして1行へ潰さない。fixture `case_032`、parser でクリーンパース／body-verbatim を検証 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_other`/`at_create_body`
-- ⏳ 🔎 `STREAM`, `TASK`, `DYNAMIC TABLE`（新しめ。構文要確認）
-- 🚧 `GRANT`/`REVOKE`（`ALTER` と同様に寛容なトークン列パース→新ノード `GRANT_STMT`/`REVOKE_STMT`、インライン整形＝カンマ/空白正規化・キーワード大文字化・修飾名/列リスト保持。新キーワード `GRANT`/`REVOKE`。fixture `case_031` で golden/べき等/ラウンドトリップ、parser で clean-parse/ノード種別を検証） … パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grant_stmt`/`revoke_stmt`
+- ✅ `CREATE [OR REPLACE] TABLE`（列定義、制約、`CLONE`, `CLUSTER BY`, CTAS/`AS SELECT`）/ `CREATE [SECURE] [MATERIALIZED] VIEW [(cols)] [options] AS <query>` / `DROP` / `ALTER` をパース＋整形。列定義は幅超過で1列1行、CTAS/VIEW body は構造的整形、`ALTER` は寛容インライン … パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_stmt`/`drop_stmt`/`alter_stmt` / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create`
+- ✅ Object DDL: `CREATE SCHEMA`/`DATABASE`/`WAREHOUSE`/`SEQUENCE`/`STAGE`/`FILE FORMAT`/`STREAM`/`TASK`/`DYNAMIC TABLE` を構造化。`OBJECT_PROPERTY`/`STREAM_SOURCE`/`TASK_AFTER` を導入し、property は1行ずつ、`TASK`/`DYNAMIC TABLE` の `AS <query|dml>` body は構造的に整形。認識済み option key は key position のみ大文字化 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_other`/`object_property` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create_object`。fixture `case_032` と exhaustive object DDL matrix で parse/format/idempotency/token preservation を検証
+- ✅ `GRANT`/`REVOKE`（privilege list、`ON <object>`、`TO|FROM [ROLE|USER]`、`WITH GRANT OPTION`、`GRANT OPTION FOR`、`CASCADE`/`RESTRICT`）を構造化し、target/grantee を1行ずつ整形。新ノード `GRANT_STMT`/`REVOKE_STMT`/`PRIV_LIST`/`GRANT_TARGET`/`GRANTEE`、新キーワード `GRANT`/`REVOKE`。fixture `case_031` と matrix で golden/べき等/ラウンドトリップを検証 … パーサ [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `grant_stmt`/`revoke_stmt` / 整形 [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_grant`
 - ✅ セッション/introspection 文 `USE`/`SHOW`/`DESCRIBE`(`DESC`)/`TRUNCATE`（`lenient_stmt` 共通ヘルパで寛容パース→新ノード `USE_STMT`/`SHOW_STMT`/`DESCRIBE_STMT`/`TRUNCATE_STMT`、インライン整形。新キーワード `USE`/`SHOW`/`DESCRIBE`/`TRUNCATE`。**バグ修正**: `USE ROLE r` が3文に分割され `;` が挿入されていた非ロスレス挙動を解消。`ORDER BY … DESC` は従来どおり）。fixture `case_034`、parser で回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `lenient_stmt`
 - ✅ `COMMENT ON <object> IS '…'`（オブジェクト注釈。`comment` は `ON` の直前でのみ効く**コンテキストキーワード**にして、頻出する `comment` 列名を誤ってキーワード化しない。`COMMENT_STMT` ノード、`CONTEXTUAL_KEYWORD` 化で大文字化）。fixture `case_035`、parser で衝突回避を回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `comment_stmt`
 - ✅ `UNDROP <object> <name>`（`UNDROP_STMT`、寛容インライン）。**バグ修正**: `UNDROP SCHEMA s` の複数文分割を解消。fixture `case_036`
@@ -118,6 +116,7 @@
 - ✅ Tree-sitter grammar baseline（Neovim/Zed/GitHub 向け token grammar、highlight/locals/injections queries、Rust wrapper、内蔵 easy fixture 全 SQL + LF/CRLF/CR/mixed 改行で cargo test 統合） … [tree-sitter-snowflake/](tree-sitter-snowflake/) / [crates/snow-fmt-tree-sitter/](crates/snow-fmt-tree-sitter/)
 - ✅ CST → セマンティックトークン（highlighter から LSP legend へ、UTF-16 桁・複数行トークン分割・デルタ符号化） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/) `semantic_tokens`
 - ✅ **LSP サーバ `snow-fmt-lsp`**（stdio・`lsp-server`/`lsp-types`、同期。`formatting`＝全文整形、`semanticTokens/full`、`publishDiagnostics`＝パースエラー、`hover`＝キーワード/型/シンボル説明（`snow-fmt-hover` 配線）、`foldingRange`＝文単位。**インクリメンタル同期**（範囲編集を splice）・初期化/シャットダウン。純粋関数はユニットテスト、サーバは stdio エンドツーエンド検証） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/)
+- ✅ 診断品質: lexer/parser diagnostics は byte span（token 全体、EOF は zero-width）を持ち、`SyntaxKind::INTO_KW` ではなく `expected INTO` / `expected '('` のような人間向け表示へ変換。LSP diagnostics は lexer error（未終端 literal/comment 等）も拾い、UTF-16 range へ変換 … [diagnostics.rs](crates/snow-fmt-parser/tests/diagnostics.rs) / [kind.rs](crates/snow-fmt-syntax/src/kind.rs) `describe`
 - ✅ LSP のインクリメンタル更新（`apply_change`＝範囲 splice／全文置換、`TextDocumentSyncKind::INCREMENTAL`） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/) `apply_change`
 - ✅ TextMate 文法（素のエディタ向けベースライン。`source.sql.snowflake`、comment/string/`$$…$$`/number/type/keyword/variable/operator をスコープ。キーワード・型語彙は `snow-fmt-highlight::classify` と一致をテストで機械保証＝drift しない） … [editors/textmate/](editors/textmate/)
 - ✅ Tree-sitter 文法の構造化（第一層: `;` 区切りの `statement` ノードで token 列をグルーピング、`folds.scm`＝文単位の折りたたみ（LSP `foldingRange` と一致）。`source_file` ルート維持で既存 highlight/locals/injections と互換、corpus＋Rust smoke で検証） … [tree-sitter-snowflake/](tree-sitter-snowflake/)
@@ -125,21 +124,20 @@
 
 ## Phase 10 — 仕上げ・周辺 🚧
 - ⏳ 🔎 Cortex / AISQL 関数（`AI_COMPLETE`, `SNOWFLAKE.CORTEX.*` 等）の認識
-- ✅ CLI `snow-fmt`（`--write`/`--check`/stdin、`--line-width`/`--indent-width`/`--no-uppercase`、エンコーディング保持、`cargo install` 可、v0.1.0） … [crates/snow-fmt-cli/](crates/snow-fmt-cli/)。残: 設定ファイル（`snow-fmt.toml`）
-- ⏳ 複数ファイル並列整形（`rayon`）, ベンチマーク
+- ✅ CLI `snow-fmt`（`--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、`--no-config`、`--line-width`/`--indent-width`/`--no-uppercase`/`--uppercase`、エンコーディング保持、error UX、`cargo install` 可、v0.1.0） … [crates/snow-fmt-cli/](crates/snow-fmt-cli/)
+- 🚧 複数ファイル**並列**整形（`rayon`）は未導入。Criterion ベンチマークは [benches/format.rs](crates/snow-fmt-formatter/benches/format.rs) で導入済み
 - ✅ 大規模コーパスでのべき等性・無破壊（ラウンドトリップ）回帰（内蔵 easy fixture 全 SQL で機械ガード）。残: より大きな外部コーパス
 - ⏳ エディタ拡張（VS Code）パッケージング
 
 ---
 
 ### 現状サマリ（2026-06）
-**Phase 0–6 は実質完了**、Phase 9 は基盤（highlight/hover/tree-sitter baseline）まで、Phase 7/8/10 が部分。コア整形（SELECT 一式・DML・基本 DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を機械保証しつつ実用段階。CLI `snow-fmt` v0.1.0 公開可。
+**Phase 0–6 は完了**、Phase 7 は主要 DDL/object DDL/access control まで実用域、Phase 9 は LSP/diagnostics/editor grammar 基盤まで、Phase 8/10 が部分。コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。CLI `snow-fmt` v0.1.0 公開可。
 
 **残りの主な未着手（価値順）**:
-1. **Phase 8 scripting / 埋め込み言語**: `DECLARE/BEGIN/END`・`LET`・制御構文のボディ内部整形、`$$…$$` の言語判定→サブフォーマッタ委譲（JS=biome、SQL=自己再帰）。現状は verbatim 保持で無破壊。
-2. **Phase 7 DDL の拡張**: `STREAM`/`TASK`/`DYNAMIC TABLE`/`SEQUENCE`/`STAGE`/`FILE FORMAT`/ポリシー/`GRANT`（🔎 新しめは要ドキュメント確認）。インライン巨大1行になるものは無理に取り込まず素通しのまま。
-3. **Phase 5 フロー演算子 `->>`** の整形規則（🔎 仕様確認）。
-4. **Phase 9 LSP**（`textDocument/formatting`・`semanticTokens`・診断）と Tree-sitter 文法の構造化。
-5. **Phase 10**: `snow-fmt.toml`、`rayon` 並列、Cortex/AISQL 関数認識、VS Code 拡張、`CHANGES`。
+1. **Phase 8 埋め込み言語**: `$$…$$` の言語判定→サブフォーマッタ委譲（JS=biome、SQL=自己再帰、Python 方針決定）。トップレベル Snowflake Scripting は構造化済み、procedure body は現在 verbatim 保持で無破壊。
+2. **Phase 7 DDL の残り**: マスキング/行アクセスポリシー、タグ、Semantic View、細かい object option のさらなる構造化（🔎 新しめは要ドキュメント確認）。
+3. **Phase 5/9 の網羅強化**: `->>` の `SHOW` chain など追加ゴールデン、Tree-sitter expression/context-aware injections/indents。
+4. **Phase 10**: `rayon` 並列、Cortex/AISQL 関数認識、VS Code 拡張、外部大規模コーパス。
 
 回帰ゲートは `cargo test --workspace`（golden=insta、full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）＋ `cargo clippy --workspace --all-targets` ＋ `cargo fmt --all --check`。

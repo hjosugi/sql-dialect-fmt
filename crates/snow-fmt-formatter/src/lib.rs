@@ -115,9 +115,11 @@ pub fn format(source: &str, options: &FormatOptions) -> String {
     if !lexed.errors.is_empty() {
         return source.to_string();
     }
-    if lexed.tokens.iter().any(|token| {
-        !token.kind.is_trivia() && multiline_token_has_line_trailing_space(token.text)
-    }) {
+    if lexed
+        .tokens
+        .iter()
+        .any(|token| !token.kind.is_trivia() && multiline_token_has_line_trailing_space(token.text))
+    {
         return source.to_string();
     }
     let parse = snow_fmt_parser::parse(source);

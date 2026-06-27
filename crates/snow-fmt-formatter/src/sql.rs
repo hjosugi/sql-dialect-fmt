@@ -1381,7 +1381,8 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
 fn keyword_text_forced(token: &SyntaxToken, ctx: Ctx, force_keyword: bool) -> Doc {
     // Soft (contextual) keywords are tagged `CONTEXTUAL_KEYWORD` rather than living in the keyword
     // range, but they upper-case just like real keywords.
-    let is_keyword = force_keyword || token.kind().is_keyword() || token.kind() == CONTEXTUAL_KEYWORD;
+    let is_keyword =
+        force_keyword || token.kind().is_keyword() || token.kind() == CONTEXTUAL_KEYWORD;
     if ctx.uppercase_keywords && is_keyword {
         text(token.text().to_ascii_uppercase())
     } else {
@@ -1400,13 +1401,17 @@ fn keyword_text_forced(token: &SyntaxToken, ctx: Ctx, force_keyword: bool) -> Do
 /// canonical spelling. Adding a word here only changes the *casing* of a recognized key in key
 /// position — never a value, identifier, or literal.
 fn is_option_key(word: &str) -> bool {
-    OPTION_KEYS.binary_search(&word.to_ascii_lowercase().as_str()).is_ok()
+    OPTION_KEYS
+        .binary_search(&word.to_ascii_lowercase().as_str())
+        .is_ok()
 }
 
 /// A no-value option flag word (`ORDER` / `NOORDER`): a recognized key that stands alone with no
 /// `= value`. Used so a trailing flag still up-cases even though no `=` follows it.
 fn is_option_flag(word: &str) -> bool {
-    OPTION_FLAGS.binary_search(&word.to_ascii_lowercase().as_str()).is_ok()
+    OPTION_FLAGS
+        .binary_search(&word.to_ascii_lowercase().as_str())
+        .is_ok()
 }
 
 /// Canonical option-key spellings, lower-cased and **kept sorted** for `binary_search`. (Multi-word

@@ -222,7 +222,7 @@ fn create_stream_source_on_its_own_line() {
         fmt("create stream s on table t append_only = true"),
         "CREATE STREAM s\n    \
            ON TABLE t\n    \
-           append_only = TRUE;\n",
+           APPEND_ONLY = TRUE;\n",
     );
 }
 

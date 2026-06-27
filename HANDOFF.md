@@ -1,4 +1,4 @@
-# snow-fmt 引き継ぎ (HANDOFF) — 2026-06-22
+# snow-fmt 引き継ぎ (HANDOFF) — 2026-06-27
 
 > 「きれいに再開する」ための引き継ぎメモ。**現状を緑のまま固定**し、次タスクを優先順位つきで残す。
 > 関連: [README.md](README.md) / [ROADMAP.md](ROADMAP.md) / [docs/research/](docs/research/) /
@@ -18,9 +18,10 @@
 - **構文拡張（パーサ）**: 集約 `DISTINCT`、`WITHIN GROUP`、`PIVOT/UNPIVOT`、`GROUPING SETS/CUBE/ROLLUP`、`LATERAL FLATTEN`/テーブル関数/名前付き引数、`MATCH_RECOGNIZE`、`ASOF JOIN`、time travel `AT/BEFORE`、`IS [NOT] DISTINCT FROM`、`FROM VALUES`、`WITH` を query primary に。
 - **DML**: `INSERT`（単一/`OVERWRITE`/`ALL`/`FIRST`）, `UPDATE`, `DELETE`, `MERGE`。
 - **DDL**: `CREATE TABLE/VIEW/CTAS`, `DROP`, `ALTER`(寛容), `CREATE PROCEDURE/FUNCTION` 骨格（`$$…$$` ボディ verbatim）。
-- **COPY INTO**（ロード/アンロード、ステージパス verbatim）。
-- **CLI `snow-fmt`**: `--write`/`--check`/stdin、エンコーディング保持（v0.1.0、`cargo install` 可）。
-- **無破壊・べき等・トークン/コメント保存**を内蔵 easy corpus 全件で機械ガード。
+- **COPY INTO**（ロード/アンロード、ステージパス verbatim、option key の key-position 大文字化）。
+- **CLI `snow-fmt`**: `--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、エンコーディング保持（v0.1.0、`cargo install` 可）。
+- **診断品質**: lexer/parser error span（token 全体、EOF zero-width）、人間向け `SyntaxKind::describe`、LSP diagnostics に lexer error も反映。
+- **無破壊・べき等・トークン/コメント保存**を内蔵 easy corpus 全件 + `proptest`（Unicode/ASCII/token-salad）で機械ガード。
 - **コーパス clean パース 0 → 38 / 77**（残りは安全に無変更パススルー）。
 
 ### 既知の技術的負債（次のリファクタ対象）
@@ -31,6 +32,9 @@
 - 残る balanced-paren（`SAMPLE`/`TABLESAMPLE`/time travel `AT|BEFORE (...)`/COPY のステージ）は未構造化のインライン（短いので実害小）。
 - ✅ ~~`INSERT INTO t(cols)` の `(` 前スペース不統一~~ → 列名リスト（`COLUMN_LIST`）は常に前スペース（`INSERT INTO t (a, b)`／`AS t (c1, c2)`／`USING (a, b)`）、関数呼び出し `ARG_LIST` は密着のまま。`CREATE TABLE t (…)` と一致。
 - ✅ ~~`insta` スナップショット未導入~~ → 複数行のゴールデンテストを `insta::assert_snapshot!`（インライン）に移行。期待値はテスト内に残りつつ自動更新可。更新は `cargo insta test --accept`（要 `cargo install cargo-insta`）、検証は通常の `cargo test` で可。
+- ✅ ~~COPY/object DDL option key が小文字のまま残る~~ → `lower_option_node` で key position のみ認識して大文字化。値・識別子・stage path は不変。
+- ✅ ~~parser/lexer diagnostics が単点 offset + Debug 名~~ → byte span + human-readable message に刷新。LSP range も token 全体へ。
+- ✅ ~~property/fuzz 系の panic-safety ゲート不足~~ → parser/formatter の `proptest` harness を追加し、既知の formatter 非べき等ケース（未終端 token、行コメントのセミコロン後流出）も本体側で修正。
 - ※「コメントを含む文は丸ごと verbatim」は**誤り**だった: leading/trailing/inline コメントは通常経路で整形済み。verbatim はトークンに付与できない稀なコメントだけの安全網。
 
 ## 1. ゴール（ユーザー指示の要約）
@@ -45,12 +49,12 @@
 |---|---|---|
 | `snow-fmt-syntax` | `SyntaxKind`・`keyword_kind`・`T!`・rowan `Language` | ✅ 中核 |
 | `snow-fmt-lexer` | ロスレス手書きレキサ（`->>`=FLOW_PIPE, `|>`, `::`, `$$..$$`, コメント3種, エスケープ） | ✅ 中核 |
-| `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/DML/DDL/プロシージャ骨格/Snowflake 拡張。**決して失敗しない**・ロスレス | ✅ Phase 1–8 部分 |
-| `snow-fmt-formatter` | 汎用 Doc IR エンジン ＋ SQL 整形規則（上記 §0.5）。べき等・無破壊（パース失敗はパススルー、未配置コメントは文単位 verbatim） | ✅ Phase 3 + 実用 |
+| `snow-fmt-parser` | イベント方式パーサ→rowan CST、Pratt 式、SELECT 一式/DML/DDL/プロシージャ骨格/Snowflake 拡張。**決して失敗しない**・ロスレス・span 付き診断 | ✅ Phase 1–8 部分 |
+| `snow-fmt-formatter` | 汎用 Doc IR エンジン ＋ SQL 整形規則（上記 §0.5）。べき等・無破壊（lexer/parser error はパススルー、未配置コメントは文単位 verbatim） | ✅ Phase 3 + 実用 |
 | `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
 | `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
-| `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル） | 🚧 初期 |
-| `snow-fmt-cli` | 実用 `snow-fmt` CLI（`--write`/`--check`/stdin、エンコーディング保持）。v0.1.0 | ✅ |
+| `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル、statement/folds まで） | 🚧 初期+ |
+| `snow-fmt-cli` | 実用 `snow-fmt` CLI（`--write`/`--check`/stdin、複数ファイル/ディレクトリ、`snow-fmt.toml`、エンコーディング保持）。v0.1.0 | ✅ |
 | `snow-fmt-encoding` | 文字コード/改行ユーティリティ | 🚧 |
 | `snow-fmt-test-fixtures` | easy-test-cases を `include_str!` で内蔵（外部 `easy-test-cases/` 無しでも `cargo test` 通る） | ✅ |
 | `snow-fmt-test-support` | テスト共有ユーティリティ | ✅ |
@@ -58,17 +62,11 @@
 設計の真実の源は **rowan CST**。tree-sitter は競合させず、エディタ向けの寛容・高速な認識層という役割分担。
 
 ## 3. 次の優先タスク（順番）
-1. **formatter リファクタ（負債返済）**: §0.5 の「既知の負債」を潰す。`Lowerer` の特殊ケースを共通ヘルパ
-   （ヘッダ＋ブロック行、寛容リスト等）に統合、contextual keyword の大文字化統一、`insta` 導入を検討。
-   ノード追加の手順: 文法 [grammar.rs](crates/snow-fmt-parser/src/grammar.rs)、種別は
-   [kind.rs](crates/snow-fmt-syntax/src/kind.rs)（`__LAST`/`__KW_END` 直前に追加 → キーワードなら
-   [keyword.rs](crates/snow-fmt-syntax/src/keyword.rs) の match と KEYWORDS テスト両方）。各追加に往復＋整形テスト。
-2. **残コーパスの整形カバレッジ拡大**（clean 38→）: `CREATE` 各種（TASK/STREAM/PIPE/POLICY/FILE FORMAT/
-   DATABASE/SCHEMA/WAREHOUSE/TAG/DYNAMIC TABLE/SEQUENCE）を「綺麗に整形できる形」で。`CHANGES`、semantic view、
-   `MERGE … METADATA$`、scripting ボディ内部整形。※インライン巨大1行になるなら無理に取り込まず素通しのまま。
-3. **rich hover**（§4）／ LSP（`snow-fmt-lsp` 別 crate）。
-4. tree-sitter の corpus テストと `queries/highlights.scm` 拡充。
-5. crates.io 公開 / GitHub Release（タグ）。設定ファイル `snow-fmt.toml`。
+1. **埋め込み言語の次段**: `$$…$$` body の言語判定 → JS は Biome、SQL は自己再帰、Python は方針決定。procedure body は今は verbatim で無破壊。
+2. **DDL の残り**: マスキング/行アクセスポリシー、タグ、Semantic View、細かい object option の構造化。新しめの仕様は Snowflake 公式 docs で確認してから入れる。
+3. **rich hover / spec 連携**: §4 の通り、まず keyword/function hover を `spec/seed/features.json` 由来にする。
+4. **editor 周辺**: tree-sitter expression/context-aware injections/indents、VS Code 拡張。
+5. **仕上げ**: `rayon` 並列、外部大規模コーパス、crates.io/GitHub Release。
 
 ## 4. rich hover の設計案
 - LSP `textDocument/hover` を `snow-fmt-hover` で実装。CST 上の位置 → 最小ノードを特定し、種別ごとに内容を返す:
