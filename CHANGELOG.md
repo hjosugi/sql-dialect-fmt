@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-27
+
 This is the first release line of **sql-dialect-fmt**, a Rust toolchain for formatting and
 highlighting Snowflake SQL and Databricks SQL. The format is mechanically **lossless and idempotent**:
 unparseable input passes through unchanged, significant tokens and comments are
@@ -50,11 +52,17 @@ preserved, and `format(format(x)) == format(x)`.
   compatibility alias) with `--write`, `--check`, stdin/stdout, `--dialect`,
   and `--line-width` / `--indent-width` / `--no-uppercase` options.
 - **LSP** (`sql-dialect-fmt-lsp`): Language Server providing formatting, semantic tokens,
-  and diagnostics over stdio.
+  diagnostics, hover, folding ranges, and first-pass lint warnings over stdio.
+- **Conformance generator** (`scripts/conformance-report.py`): mines `.sql` files and SQL
+  fenced blocks from local paths or archives, then runs the external corpus harness and emits
+  a parser/formatter conformance report.
+- **Distribution packages**: GitHub Release assets for the CLI binary, Snowsight Chrome
+  extension zip, and VS Code VSIX, plus manual Marketplace/Web Store publish workflow gates.
 
 ### Notes
 
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v0.1.0...v1.0.0
