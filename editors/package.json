@@ -10,6 +10,10 @@
     "url": "https://github.com/hjosugi/sql-dialect-fmt.git",
     "directory": "editors"
   },
+  "bugs": {
+    "url": "https://github.com/hjosugi/sql-dialect-fmt/issues"
+  },
+  "qna": false,
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -20,6 +24,14 @@
     "snowflake",
     "sql",
     "sql-dialect-fmt"
+  ],
+  "files": [
+    "CHANGELOG.md",
+    "LICENSE.md",
+    "README.md",
+    "language-configuration.json",
+    "package.json",
+    "snowflake.tmLanguage.json"
   ],
   "contributes": {
     "languages": [

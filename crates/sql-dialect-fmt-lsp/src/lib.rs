@@ -144,7 +144,169 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
         )
         .collect();
     diagnostics.extend(embedded_language_diagnostics(text, &index));
+    diagnostics.extend(lint_diagnostics(text, &index));
     diagnostics
+}
+
+fn lint_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagnostic> {
+    let tokens = sql_dialect_fmt_highlight::highlight(text).tokens;
+    let mut diagnostics = Vec::new();
+
+    diagnostics.extend(select_wildcard_diagnostics(&tokens, index));
+    diagnostics.extend(large_in_list_diagnostics(&tokens, index));
+
+    diagnostics
+}
+
+fn lint_warning(index: &LineIndex<'_>, range: std::ops::Range<usize>, message: &str) -> Diagnostic {
+    Diagnostic {
+        range: Range::new(index.position(range.start), index.position(range.end)),
+        severity: Some(DiagnosticSeverity::WARNING),
+        source: Some("sql-dialect-fmt".to_string()),
+        message: message.to_string(),
+        ..Default::default()
+    }
+}
+
+fn select_wildcard_diagnostics(
+    tokens: &[sql_dialect_fmt_highlight::HighlightToken<'_>],
+    index: &LineIndex<'_>,
+) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut in_select_list = false;
+    let mut paren_depth = 0usize;
+    let mut previous_significant: Option<&str> = None;
+
+    for token in tokens.iter().filter(|token| is_significant(token.kind)) {
+        if token.kind == HighlightKind::Keyword && token.text.eq_ignore_ascii_case("select") {
+            in_select_list = true;
+            paren_depth = 0;
+            previous_significant = Some(token.text);
+            continue;
+        }
+
+        if in_select_list {
+            match token.text {
+                "(" => paren_depth += 1,
+                ")" => paren_depth = paren_depth.saturating_sub(1),
+                ";" if paren_depth == 0 => in_select_list = false,
+                _ => {
+                    if paren_depth == 0
+                        && token.kind == HighlightKind::Keyword
+                        && token.text.eq_ignore_ascii_case("from")
+                    {
+                        in_select_list = false;
+                    } else if paren_depth == 0
+                        && token.text == "*"
+                        && previous_significant.is_some_and(is_wildcard_prefix)
+                    {
+                        diagnostics.push(lint_warning(
+                            index,
+                            token.range.clone(),
+                            "avoid SELECT * in shared SQL; list columns explicitly",
+                        ));
+                    }
+                }
+            }
+        }
+
+        previous_significant = Some(token.text);
+    }
+
+    diagnostics
+}
+
+fn is_wildcard_prefix(text: &str) -> bool {
+    matches!(text, "," | ".")
+        || text.eq_ignore_ascii_case("select")
+        || text.eq_ignore_ascii_case("distinct")
+        || text.eq_ignore_ascii_case("all")
+}
+
+fn large_in_list_diagnostics(
+    tokens: &[sql_dialect_fmt_highlight::HighlightToken<'_>],
+    index: &LineIndex<'_>,
+) -> Vec<Diagnostic> {
+    const LARGE_IN_LIST_THRESHOLD: usize = 100;
+
+    #[derive(Debug)]
+    struct InList {
+        start: usize,
+        depth: usize,
+        commas: usize,
+        saw_top_level_item: bool,
+        possible_subquery: bool,
+    }
+
+    let mut diagnostics = Vec::new();
+    let mut pending_in: Option<usize> = None;
+    let mut list: Option<InList> = None;
+
+    for token in tokens.iter().filter(|token| is_significant(token.kind)) {
+        let mut close_list_at: Option<usize> = None;
+        if let Some(active) = list.as_mut() {
+            match token.text {
+                "(" => active.depth += 1,
+                ")" => {
+                    active.depth = active.depth.saturating_sub(1);
+                    if active.depth == 0 {
+                        close_list_at = Some(token.range.end);
+                    }
+                }
+                "," if active.depth == 1 => active.commas += 1,
+                _ if active.depth == 1 && !active.saw_top_level_item => {
+                    active.saw_top_level_item = true;
+                    if token.kind == HighlightKind::Keyword
+                        && (token.text.eq_ignore_ascii_case("select")
+                            || token.text.eq_ignore_ascii_case("with"))
+                    {
+                        active.possible_subquery = true;
+                    }
+                }
+                _ => {}
+            }
+
+            if let Some(end) = close_list_at {
+                let active = list.take().expect("closing active IN list");
+                let item_count = if active.saw_top_level_item {
+                    active.commas + 1
+                } else {
+                    0
+                };
+                if !active.possible_subquery && item_count > LARGE_IN_LIST_THRESHOLD {
+                    diagnostics.push(lint_warning(
+                        index,
+                        active.start..end,
+                        "large IN list; prefer a temp table, CTE, or semi-join when practical",
+                    ));
+                }
+            }
+            continue;
+        }
+
+        if let Some(start) = pending_in.take() {
+            if token.text == "(" {
+                list = Some(InList {
+                    start,
+                    depth: 1,
+                    commas: 0,
+                    saw_top_level_item: false,
+                    possible_subquery: false,
+                });
+                continue;
+            }
+        }
+
+        if token.kind == HighlightKind::Keyword && token.text.eq_ignore_ascii_case("in") {
+            pending_in = Some(token.range.start);
+        }
+    }
+
+    diagnostics
+}
+
+fn is_significant(kind: HighlightKind) -> bool {
+    !matches!(kind, HighlightKind::Whitespace | HighlightKind::Comment)
 }
 
 fn embedded_language_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagnostic> {
@@ -407,6 +569,63 @@ mod tests {
                 diagnostics(text)
                     .iter()
                     .all(|diag| !diag.message.contains("unsupported embedded language")),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn select_wildcard_lint_is_a_warning() {
+        let text = "SELECT * FROM t;";
+        let diags = diagnostics(text);
+        let wildcard = diags
+            .iter()
+            .find(|d| d.message.contains("avoid SELECT *"))
+            .expect("SELECT * warning");
+        assert_eq!(wildcard.severity, Some(DiagnosticSeverity::WARNING));
+        let col = text.find('*').unwrap() as u32;
+        assert_eq!(wildcard.range.start, Position::new(0, col));
+        assert_eq!(wildcard.range.end, Position::new(0, col + 1));
+    }
+
+    #[test]
+    fn select_wildcard_lint_ignores_function_stars() {
+        let text = "SELECT count(*) FROM t;";
+        assert!(
+            diagnostics(text)
+                .iter()
+                .all(|diag| !diag.message.contains("avoid SELECT *")),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn large_in_list_lint_is_a_warning() {
+        let values = (0..101)
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let text = format!("SELECT id FROM t WHERE id IN ({values});");
+        let diags = diagnostics(&text);
+        let in_list = diags
+            .iter()
+            .find(|d| d.message.contains("large IN list"))
+            .expect("large IN-list warning");
+        assert_eq!(in_list.severity, Some(DiagnosticSeverity::WARNING));
+        let col = text.find("IN").unwrap() as u32;
+        assert_eq!(in_list.range.start, Position::new(0, col));
+    }
+
+    #[test]
+    fn normal_in_list_and_subquery_have_no_lint() {
+        for text in [
+            "SELECT id FROM t WHERE id IN (1, 2, 3);",
+            "SELECT id FROM t WHERE id IN (SELECT id FROM src);",
+        ] {
+            assert!(
+                diagnostics(text)
+                    .iter()
+                    .all(|diag| !diag.message.contains("large IN list")),
                 "{text}"
             );
         }

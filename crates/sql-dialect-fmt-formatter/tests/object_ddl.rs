@@ -218,6 +218,33 @@ fn newer_object_options_upcase_in_key_position() {
 }
 
 #[test]
+fn preview_object_options_upcase_in_key_position() {
+    assert_eq!(
+        fmt("create warehouse preview_wh min_nodes = 1 max_nodes = 3 instance_family = CPU_X64_XS auto_suspend_secs = 60 network_policy = np password_policy = pp session_policy = sp authentication_policy = ap default_warehouse = wh"),
+        "CREATE WAREHOUSE preview_wh\n    \
+           MIN_NODES = 1\n    \
+           MAX_NODES = 3\n    \
+           INSTANCE_FAMILY = CPU_X64_XS\n    \
+           AUTO_SUSPEND_SECS = 60\n    \
+           NETWORK_POLICY = np\n    \
+           PASSWORD_POLICY = pp\n    \
+           SESSION_POLICY = sp\n    \
+           AUTHENTICATION_POLICY = ap\n    \
+           DEFAULT_WAREHOUSE = wh;\n",
+    );
+
+    assert_eq!(
+        fmt("create schema governed aggregation_policy = agg join_policy = jp projection_policy = pp data_metric_function = dm data_metric_schedule = '5 minutes'"),
+        "CREATE SCHEMA governed\n    \
+           AGGREGATION_POLICY = agg\n    \
+           JOIN_POLICY = jp\n    \
+           PROJECTION_POLICY = pp\n    \
+           DATA_METRIC_FUNCTION = dm\n    \
+           DATA_METRIC_SCHEDULE = '5 minutes';\n",
+    );
+}
+
+#[test]
 fn create_task_lays_out_body_structurally() {
     assert_eq!(
         fmt("create task t warehouse = w schedule = '5 minutes' as select 1"),

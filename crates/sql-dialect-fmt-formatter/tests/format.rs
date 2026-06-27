@@ -529,6 +529,27 @@ fn single_quoted_routine_bodies_are_formatted_when_safe() {
 }
 
 #[test]
+fn single_quoted_java_and_scala_bodies_are_formatted_when_safe() {
+    let java =
+        "create function jq() returns int language java as 'class C { public static int run() { return 1; } }'";
+    let java_out = fmt(java);
+    assert_eq!(
+        java_out,
+        "CREATE FUNCTION jq () RETURNS int LANGUAGE JAVA AS '\nclass C {\n    public static int run() {\n        return 1;\n    }\n}\n';\n"
+    );
+    assert_eq!(fmt(&java_out), java_out);
+
+    let scala =
+        "create function sq() returns int language scala as 'class C { def run(): Int = { 1 } }'";
+    let scala_out = fmt(scala);
+    assert_eq!(
+        scala_out,
+        "CREATE FUNCTION sq () RETURNS int LANGUAGE SCALA AS '\nclass C {\n    def run(): Int = {\n        1\n    }\n}\n';\n"
+    );
+    assert_eq!(fmt(&scala_out), scala_out);
+}
+
+#[test]
 fn sql_expression_quoted_body_stays_verbatim() {
     let src = "create function add1(n float) returns float language sql as 'n + 1'";
     let out = fmt(src);
@@ -600,6 +621,25 @@ fn java_and_scala_text_blocks_do_not_break_brace_formatting() {
     assert_eq!(
         scala_out,
         "CREATE FUNCTION s () RETURNS string LANGUAGE SCALA AS $$\nclass C {\n    def run(): String = {\n        val q = \"\"\"select } as text\"\"\";\n        q\n    }\n}\n$$;\n"
+    );
+    assert_eq!(fmt(&scala_out), scala_out);
+}
+
+#[test]
+fn java_and_scala_comments_do_not_break_brace_formatting() {
+    let java = "create function j() returns int language java as $$ class C { // entry\n public static int run() { /* keep */ return 1; } } $$";
+    let java_out = fmt(java);
+    assert_eq!(
+        java_out,
+        "CREATE FUNCTION j () RETURNS int LANGUAGE JAVA AS $$\nclass C {\n    // entry\n    public static int run() {\n        /* keep */ return 1;\n    }\n}\n$$;\n"
+    );
+    assert_eq!(fmt(&java_out), java_out);
+
+    let scala = "create function s() returns int language scala as $$ class C { def run(): Int = { // value\n 1 } } $$";
+    let scala_out = fmt(scala);
+    assert_eq!(
+        scala_out,
+        "CREATE FUNCTION s () RETURNS int LANGUAGE SCALA AS $$\nclass C {\n    def run(): Int = {\n        // value\n        1\n    }\n}\n$$;\n"
     );
     assert_eq!(fmt(&scala_out), scala_out);
 }

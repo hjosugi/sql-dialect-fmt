@@ -1,0 +1,100 @@
+name: Extension Packages
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version, without leading v. Defaults to Cargo.toml."
+        required: false
+        default: ""
+      publish:
+        description: "Publish to VS Code Marketplace and Chrome Web Store."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package and optionally publish extensions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Resolve package version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version || '' }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(awk -F'"' '/^version =/ { print $2; exit }' Cargo.toml)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build Chrome zip and VSIX
+        run: ./scripts/package-extensions.sh "${{ steps.version.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sql-dialect-fmt-extension-packages-v${{ steps.version.outputs.version }}
+          path: target/dist/*
+          if-no-files-found: error
+      - name: Publish VS Code Marketplace
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::error::VSCE_PAT secret is required to publish the VS Code extension"
+            exit 1
+          fi
+          npx --yes @vscode/vsce publish \
+            --packagePath "target/dist/sql-dialect-fmt-v${{ steps.version.outputs.version }}.vsix" \
+            -p "$VSCE_PAT"
+      - name: Publish Chrome Web Store
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: |
+          for name in CHROME_EXTENSION_ID CHROME_CLIENT_ID CHROME_CLIENT_SECRET CHROME_REFRESH_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name secret is required to publish the Chrome extension"
+              exit 1
+            fi
+          done
+
+          token_response="$(
+            curl -fsS https://oauth2.googleapis.com/token \
+              -d client_id="$CHROME_CLIENT_ID" \
+              -d client_secret="$CHROME_CLIENT_SECRET" \
+              -d refresh_token="$CHROME_REFRESH_TOKEN" \
+              -d grant_type=refresh_token
+          )"
+          access_token="$(
+            python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])' \
+              <<< "$token_response"
+          )"
+          zip_path="target/dist/sql-dialect-fmt-v${{ steps.version.outputs.version }}-chrome.zip"
+
+          curl -fsS -X PUT \
+            -H "Authorization: Bearer $access_token" \
+            -H "x-goog-api-version: 2" \
+            -H "Content-Type: application/zip" \
+            --data-binary "@$zip_path" \
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$CHROME_EXTENSION_ID?uploadType=media"
+
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $access_token" \
+            -H "x-goog-api-version: 2" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$CHROME_EXTENSION_ID/publish"

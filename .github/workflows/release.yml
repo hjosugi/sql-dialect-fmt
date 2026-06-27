@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version tag to create (e.g. v0.1.0)"
+        description: "Release version tag to create (e.g. v1.0.0)"
         required: true
-        default: v0.1.0
+        default: v1.0.0
 
 permissions:
   contents: write
@@ -21,6 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Resolve version
         id: version
         run: echo "version=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_OUTPUT"
@@ -31,6 +34,10 @@ jobs:
           asset="sql-dialect-fmt-${{ steps.version.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz"
           tar -czf "$asset" -C target/release sql-dialect-fmt
           sha256sum "$asset" > "$asset.sha256"
+      - name: Package editor extensions
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          ./scripts/package-extensions.sh "${version#v}"
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,7 +52,9 @@ jobs:
               --repo "${{ github.repository }}" \
               --clobber \
               "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz" \
-              "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256"
+              "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256" \
+              "target/dist/sql-dialect-fmt-$v-chrome.zip" \
+              "target/dist/sql-dialect-fmt-$v.vsix"
           else
             # When dispatched, the tag does not exist yet; --target creates it at this commit.
             # When triggered by a tag push, the tag already exists and --target is ignored.
@@ -55,5 +64,7 @@ jobs:
               --title "$v" \
               --generate-notes \
               "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz" \
-              "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256"
+              "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256" \
+              "target/dist/sql-dialect-fmt-$v-chrome.zip" \
+              "target/dist/sql-dialect-fmt-$v.vsix"
           fi
