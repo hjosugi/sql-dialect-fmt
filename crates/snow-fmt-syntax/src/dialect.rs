@@ -98,6 +98,17 @@ impl Dialect {
     pub fn supports_as_of_travel(self) -> bool {
         matches!(self, Dialect::Databricks)
     }
+
+    /// Delta/Spark maintenance + cache statements — `VACUUM`, `OPTIMIZE … ZORDER BY`,
+    /// `INSERT OVERWRITE`, `CACHE`/`UNCACHE`/`REFRESH`, `DESCRIBE HISTORY`, and the
+    /// `WHEN NOT MATCHED BY SOURCE`/`INSERT *` MERGE extensions. Databricks only. The leading words
+    /// (`VACUUM`, `OPTIMIZE`, `CACHE`, …) are recognized **contextually** at statement start, so they
+    /// stay ordinary identifiers under Snowflake (and elsewhere under Databricks), and Snowflake
+    /// output is byte-identical.
+    #[must_use]
+    pub fn supports_delta_commands(self) -> bool {
+        matches!(self, Dialect::Databricks)
+    }
 }
 
 #[cfg(test)]
@@ -123,6 +134,7 @@ mod tests {
         assert!(!s.supports_delta_table_options());
         assert!(!s.supports_lambda_expr());
         assert!(!s.supports_as_of_travel());
+        assert!(!s.supports_delta_commands());
     }
 
     #[test]
@@ -139,5 +151,6 @@ mod tests {
         assert!(d.supports_delta_table_options());
         assert!(d.supports_lambda_expr());
         assert!(d.supports_as_of_travel());
+        assert!(d.supports_delta_commands());
     }
 }

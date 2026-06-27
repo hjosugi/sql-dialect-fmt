@@ -12,6 +12,7 @@ use snow_fmt_syntax::SyntaxKind::*;
 
 use crate::parser::{CompletedMarker, ContextualKeyword, Parser};
 
+mod delta;
 mod dml;
 mod stmt;
 

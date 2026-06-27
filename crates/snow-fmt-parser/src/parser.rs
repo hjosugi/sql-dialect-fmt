@@ -217,6 +217,36 @@ contextual_keywords! {
     Check => "check",
     /// A column `COLLATE '<spec>'`.
     Collate => "collate",
+    // ---- Databricks / Delta maintenance + cache statements (contextual at statement start, so the
+    // words stay ordinary identifiers under Snowflake and elsewhere under Databricks) ----
+    /// `VACUUM <table|path> …` — Delta file cleanup statement.
+    Vacuum => "vacuum",
+    /// `VACUUM <t> RETAIN <n> HOURS …`.
+    Retain => "retain",
+    /// `VACUUM <t> RETAIN <n> HOURS` — the `HOURS` unit word.
+    Hours => "hours",
+    /// `VACUUM <t> … DRY RUN` — first word.
+    Dry => "dry",
+    /// `VACUUM <t> … DRY RUN` — second word.
+    Run => "run",
+    /// `OPTIMIZE <table> [WHERE p] [ZORDER BY (cols)]` — Delta compaction statement.
+    Optimize => "optimize",
+    /// `OPTIMIZE <t> ZORDER BY ( col [, ...] )` — the z-order clause keyword.
+    Zorder => "zorder",
+    /// `CACHE [LAZY] TABLE <t> …` — Spark cache statement.
+    Cache => "cache",
+    /// `CACHE LAZY TABLE …` — defer caching until first use.
+    Lazy => "lazy",
+    /// `UNCACHE TABLE [IF EXISTS] <t>` — drop a cached table.
+    Uncache => "uncache",
+    /// `REFRESH [TABLE] <t>` / `REFRESH <path>` — invalidate cached entries.
+    Refresh => "refresh",
+    /// `DESCRIBE HISTORY <table>` — Delta change-history statement (the `HISTORY` word).
+    History => "history",
+    /// `MERGE … WHEN NOT MATCHED BY SOURCE …` — the `SOURCE` qualifier word.
+    Source => "source",
+    /// `MERGE … WHEN NOT MATCHED BY TARGET …` — the `TARGET` qualifier word.
+    Target => "target",
 }
 
 pub(crate) struct Parser<'a> {

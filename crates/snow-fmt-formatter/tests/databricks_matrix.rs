@@ -42,8 +42,10 @@ fn signature(sql: &str) -> Vec<String> {
 }
 
 /// Every case below is verified to parse **clean** (no diagnostics) under Databricks, so all four
-/// hard invariants apply. Cases that only round-trip via verbatim fallback (e.g. `OPTIMIZE`,
-/// `INSERT OVERWRITE`, typed literals) are deliberately excluded and listed in the gap report.
+/// hard invariants apply. The Delta maintenance + cache statements (`VACUUM`, `OPTIMIZE … ZORDER
+/// BY`, `INSERT OVERWRITE`, `CACHE`/`UNCACHE`/`REFRESH`, `DESCRIBE HISTORY`, and the `MERGE`
+/// extensions) have their own dedicated matrix in `tests/databricks_delta.rs`; a few representative
+/// cases also appear here so the shared invariants cover them.
 const CASES: &[&str] = &[
     // ---- shared: basic SELECT / projection / predicates ----
     "select a, b from t",
@@ -155,6 +157,16 @@ const CASES: &[&str] = &[
     "select a || ' ' || b from t",
     "select a::int from t",
     "select (a + b)::double from t",
+    // ---- databricks: Delta maintenance + cache statements (full matrix in databricks_delta.rs) ----
+    "vacuum t retain 168 hours dry run",
+    "optimize t where a > 1 zorder by (a, b)",
+    "insert overwrite table t partition (dt = '2024-01-01') select a, b from s",
+    "cache table t as select * from s",
+    "uncache table if exists t",
+    "refresh table t",
+    "describe history t",
+    "merge into t using s on t.id = s.id when not matched by source then delete",
+    "merge into t using s on t.id = s.id when not matched then insert *",
 ];
 
 #[test]

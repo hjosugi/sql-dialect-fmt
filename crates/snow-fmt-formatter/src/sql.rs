@@ -404,6 +404,31 @@ impl Lowerer {
         self.lower_clausal(node, |k| matches!(k, USING_KW | ON_KW), |k| k == MERGE_WHEN)
     }
 
+    /// Databricks `OPTIMIZE <t> [WHERE p] [ZORDER BY (cols)]`: the `OPTIMIZE <t>` header inline, with
+    /// the `WHERE` predicate and the `ZORDER BY` clause each on their own line.
+    fn lower_optimize(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_clausal(
+            node,
+            |_| false,
+            |k| matches!(k, WHERE_CLAUSE | ZORDER_CLAUSE),
+        )
+    }
+
+    /// Databricks `CACHE [LAZY] TABLE <t> [OPTIONS (...)]` header inline, with a defining `[AS]` query
+    /// laid out on its own indented line(s).
+    fn lower_cache(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_clausal(
+            node,
+            |_| false,
+            |k| {
+                matches!(
+                    k,
+                    SELECT_STMT | SET_OP | WITH_QUERY | SUBQUERY | VALUES_CLAUSE
+                )
+            },
+        )
+    }
+
     /// `CREATE [OR REPLACE] ... TABLE/VIEW ...`: the header inline (a column-def list expanded in
     /// place) and a defining/CTAS query after `AS` on its own line(s). For object DDL (SCHEMA /
     /// WAREHOUSE / STAGE / FILE FORMAT / SEQUENCE / STREAM / TASK / DYNAMIC TABLE) each property
@@ -972,6 +997,13 @@ impl Lowerer {
             UPDATE_STMT => self.lower_update(node),
             DELETE_STMT => self.lower_delete(node),
             MERGE_STMT => self.lower_merge(node),
+            // Databricks / Delta maintenance + cache statements.
+            OPTIMIZE_STMT => self.lower_optimize(node),
+            CACHE_STMT => self.lower_cache(node),
+            // `VACUUM`, `UNCACHE`, `REFRESH`, and `DESCRIBE HISTORY` are single-line statements.
+            VACUUM_STMT | UNCACHE_STMT | REFRESH_STMT | DESCRIBE_HISTORY_STMT => {
+                self.lower_children(node)
+            }
             CREATE_STMT => self.lower_create(node),
             GRANT_STMT | REVOKE_STMT => self.lower_grant(node),
             COPY_STMT => self.lower_copy(node),

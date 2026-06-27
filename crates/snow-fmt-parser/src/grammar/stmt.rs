@@ -54,6 +54,7 @@ pub(super) fn at_stmt_start(p: &Parser) -> bool {
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
         || (p.dialect().supports_copy_into() && p.at(COPY_KW))
+        || (p.dialect().supports_delta_commands() && super::delta::at_delta_stmt_start(p))
         || super::at_expr_start(p)
 }
 
@@ -82,6 +83,8 @@ pub(super) fn statement(p: &mut Parser) {
         super::lenient_stmt(p, USE_STMT);
     } else if p.at(SHOW_KW) {
         super::lenient_stmt(p, SHOW_STMT);
+    } else if p.dialect().supports_delta_commands() && super::delta::at_describe_history(p) {
+        super::delta::delta_stmt(p);
     } else if p.at(DESCRIBE_KW) || p.at(DESC_KW) {
         super::lenient_stmt(p, DESCRIBE_STMT);
     } else if p.at(TRUNCATE_KW) {
@@ -102,6 +105,8 @@ pub(super) fn statement(p: &mut Parser) {
         super::execute_stmt(p);
     } else if p.dialect().supports_copy_into() && p.at(COPY_KW) {
         super::copy_stmt(p);
+    } else if p.dialect().supports_delta_commands() && super::delta::at_delta_stmt_start(p) {
+        super::delta::delta_stmt(p);
     } else if p.at(SELECT_KW)
         || p.at(VALUES_KW)
         || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))

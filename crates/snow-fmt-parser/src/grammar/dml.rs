@@ -2,14 +2,23 @@
 
 use snow_fmt_syntax::SyntaxKind::*;
 
-use crate::parser::Parser;
+use crate::parser::{ContextualKeyword, Parser};
 
 pub(super) fn insert_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(INSERT_KW);
-    p.eat(OVERWRITE_KW);
+    let overwrite = p.eat(OVERWRITE_KW);
     if p.at(ALL_KW) || p.at(FIRST_KW) {
         multi_table_insert(p);
+    } else if overwrite
+        && p.dialect().supports_delta_commands()
+        && !p.at(INTO_KW)
+        && (p.at(TABLE_KW) || p.at_name())
+    {
+        // Databricks `INSERT OVERWRITE [TABLE] t [PARTITION (...)] { <query> | VALUES ... }` — the
+        // `INTO` keyword is absent and an optional `TABLE` word and `PARTITION` spec precede the
+        // source. Snowflake's `INSERT OVERWRITE INTO …` keeps the `INTO` path below, unchanged.
+        databricks_insert_overwrite(p);
     } else {
         // Single-table: INSERT [OVERWRITE] INTO t [(cols)] VALUES/<query>.
         p.expect(INTO_KW);
@@ -24,6 +33,29 @@ pub(super) fn insert_stmt(p: &mut Parser) {
         }
     }
     m.complete(p, INSERT_STMT);
+}
+
+/// `INSERT OVERWRITE [TABLE] t [PARTITION ( col [= val] [, ...] )] [(cols)] { <query> | VALUES ... }`
+/// (Databricks/Spark). The `TABLE` keyword and `PARTITION` spec are both optional.
+fn databricks_insert_overwrite(p: &mut Parser) {
+    p.eat(TABLE_KW);
+    super::name_ref(p);
+    if p.at(PARTITION_KW) {
+        p.bump(PARTITION_KW);
+        if p.at(L_PAREN) {
+            super::balanced_parens(p);
+        } else {
+            p.error("expected '(' after PARTITION");
+        }
+    }
+    if p.at(L_PAREN) {
+        super::column_list(p);
+    }
+    if p.at(VALUES_KW) {
+        super::values_clause(p);
+    } else {
+        super::query_expr(p);
+    }
 }
 
 /// `INSERT [OVERWRITE] ALL <into>+ <query>` (unconditional) or
@@ -140,8 +172,21 @@ fn merge_when(p: &mut Parser) {
     p.bump(WHEN_KW);
     p.eat(NOT_KW);
     p.expect(MATCHED_KW);
+    // Databricks `WHEN NOT MATCHED BY {SOURCE|TARGET}` qualifier. `BY` is reserved; `SOURCE`/`TARGET`
+    // are contextual (so they stay ordinary identifiers). Snowflake has no `BY` here, so this never
+    // fires under Snowflake and its MERGE is unchanged.
+    if p.dialect().supports_delta_commands() && p.at(BY_KW) {
+        p.bump(BY_KW);
+        if p.nth_contextual(0, ContextualKeyword::Source)
+            || p.nth_contextual(0, ContextualKeyword::Target)
+        {
+            p.bump_as(CONTEXTUAL_KEYWORD); // SOURCE / TARGET
+        } else {
+            p.error("expected SOURCE or TARGET after BY");
+        }
+    }
     if p.eat(AND_KW) {
-        super::expr(p); // WHEN MATCHED AND <cond>
+        super::expr(p); // WHEN [NOT] MATCHED [BY ...] AND <cond>
     }
     p.expect(THEN_KW);
     if p.at(UPDATE_KW) {
@@ -151,11 +196,16 @@ fn merge_when(p: &mut Parser) {
         p.bump(DELETE_KW);
     } else if p.at(INSERT_KW) {
         p.bump(INSERT_KW);
-        if p.at(L_PAREN) {
-            super::column_list(p);
-        }
-        if p.at(VALUES_KW) {
-            super::values_clause(p);
+        // Databricks `INSERT *` — insert all source columns.
+        if p.dialect().supports_delta_commands() && p.at(STAR) {
+            p.bump(STAR);
+        } else {
+            if p.at(L_PAREN) {
+                super::column_list(p);
+            }
+            if p.at(VALUES_KW) {
+                super::values_clause(p);
+            }
         }
     } else {
         p.error("expected UPDATE, DELETE, or INSERT after THEN");

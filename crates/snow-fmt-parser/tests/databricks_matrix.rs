@@ -91,6 +91,16 @@ const CASES: &[&str] = &[
     "SELECT task, flatten, warehouse FROM t",
     "SELECT a FROM task",
     "SELECT cursor, resultset, undrop FROM t",
+    // ---- databricks: Delta maintenance + cache statements (full matrix in databricks_delta.rs) ----
+    "VACUUM t RETAIN 168 HOURS DRY RUN",
+    "OPTIMIZE t WHERE a > 1 ZORDER BY (a, b)",
+    "INSERT OVERWRITE TABLE t PARTITION (dt = '2024-01-01') SELECT a, b FROM s",
+    "CACHE TABLE t AS SELECT * FROM s",
+    "UNCACHE TABLE IF EXISTS t",
+    "REFRESH TABLE t",
+    "DESCRIBE HISTORY t",
+    "MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE THEN DELETE",
+    "MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED THEN INSERT *",
 ];
 
 fn parse_databricks_clean(sql: &str) {
@@ -326,12 +336,8 @@ fn never_fails_on_databricks_gap_constructs() {
     // Constructs the grammar does not yet model (gap report) must still never panic and must
     // round-trip losslessly under BOTH dialects, even though they produce diagnostics.
     for sql in [
-        "OPTIMIZE t ZORDER BY (a)",
-        "VACUUM t",
-        "CACHE TABLE t",
-        "REFRESH TABLE t",
-        "INSERT OVERWRITE TABLE t SELECT * FROM s",
-        "MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE THEN DELETE",
+        // Higher-order `exists(array, lambda)` is not modeled as a generator (the bare `exists`
+        // predicate `EXISTS (subquery)` is); the lambda arrow still round-trips verbatim.
         "SELECT exists(xs, x -> x > 0) FROM t",
     ] {
         for dialect in [Dialect::Snowflake, Dialect::Databricks] {
@@ -342,5 +348,37 @@ fn never_fails_on_databricks_gap_constructs() {
                 "lossless round-trip must hold for gap construct {sql:?} @ {dialect:?}"
             );
         }
+    }
+}
+
+#[test]
+fn delta_commands_now_parse_clean_under_databricks_and_round_trip_under_snowflake() {
+    // Statements that were previously gap constructs are now first-class under Databricks: they
+    // parse clean there, while remaining lossless-but-unrecognized under Snowflake (the leading
+    // words stay plain identifiers). `VACUUM t` in particular no longer mis-splits under Databricks.
+    for sql in [
+        "OPTIMIZE t ZORDER BY (a)",
+        "VACUUM t",
+        "VACUUM t RETAIN 0 HOURS DRY RUN",
+        "CACHE TABLE t",
+        "REFRESH TABLE t",
+        "INSERT OVERWRITE TABLE t SELECT * FROM s",
+        "MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE THEN DELETE",
+        "DESCRIBE HISTORY t",
+    ] {
+        let databricks = parse_with_dialect(sql, Dialect::Databricks);
+        assert!(
+            databricks.errors().is_empty(),
+            "Databricks must now parse {sql:?} clean: {:?}",
+            databricks.errors()
+        );
+        assert_eq!(databricks.syntax().to_string(), sql);
+
+        let snowflake = parse_with_dialect(sql, Dialect::Snowflake);
+        assert_eq!(
+            snowflake.syntax().to_string(),
+            sql,
+            "Snowflake must round-trip losslessly for {sql:?}"
+        );
     }
 }

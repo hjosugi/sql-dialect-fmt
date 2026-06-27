@@ -374,6 +374,16 @@ pub enum SyntaxKind {
     GRANT_TARGET, // the `ON <object_type> <object_name>` securable of a GRANT/REVOKE
     GRANTEE,   // the `[ROLE|USER] <name>` recipient of a GRANT/REVOKE
 
+    // Databricks / Delta maintenance + cache statements (recognized only under the Databricks
+    // dialect; the leading words stay ordinary identifiers under Snowflake).
+    VACUUM_STMT,           // `VACUUM <table|path> [RETAIN n HOURS] [DRY RUN]`
+    OPTIMIZE_STMT,         // `OPTIMIZE <table> [WHERE p] [ZORDER BY (cols)]`
+    ZORDER_CLAUSE,         // the `ZORDER BY ( col [, ...] )` tail of an OPTIMIZE
+    CACHE_STMT,            // `CACHE [LAZY] TABLE <t> [OPTIONS (...)] [[AS] <query>]`
+    UNCACHE_STMT,          // `UNCACHE TABLE [IF EXISTS] <t>`
+    REFRESH_STMT,          // `REFRESH [TABLE] <t>` / `REFRESH <path>`
+    DESCRIBE_HISTORY_STMT, // `DESCRIBE HISTORY <table>` (Delta change history)
+
     #[doc(hidden)]
     __LAST,
 }
