@@ -12,7 +12,7 @@ use lsp_types::{
     SemanticTokenType, TextEdit,
 };
 use snow_fmt_formatter::{format, FormatOptions};
-use snow_fmt_highlight::semantic;
+use snow_fmt_highlight::{semantic, HighlightKind};
 
 /// The semantic-token type legend, mirrored from the single source of truth in
 /// `snow-fmt-highlight` ([`semantic::SemanticTokenType::LEGEND`]). A token's `token_type` field is
@@ -133,7 +133,7 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
 
     let lex_errors = snow_fmt_highlight::highlight(text).errors;
     let parse = snow_fmt_parser::parse(text);
-    lex_errors
+    let mut diagnostics: Vec<_> = lex_errors
         .into_iter()
         .map(|err| make(to_range(err.range()), err.message))
         .chain(
@@ -142,7 +142,73 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
                 .iter()
                 .map(|err| make(to_range(err.range()), err.message.clone())),
         )
-        .collect()
+        .collect();
+    diagnostics.extend(embedded_language_diagnostics(text, &index));
+    diagnostics
+}
+
+fn embedded_language_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut expect_language_name = false;
+    let mut language_name: Option<(&str, std::ops::Range<usize>)> = None;
+    let mut saw_as_after_language = false;
+
+    for token in snow_fmt_highlight::highlight(text).tokens {
+        match token.kind {
+            HighlightKind::Whitespace | HighlightKind::Comment => {}
+            HighlightKind::Punctuation if token.text == ";" => {
+                expect_language_name = false;
+                language_name = None;
+                saw_as_after_language = false;
+            }
+            HighlightKind::DollarString => {
+                if saw_as_after_language {
+                    if let Some((word, range)) = language_name.take() {
+                        if !is_supported_embedded_language(word) {
+                            diagnostics.push(Diagnostic {
+                                range: Range::new(index.position(range.start), index.position(range.end)),
+                                severity: Some(DiagnosticSeverity::WARNING),
+                                source: Some("snow-fmt".to_string()),
+                                message: format!(
+                                    "unsupported embedded language {word}; expected SQL, JAVASCRIPT, PYTHON, JAVA, or SCALA"
+                                ),
+                                ..Default::default()
+                            });
+                        }
+                    }
+                }
+                expect_language_name = false;
+                saw_as_after_language = false;
+            }
+            HighlightKind::Keyword if token.text.eq_ignore_ascii_case("language") => {
+                expect_language_name = true;
+                language_name = None;
+                saw_as_after_language = false;
+            }
+            HighlightKind::Keyword | HighlightKind::Identifier | HighlightKind::Type
+                if expect_language_name =>
+            {
+                language_name = Some((token.text, token.range));
+                expect_language_name = false;
+            }
+            HighlightKind::Keyword
+                if language_name.is_some() && token.text.eq_ignore_ascii_case("as") =>
+            {
+                saw_as_after_language = true;
+            }
+            _ => {
+                expect_language_name = false;
+            }
+        }
+    }
+
+    diagnostics
+}
+
+fn is_supported_embedded_language(word: &str) -> bool {
+    ["SQL", "JAVASCRIPT", "PYTHON", "JAVA", "SCALA"]
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(word))
 }
 
 /// Hover information for `textDocument/hover`: the keyword/type/symbol description at `position`,
@@ -315,6 +381,35 @@ mod tests {
     #[test]
     fn clean_sql_still_has_no_lexer_or_parser_diagnostics() {
         assert!(diagnostics("SELECT a FROM t").is_empty());
+    }
+
+    #[test]
+    fn unsupported_embedded_language_is_a_warning() {
+        let text = "CREATE FUNCTION f() RETURNS STRING LANGUAGE RUBY AS $$x$$;";
+        let diags = diagnostics(text);
+        let language = diags
+            .iter()
+            .find(|d| d.message.contains("unsupported embedded language RUBY"))
+            .expect("unsupported-language diagnostic");
+        assert_eq!(language.severity, Some(DiagnosticSeverity::WARNING));
+        let col = text.find("RUBY").unwrap() as u32;
+        assert_eq!(language.range.start, Position::new(0, col));
+        assert_eq!(language.range.end, Position::new(0, col + 4));
+    }
+
+    #[test]
+    fn embedded_language_warning_does_not_fire_for_plain_columns_or_dynamic_sql() {
+        for text in [
+            "SELECT language FROM t;",
+            "EXECUTE IMMEDIATE $$ SELECT 1 $$;",
+        ] {
+            assert!(
+                diagnostics(text)
+                    .iter()
+                    .all(|diag| !diag.message.contains("unsupported embedded language")),
+                "{text}"
+            );
+        }
     }
 
     #[test]

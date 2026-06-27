@@ -51,9 +51,10 @@ $$;
   (statement
     (keyword)
     (keyword)
-    (identifier)
-    (punctuation)
-    (punctuation)
+    (expression
+      (call_expression
+        function: (identifier)
+        arguments: (argument_list)))
     (keyword)
     (type)
     (keyword)

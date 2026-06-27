@@ -233,6 +233,43 @@ fn highlight_captures(sql: &str) -> Vec<(String, String)> {
     seen
 }
 
+fn injection_captures(sql: &str) -> Vec<(String, String)> {
+    let language = snow_fmt_tree_sitter::language();
+    let query = Query::new(&language, snow_fmt_tree_sitter::INJECTIONS_QUERY)
+        .expect("injection query compiles");
+    let tree = parse(sql);
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), sql.as_bytes());
+    let capture_names = query.capture_names();
+    let mut seen = Vec::new();
+
+    matches.advance();
+    while let Some(query_match) = matches.get() {
+        let language = query
+            .property_settings(query_match.pattern_index)
+            .iter()
+            .find(|property| property.key.as_ref() == "injection.language")
+            .and_then(|property| property.value.as_deref())
+            .expect("injection pattern sets injection.language")
+            .to_string();
+        for capture in query_match.captures {
+            let name = capture_names[capture.index as usize];
+            if name != "injection.content" {
+                continue;
+            }
+            let text = capture
+                .node
+                .utf8_text(sql.as_bytes())
+                .expect("capture text is valid UTF-8")
+                .to_string();
+            seen.push((language.clone(), text));
+        }
+        matches.advance();
+    }
+
+    seen
+}
+
 #[test]
 fn grammar_metadata_is_available() {
     let language = snow_fmt_tree_sitter::language();
@@ -284,6 +321,34 @@ fn highlight_query_captures_expected_tokens() {
             );
         }
     }
+}
+
+#[test]
+fn expression_nodes_group_calls_and_parentheses() {
+    let sql = "SELECT COUNT(*), (ABS(-2) + 1) FROM t;";
+    let tree = parse(sql);
+    let sexp = tree.root_node().to_sexp();
+
+    assert!(sexp.contains("(expression"), "{sexp}");
+    assert!(sexp.contains("(call_expression"), "{sexp}");
+    assert!(sexp.contains("(argument_list"), "{sexp}");
+    assert!(sexp.contains("(parenthesized_expression"), "{sexp}");
+}
+
+#[test]
+fn injection_query_tags_dollar_bodies_by_context() {
+    let sql = "CREATE FUNCTION js() LANGUAGE JAVASCRIPT AS $$return 1;$$; \
+               CREATE FUNCTION py() LANGUAGE PYTHON AS $$return 2$$; \
+               EXECUTE IMMEDIATE $$ SELECT 3 $$;";
+    let captures = injection_captures(sql);
+    assert_eq!(
+        captures,
+        vec![
+            ("javascript".to_string(), "$$return 1;$$".to_string()),
+            ("python".to_string(), "$$return 2$$".to_string()),
+            ("sql".to_string(), "$$ SELECT 3 $$".to_string()),
+        ]
+    );
 }
 
 #[test]

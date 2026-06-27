@@ -266,7 +266,9 @@ impl<'a> Parser<'a> {
     pub(crate) fn at_name(&self) -> bool {
         match self.nth(0) {
             SyntaxKind::QUOTED_IDENT => true,
-            SyntaxKind::IDENT => keyword_kind(self.input.text(self.pos)).is_none(),
+            SyntaxKind::IDENT => {
+                keyword_kind(self.input.text(self.pos)).is_none_or(is_identifier_compatible_keyword)
+            }
             _ => false,
         }
     }
@@ -407,6 +409,18 @@ impl<'a> Parser<'a> {
             completed: false,
         }
     }
+}
+
+fn is_identifier_compatible_keyword(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::LANGUAGE_KW
+            | SyntaxKind::JAVASCRIPT_KW
+            | SyntaxKind::PYTHON_KW
+            | SyntaxKind::JAVA_KW
+            | SyntaxKind::SCALA_KW
+            | SyntaxKind::SQL_KW
+    )
 }
 
 /// A still-open node. Must be `complete`d (a `DropBomb` catches grammar bugs that forget to).

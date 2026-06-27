@@ -15,6 +15,10 @@
 
 use std::collections::HashMap;
 
+use biome_formatter::{IndentStyle, IndentWidth, LineWidth};
+use biome_js_formatter::{context::JsFormatOptions, format_range as format_js_range};
+use biome_js_parser::{parse as parse_js, JsParserOptions};
+use biome_js_syntax::{JsFileSource, TextRange, TextSize};
 use snow_fmt_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use SyntaxKind::*;
 
@@ -520,27 +524,37 @@ impl Lowerer {
         )
     }
 
-    /// `CREATE PROCEDURE/FUNCTION ... AS $$ ... $$`: keep the signature inline, and for
-    /// `LANGUAGE SQL` bodies recursively format the dollar-quoted SQL/Scripting body. Other
-    /// languages remain verbatim until their dedicated sub-formatters land.
+    /// `CREATE PROCEDURE/FUNCTION ... AS <body>`: keep the signature inline, format supported
+    /// dollar-quoted bodies through their language formatter, and lower unquoted Snowflake
+    /// Scripting blocks structurally. Unknown languages stay verbatim.
     fn lower_create_routine(&mut self, node: &SyntaxNode) -> Doc {
-        let format_sql_body = routine_body_language(node).unwrap_or(RoutineBodyLanguage::Sql)
-            == RoutineBodyLanguage::Sql;
+        let body_language = routine_body_language(node).unwrap_or(RoutineBodyLanguage::Sql);
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {
             if let Some(token) = child.as_token() {
                 if token.kind().is_trivia() {
                     continue;
                 }
-                if token.kind() == DOLLAR_STRING && format_sql_body {
-                    if let Some(formatted) = format_embedded_sql_dollar_body(token.text(), self.ctx)
-                    {
+                if token.kind() == DOLLAR_STRING {
+                    if let Some(formatted) = match body_language {
+                        RoutineBodyLanguage::Sql => {
+                            format_embedded_sql_dollar_body(token.text(), self.ctx)
+                        }
+                        RoutineBodyLanguage::Javascript => {
+                            format_embedded_javascript_dollar_body(token.text(), self.ctx)
+                        }
+                        RoutineBodyLanguage::Other => None,
+                    } {
                         parts.push(self.token_rendered(token, text(formatted)));
                         continue;
                     }
                 }
                 parts.push(self.token(token));
             } else if let Some(node) = child.as_node() {
+                if node.kind() == BLOCK_STMT {
+                    parts.push(hard_line());
+                    self.reset();
+                }
                 parts.push(self.lower_node(node));
             }
         }
@@ -1416,6 +1430,7 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RoutineBodyLanguage {
     Sql,
+    Javascript,
     Other,
 }
 
@@ -1436,6 +1451,10 @@ fn routine_body_language(node: &SyntaxNode) -> Option<RoutineBodyLanguage> {
             return Some(
                 if token.kind() == SQL_KW || token.text().eq_ignore_ascii_case("sql") {
                     RoutineBodyLanguage::Sql
+                } else if token.kind() == JAVASCRIPT_KW
+                    || token.text().eq_ignore_ascii_case("javascript")
+                {
+                    RoutineBodyLanguage::Javascript
                 } else {
                     RoutineBodyLanguage::Other
                 },
@@ -1444,6 +1463,53 @@ fn routine_body_language(node: &SyntaxNode) -> Option<RoutineBodyLanguage> {
         after_language = token.kind() == LANGUAGE_KW;
     }
     None
+}
+
+fn format_embedded_javascript_dollar_body(text: &str, ctx: Ctx) -> Option<String> {
+    let body = text.strip_prefix("$$")?.strip_suffix("$$")?;
+    let source = body.trim();
+    if source.is_empty() {
+        return None;
+    }
+
+    let formatted = format_javascript_body_once(source, ctx)?;
+    if format_javascript_body_once(&formatted, ctx)? != formatted {
+        return None;
+    }
+
+    Some(format!("$$\n{}\n$$", formatted.trim_end()))
+}
+
+fn format_javascript_body_once(source: &str, ctx: Ctx) -> Option<String> {
+    let source_type = JsFileSource::js_script();
+    let wrapper_prefix = "function __snow_fmt_snowflake_body__() {\n";
+    let wrapped = format!("{wrapper_prefix}{source}\n}}\n");
+    let parse = parse_js(&wrapped, source_type, JsParserOptions::default());
+    if parse.has_errors() {
+        return None;
+    }
+
+    let line_width = LineWidth::try_from(
+        ctx.line_width
+            .clamp(LineWidth::MIN as usize, LineWidth::MAX as usize) as u16,
+    )
+    .ok()?;
+    let indent_width_value = ctx.indent_width.clamp(1, u8::MAX as usize);
+    let indent_width = IndentWidth::from(indent_width_value as u8);
+    let options = JsFormatOptions::new(source_type)
+        .with_indent_style(IndentStyle::Space)
+        .with_indent_width(indent_width)
+        .with_line_width(line_width);
+    let syntax = parse.syntax();
+    let range_start = TextSize::try_from(wrapper_prefix.len()).ok()?;
+    let range_end = TextSize::try_from(wrapper_prefix.len() + source.len()).ok()?;
+    let printed = format_js_range(options, &syntax, TextRange::new(range_start, range_end)).ok()?;
+    let formatted = printed.as_code().trim();
+    if formatted.is_empty() {
+        None
+    } else {
+        Some(formatted.trim_end().to_string())
+    }
 }
 
 fn format_embedded_sql_dollar_body(text: &str, ctx: Ctx) -> Option<String> {

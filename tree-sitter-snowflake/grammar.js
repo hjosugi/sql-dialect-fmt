@@ -112,6 +112,7 @@ const KEYWORDS = [
   'imports',
   'runtime_version',
   'execute',
+  'immediate',
   'owner',
   'caller',
   'strict',
@@ -195,13 +196,48 @@ module.exports = grammar({
   rules: {
     source_file: $ => repeat($.statement),
 
-    // A top-level statement: a run of tokens up to (and including) its `;` terminator. The last
-    // statement in a script may omit the terminator, and a bare `;` is an empty statement. This is
-    // the first structural layer over the flat token stream — enough for statement-level folds and
-    // navigation without committing to a full expression grammar.
+    // A top-level statement: a tolerant run of tokens up to (and including) its `;` terminator. The
+    // last statement in a script may omit the terminator, and a bare `;` is an empty statement.
+    // Inside the run we opportunistically group balanced parentheses and immediate call syntax into
+    // expression nodes. The grammar remains deliberately permissive: the rowan CST parser is still
+    // the formatter source of truth.
     statement: $ => choice(
-      prec.right(seq(repeat1($._token), optional(';'))),
+      prec.right(seq(repeat1($._statement_item), optional(';'))),
       ';',
+    ),
+
+    _statement_item: $ => choice(
+      $.expression,
+      $._token,
+    ),
+
+    expression: $ => choice(
+      $.call_expression,
+      $.parenthesized_expression,
+    ),
+
+    call_expression: $ => prec(2, seq(
+      field('function', $._callee),
+      field('arguments', $.argument_list),
+    )),
+
+    argument_list: $ => seq(
+      token.immediate('('),
+      repeat(choice($.expression, $._token)),
+      ')',
+    ),
+
+    parenthesized_expression: $ => seq(
+      '(',
+      repeat(choice($.expression, $._token)),
+      ')',
+    ),
+
+    _callee: $ => choice(
+      $.identifier,
+      $.quoted_identifier,
+      $.keyword,
+      $.type,
     ),
 
     _token: $ => choice(
@@ -292,8 +328,6 @@ module.exports = grammar({
     ))),
 
     punctuation: _ => token(choice(
-      '(',
-      ')',
       '[',
       ']',
       '{',

@@ -87,6 +87,27 @@ fn scripting_blocks_parse_into_structured_nodes() {
 }
 
 #[test]
+fn routine_bodies_cover_python_scala_and_unquoted_scripting() {
+    for sql in [
+        "CREATE PROCEDURE py_p() RETURNS STRING LANGUAGE PYTHON RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' AS $$\ndef main(session):\n    return 'ok'\n$$",
+        "CREATE PROCEDURE scala_p() RETURNS STRING LANGUAGE SCALA RUNTIME_VERSION = '2.12' PACKAGES = ('com.snowflake:snowpark:latest') HANDLER = 'Main.run' AS $$\nclass Main { def run(session: com.snowflake.snowpark.Session): String = \"ok\" }\n$$",
+        "CREATE PROCEDURE sql_p() RETURNS STRING LANGUAGE SQL AS BEGIN RETURN 'ok'; END",
+        "CREATE PROCEDURE sql_decl_p() RETURNS NUMBER LANGUAGE SQL AS DECLARE x NUMBER DEFAULT 1; BEGIN RETURN x; END",
+    ] {
+        assert_parse_clean(sql);
+    }
+
+    let p = parse("CREATE PROCEDURE sql_p() RETURNS STRING LANGUAGE SQL AS BEGIN RETURN 'ok'; END");
+    assert!(p.errors().is_empty(), "{:?}", p.errors());
+    assert!(
+        p.syntax()
+            .descendants()
+            .any(|node| node.kind() == SyntaxKind::BLOCK_STMT),
+        "unquoted SQL routine body should parse as a Snowflake Scripting block"
+    );
+}
+
+#[test]
 fn let_with_case_expression_is_not_split_at_inner_end() {
     // A `LET`/assignment whose right-hand side is a `CASE … END` expression must be one statement —
     // consume-to-`;` must not stop at the expression's inner `END`.
@@ -119,6 +140,7 @@ fn clean_sql_has_no_errors() {
     for s in [
         "SELECT 1",
         "SELECT a, b FROM t WHERE a > 1",
+        "SELECT language, python, scala, sql FROM t",
         "SELECT count(*) FROM db.s.t",
         "SELECT a::int, (a + b) * c FROM t",
         "SELECT DISTINCT a FROM t",

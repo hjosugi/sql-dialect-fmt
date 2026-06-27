@@ -96,19 +96,19 @@ fn handle_request(request: Request, docs: &Docs) -> Response {
     match request.method.as_str() {
         Formatting::METHOD => match cast::<Formatting>(request) {
             Ok((id, params)) => ok(id, formatting(params, docs)),
-            Err(response) => response,
+            Err(response) => *response,
         },
         SemanticTokensFullRequest::METHOD => match cast::<SemanticTokensFullRequest>(request) {
             Ok((id, params)) => ok(id, semantic_tokens_full(params, docs)),
-            Err(response) => response,
+            Err(response) => *response,
         },
         HoverRequest::METHOD => match cast::<HoverRequest>(request) {
             Ok((id, params)) => ok(id, hover_request(params, docs)),
-            Err(response) => response,
+            Err(response) => *response,
         },
         FoldingRangeRequest::METHOD => match cast::<FoldingRangeRequest>(request) {
             Ok((id, params)) => ok(id, folding_request(params, docs)),
-            Err(response) => response,
+            Err(response) => *response,
         },
         _ => Response::new_err(
             request.id,
@@ -220,21 +220,21 @@ fn ok<T: serde::Serialize>(id: RequestId, result: T) -> Response {
 }
 
 /// Extract a typed request, turning a method/shape mismatch into an error response.
-fn cast<R>(request: Request) -> Result<(RequestId, R::Params), Response>
+fn cast<R>(request: Request) -> Result<(RequestId, R::Params), Box<Response>>
 where
     R: lsp_types::request::Request,
 {
     request.extract(R::METHOD).map_err(|err| match err {
-        ExtractError::JsonError { method, error } => Response::new_err(
+        ExtractError::JsonError { method, error } => Box::new(Response::new_err(
             // `extract` consumed the id on a JSON error; report against a fresh sentinel.
             RequestId::from(0),
             lsp_server::ErrorCode::InvalidParams as i32,
             format!("invalid params for {method}: {error}"),
-        ),
-        ExtractError::MethodMismatch(request) => Response::new_err(
+        )),
+        ExtractError::MethodMismatch(request) => Box::new(Response::new_err(
             request.id,
             lsp_server::ErrorCode::MethodNotFound as i32,
             format!("method mismatch: {}", request.method),
-        ),
+        )),
     })
 }

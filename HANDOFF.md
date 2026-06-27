@@ -17,7 +17,7 @@
 - **SQL 整形**: SELECT パイプライン、JOIN/ORDER BY/GROUP BY 構造化、CASE、サブクエリ/CTE、集合演算、**magic trailing comma**（看板機能）、**本物のコメント付与**（leading/trailing/dangling）。
 - **構文拡張（パーサ）**: 集約 `DISTINCT`、`WITHIN GROUP`、`PIVOT/UNPIVOT`、`GROUPING SETS/CUBE/ROLLUP`、`LATERAL FLATTEN`/テーブル関数/名前付き引数、`MATCH_RECOGNIZE`、`ASOF JOIN`、time travel `AT/BEFORE`、`IS [NOT] DISTINCT FROM`、`FROM VALUES`、`WITH` を query primary に。
 - **DML**: `INSERT`（単一/`OVERWRITE`/`ALL`/`FIRST`）, `UPDATE`, `DELETE`, `MERGE`。
-- **DDL**: `CREATE TABLE/VIEW/CTAS`, `DROP`, `ALTER`(寛容), `CREATE PROCEDURE/FUNCTION` 骨格（`LANGUAGE SQL` の `$$…$$` ボディは自己再帰整形、非 SQL/quoted body は verbatim）。
+- **DDL**: `CREATE TABLE/VIEW/CTAS`, `DROP`, `ALTER`(寛容), `CREATE PROCEDURE/FUNCTION` 骨格（`LANGUAGE SQL` の `$$…$$` ボディは自己再帰整形、`LANGUAGE JAVASCRIPT` は Biome 委譲、Python/Java/Scala/quoted body は verbatim）。
 - **COPY INTO**（ロード/アンロード、ステージパス verbatim、option key の key-position 大文字化）。
 - **CLI `snow-fmt`**: `--write`/`--check`/stdin、複数ファイル/ディレクトリ再帰、`snow-fmt.toml` discovery、エンコーディング保持（v0.1.0、`cargo install` 可）。
 - **診断品質**: lexer/parser error span（token 全体、EOF zero-width）、人間向け `SyntaxKind::describe`、LSP diagnostics に lexer error も反映。
@@ -53,7 +53,7 @@
 | `snow-fmt-formatter` | 汎用 Doc IR エンジン ＋ SQL 整形規則（上記 §0.5）。べき等・無破壊（lexer/parser error はパススルー、未配置コメントは文単位 verbatim） | ✅ Phase 3 + 実用 |
 | `snow-fmt-highlight` | CST/トークン分類（keyword/type/string/comment/operator/variable）を byte range 付きで。ロスレス検証 | ✅ 初期 |
 | `snow-fmt-hover` | ホバー情報（**rich 化はこれから** — §4 参照） | 🚧 雛形 |
-| `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル、statement/folds まで） | 🚧 初期+ |
+| `snow-fmt-tree-sitter` | エディタ用 tree-sitter grammar の Rust ラッパ（生成 C parser を build.rs でコンパイル、statement/folds、軽量 expression、context-aware injections まで） | 🚧 初期+ |
 | `snow-fmt-cli` | 実用 `snow-fmt` CLI（`--write`/`--check`/stdin、複数ファイル/ディレクトリ、`snow-fmt.toml`、エンコーディング保持）。v0.1.0 | ✅ |
 | `snow-fmt-encoding` | 文字コード/改行ユーティリティ | 🚧 |
 | `snow-fmt-test-fixtures` | easy-test-cases を `include_str!` で内蔵（外部 `easy-test-cases/` 無しでも `cargo test` 通る） | ✅ |
@@ -62,10 +62,10 @@
 設計の真実の源は **rowan CST**。tree-sitter は競合させず、エディタ向けの寛容・高速な認識層という役割分担。
 
 ## 3. 次の優先タスク（順番）
-1. **埋め込み言語の次段**: `$$…$$` body の言語判定 → JS は Biome、Python は方針決定。`LANGUAGE SQL` procedure/function body は自己再帰整形済みで、非 SQL/quoted body は今は verbatim で無破壊。
+1. **埋め込み言語の次段**: `$$…$$` body の言語判定は SQL 自己再帰 + JS Biome まで完了。次は Python 方針決定。Python/Java/Scala/quoted body は今は verbatim で無破壊。
 2. **DDL の残り**: マスキング/行アクセスポリシー、タグ、Semantic View、細かい object option の構造化。新しめの仕様は Snowflake 公式 docs で確認してから入れる。
 3. **rich hover / spec 連携**: §4 の通り、まず keyword/function hover を `spec/seed/features.json` 由来にする。
-4. **editor 周辺**: tree-sitter expression/context-aware injections/indents、VS Code 拡張。
+4. **editor 周辺**: tree-sitter indents、VS Code 拡張。
 5. **仕上げ**: `rayon` 並列、外部大規模コーパス、crates.io/GitHub Release。
 
 ## 4. rich hover の設計案

@@ -12,6 +12,24 @@ categories.workspace = true
 description = "Generic Wadler/Prettier-style Doc IR + width-aware printer, plus the Snowflake SQL formatting rules built on the lossless CST."
 
 [dependencies]
+biome_formatter = "=0.5.7"
+biome_js_formatter = "=0.5.7"
+biome_js_parser = "=0.5.7"
+biome_js_syntax = "=0.5.7"
+# Biome 0.5.x internal crates are not semver-compatible across patch releases.
+# Keep the formatter/parser/syntax graph on one exact patch level.
+biome_console = "=0.5.7"
+biome_deserialize = "=0.5.7"
+biome_diagnostics = "=0.5.7"
+biome_js_factory = "=0.5.7"
+biome_json_factory = "=0.5.7"
+biome_json_parser = "=0.5.7"
+biome_json_syntax = "=0.5.7"
+biome_parser = "=0.5.7"
+biome_rowan = "=0.5.7"
+biome_text_edit = "=0.5.7"
+biome_text_size = "=0.5.7"
+biome_unicode_table = "=0.5.7"
 snow-fmt-syntax = { path = "../snow-fmt-syntax", version = "0.1.0", features = ["rowan"] }
 snow-fmt-lexer = { path = "../snow-fmt-lexer", version = "0.1.0" }
 snow-fmt-parser = { path = "../snow-fmt-parser", version = "0.1.0" }

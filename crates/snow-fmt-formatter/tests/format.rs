@@ -460,21 +460,66 @@ fn sql_procedure_body_is_recursively_formatted() {
 }
 
 #[test]
-fn non_sql_routine_body_stays_verbatim_for_now() {
+fn javascript_routine_body_is_formatted_when_supported() {
     let src = "create function f() returns string language javascript as $$ return 'x'; $$";
     let out = fmt(src);
     assert_eq!(
         out,
-        "CREATE FUNCTION f () RETURNS string LANGUAGE JAVASCRIPT AS $$ return 'x'; $$;\n"
+        "CREATE FUNCTION f () RETURNS string LANGUAGE JAVASCRIPT AS $$\nreturn \"x\";\n$$;\n"
     );
     assert_eq!(fmt(&out), out);
 }
 
 #[test]
-fn unquoted_scripting_body_passes_through_unchanged() {
-    // No delimited body → parse error → returned unchanged (never mis-split on inner `;`).
+fn javascript_routine_body_preserves_template_literal_indentation() {
+    let src = "create procedure p() returns string language javascript as $$ const sqlText = `\nSELECT\n    col\nFROM t\n`; return snowflake.createStatement({sqlText}).execute(); $$";
+    let out = fmt(src);
+    assert_eq!(
+        out,
+        "CREATE PROCEDURE p () RETURNS string LANGUAGE JAVASCRIPT AS $$\nconst sqlText = `\nSELECT\n    col\nFROM t\n`;\nreturn snowflake.createStatement({ sqlText }).execute();\n$$;\n"
+    );
+    assert_eq!(fmt(&out), out);
+}
+
+#[test]
+fn invalid_javascript_routine_body_stays_verbatim() {
+    let src = "create function f() returns string language javascript as $$ if ( $$";
+    let out = fmt(src);
+    assert_eq!(
+        out,
+        "CREATE FUNCTION f () RETURNS string LANGUAGE JAVASCRIPT AS $$ if ( $$;\n"
+    );
+    assert_eq!(fmt(&out), out);
+}
+
+#[test]
+fn python_and_scala_routine_bodies_stay_verbatim_for_now() {
+    let py = "create procedure py_p() returns string language python RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' as $$\ndef main(session):\n    return 'ok'\n$$";
+    let py_out = fmt(py);
+    assert_eq!(
+        py_out,
+        "CREATE PROCEDURE py_p () RETURNS string LANGUAGE PYTHON RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' AS $$\ndef main(session):\n    return 'ok'\n$$;\n"
+    );
+    assert_eq!(fmt(&py_out), py_out);
+
+    let scala = "create procedure scala_p() returns string language scala RUNTIME_VERSION = '2.12' PACKAGES = ('com.snowflake:snowpark:latest') HANDLER = 'Main.run' as $$\nclass Main { def run(session: com.snowflake.snowpark.Session): String = \"ok\" }\n$$";
+    let scala_out = fmt(scala);
+    assert_eq!(
+        scala_out,
+        "CREATE PROCEDURE scala_p () RETURNS string LANGUAGE SCALA RUNTIME_VERSION = '2.12' PACKAGES = ('com.snowflake:snowpark:latest') HANDLER = 'Main.run' AS $$\nclass Main { def run(session: com.snowflake.snowpark.Session): String = \"ok\" }\n$$;\n"
+    );
+    assert_eq!(fmt(&scala_out), scala_out);
+}
+
+#[test]
+fn unquoted_scripting_body_is_formatted_as_a_routine_body() {
     let src = "create procedure p() returns string language sql as begin return 'x'; end";
-    assert_eq!(fmt(src), src);
+    let out = fmt(src);
+    assert_eq!(
+        out,
+        "CREATE PROCEDURE p () RETURNS string LANGUAGE SQL AS\nBEGIN\n    RETURN 'x';\nEND;\n"
+    );
+    assert_eq!(fmt(&out), out);
 }
 
 #[test]

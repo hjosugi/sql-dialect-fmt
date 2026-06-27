@@ -100,13 +100,13 @@
 - ⏳ マスキング/行アクセスポリシー, タグ
 
 ## Phase 8 — 手続き・関数・埋め込み言語 🚧 ＜第2の差別化点＞
-- 🚧 `CREATE PROCEDURE`/`FUNCTION`（**骨格 + SQL ボディ自己再帰**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持。`LANGUAGE SQL AS $$ … $$` は内部 SQL/Scripting を同じ formatter で再帰整形し、解析不能時は安全に元 token を保持。非 SQL の `$$ … $$` と quoted body は現状 **verbatim**。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create_routine`。**コーパス clean 0→20件** に。残: UDTF の `TABLE(...)` 戻り、区切りなし scripting ボディ（現状はエラー→素通しで誤分割を防止）、quoted body の扱い
+- 🚧 `CREATE PROCEDURE`/`FUNCTION`（**骨格 + SQL/JS ボディ整形**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持。`LANGUAGE SQL AS $$ … $$` は内部 SQL/Scripting を同じ formatter で再帰整形し、`LANGUAGE JAVASCRIPT AS $$ … $$` は Biome (`biome_js_formatter`) に委譲。解析不能時は安全に元 token を保持。Python/Java/Scala と quoted body は現状 **verbatim**。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_create_routine`。**コーパス clean 0→20件** に。残: UDTF の `TABLE(...)` 戻り、quoted body の扱い
 - ✅ セッション `SET <var> = <expr>` / `SET (a, b) = (...)`、`EXECUTE IMMEDIATE <string|$$…$$|:var> [USING (...)]`（`SET_STMT`/`EXECUTE_STMT` ノード、新キーワード `IMMEDIATE`。式に `DOLLAR_STRING` を許可）。**コーパス clean 20→22件** … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `set_stmt`/`execute_stmt`
 - ✅ `CALL proc(args)`（プロシージャ呼び出し。`CALL_STMT` ノード、呼び出しは通常の call 式として整形＝引数オーバーフロー時は1引数1行、`INTO :var` 等の末尾は寛容保持）。fixture `case_033` … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `call_stmt`
 - ✅ トランザクション制御 `BEGIN`/`COMMIT`/`ROLLBACK`（`BEGIN TRANSACTION`/`BEGIN WORK`/`BEGIN;`、`COMMIT WORK`、`ROLLBACK TO SAVEPOINT …` 含む。`TRANSACTION_STMT`）。**バグ修正**: `COMMIT WORK`/`ROLLBACK TO SAVEPOINT …` の複数文分割を解消。fixture `case_036`/`case_037`。`BEGIN` はコンテキストキーワード `transaction`/`work` か直後 `;` でのみトランザクションと判定し、Scripting ブロック `BEGIN … END`（内部 `;` 区切り）は誤分割せず verbatim 維持 … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `at_begin_transaction`
 - ✅ Snowflake Scripting ブロック本体の整形（トップレベル匿名ブロック）: `[DECLARE …] BEGIN … [EXCEPTION …] END` を構造化し、本体を1文1行・インデント。`IF`/`ELSEIF`/`ELSE`/`END IF`、`FOR`/`WHILE … DO … END`、`LOOP`/`END LOOP`、`REPEAT … UNTIL … END REPEAT`、`EXCEPTION … WHEN … THEN`、ネストブロックを構造的に整形。`LET`/`:=`/`RETURN`/その他は寛容文（`;` まで）として保持。本体内の SQL（`SELECT`/`INSERT`/… ）は通常の構造的整形に委譲。新キーワード `ELSEIF`/`WHILE`/`LOOP`/`REPEAT`/`UNTIL`/`DO`/`EXCEPTION`/`CURSOR`/`RESULTSET`、新ノード `BLOCK_STMT`/`DECLARE_SECTION`/`STMT_LIST`/`IF_STMT`/`LOOP_STMT`/`EXCEPTION_SECTION`/… 。**安全性**: 寛容文は `;` まで消費するので `LET x := (CASE WHEN … END)` の式内 `END` で誤分割しない。構文が崩れたブロックはパースエラー→**ブロック全体を verbatim**（無破壊）。`BEGIN … END` トランザクションとの曖昧性は維持。fixture `case_038`/`case_039`、parser で clean-parse/ノード種別/誤分割回避/malformed-verbatim を回帰ガード … [grammar.rs](crates/snow-fmt-parser/src/grammar.rs) `block_stmt`/`if_stmt`/`loop_stmt` / [sql.rs](crates/snow-fmt-formatter/src/sql.rs) `lower_block`。残: `CASE` 文の pretty-print（現状はバランス consume でインライン保持）
-- ⏳ delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
-  - ⏳ **JavaScript**: Biome の `biome_js_formatter` を組み込み
+- 🚧 delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
+  - ✅ **JavaScript**: Biome の `biome_js_formatter` を組み込み（top-level `return` は synthetic function body で処理、失敗時 verbatim）
   - ⏳ Python: 整形方針を決定（外部 ruff か、当面は無加工パススルー）
   - ✅ ネストした SQL（`LANGUAGE SQL`）: `$$ … $$` body を自分自身で再帰整形
 
@@ -119,8 +119,8 @@
 - ✅ 診断品質: lexer/parser diagnostics は byte span（token 全体、EOF は zero-width）を持ち、`SyntaxKind::INTO_KW` ではなく `expected INTO` / `expected '('` のような人間向け表示へ変換。LSP diagnostics は lexer error（未終端 literal/comment 等）も拾い、UTF-16 range へ変換 … [diagnostics.rs](crates/snow-fmt-parser/tests/diagnostics.rs) / [kind.rs](crates/snow-fmt-syntax/src/kind.rs) `describe`
 - ✅ LSP のインクリメンタル更新（`apply_change`＝範囲 splice／全文置換、`TextDocumentSyncKind::INCREMENTAL`） … [crates/snow-fmt-lsp/](crates/snow-fmt-lsp/) `apply_change`
 - ✅ TextMate 文法（素のエディタ向けベースライン。`source.sql.snowflake`、comment/string/`$$…$$`/number/type/keyword/variable/operator をスコープ。キーワード・型語彙は `snow-fmt-highlight::classify` と一致をテストで機械保証＝drift しない） … [editors/textmate/](editors/textmate/)
-- ✅ Tree-sitter 文法の構造化（第一層: `;` 区切りの `statement` ノードで token 列をグルーピング、`folds.scm`＝文単位の折りたたみ（LSP `foldingRange` と一致）。`source_file` ルート維持で既存 highlight/locals/injections と互換、corpus＋Rust smoke で検証） … [tree-sitter-snowflake/](tree-sitter-snowflake/)
-  - 残: expression ノード（括弧/関数呼び出し）、context-aware injections、indents
+- ✅ Tree-sitter 文法の構造化（第一層: `;` 区切りの `statement` ノードで token 列をグルーピング、第二層: 括弧/即時関数呼び出しを軽量 `expression` node 化。`folds.scm`＝文単位の折りたたみ（LSP `foldingRange` と一致）。`injections.scm` は `LANGUAGE <name> ... AS $$...$$` / `EXECUTE IMMEDIATE $$...$$` を context-aware に注入。`source_file` ルート維持で既存 highlight/locals と互換、corpus＋Rust smoke で検証） … [tree-sitter-snowflake/](tree-sitter-snowflake/)
+  - 残: indents
 
 ## Phase 10 — 仕上げ・周辺 🚧
 - ⏳ 🔎 Cortex / AISQL 関数（`AI_COMPLETE`, `SNOWFLAKE.CORTEX.*` 等）の認識
@@ -135,9 +135,9 @@
 **Phase 0–6 は完了**、Phase 7 は主要 DDL/object DDL/access control まで実用域、Phase 9 は LSP/diagnostics/editor grammar 基盤まで、Phase 8/10 が部分。コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。CLI `snow-fmt` v0.1.0 公開可。
 
 **残りの主な未着手（価値順）**:
-1. **Phase 8 埋め込み言語**: `$$…$$` の言語判定→サブフォーマッタ委譲（JS=biome、Python 方針決定）。トップレベル Snowflake Scripting と `LANGUAGE SQL` procedure/function body は構造化済み。非 SQL body と quoted body は現在 verbatim 保持で無破壊。
+1. **Phase 8 埋め込み言語**: `$$…$$` の言語判定→サブフォーマッタ委譲（SQL 自己再帰・JS=Biome は完了、Python 方針決定）。トップレベル Snowflake Scripting と `LANGUAGE SQL` procedure/function body は構造化済み。Python/Java/Scala body と quoted body は現在 verbatim 保持で無破壊。
 2. **Phase 7 DDL の残り**: マスキング/行アクセスポリシー、タグ、Semantic View、細かい object option のさらなる構造化（🔎 新しめは要ドキュメント確認）。
-3. **Phase 5/9 の網羅強化**: `->>` の `SHOW` chain など追加ゴールデン、Tree-sitter expression/context-aware injections/indents。
+3. **Phase 5/9 の網羅強化**: `->>` の `SHOW` chain など追加ゴールデン、Tree-sitter indents。
 4. **Phase 10**: `rayon` 並列、Cortex/AISQL 関数認識、VS Code 拡張、外部大規模コーパス。
 
 回帰ゲートは `cargo test --workspace`（golden=insta、full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）＋ `cargo clippy --workspace --all-targets` ＋ `cargo fmt --all --check`。

@@ -764,10 +764,10 @@ fn at_create_body(p: &Parser) -> bool {
 
 /// `CREATE ... PROCEDURE/FUNCTION name (params) RETURNS ... <options> AS <body>`.
 ///
-/// Skeleton support (Phase 8): the signature/options are kept leniently as tokens and the body is
-/// the lexer's single delimited token (`$$ … $$` or a quoted string), preserved verbatim. Only the
-/// delimited-body form parses cleanly; an unquoted scripting body (`AS BEGIN …; … END`) is left to
-/// error so the statement passes through untouched rather than being mis-split on its inner `;`.
+/// Skeleton support (Phase 8): the signature/options are kept leniently as tokens. Delimited bodies
+/// (`$$ … $$` or a quoted string) remain a single token, while unquoted Snowflake Scripting bodies
+/// (`AS BEGIN … END` / `AS DECLARE … BEGIN … END`) reuse the block parser so inner `;` separators
+/// never split the outer routine statement.
 fn create_routine(p: &mut Parser) {
     p.bump_any(); // PROCEDURE or FUNCTION
     name_ref(p);
@@ -780,15 +780,26 @@ fn create_routine(p: &mut Parser) {
     }
     if at_routine_body(p) {
         p.bump(AS_KW);
-        p.bump_any(); // the delimited body token
+        if p.at(DOLLAR_STRING) || p.at(STRING) {
+            p.bump_any(); // the delimited body token
+        } else if at_block_start(p) {
+            block_stmt(p);
+        }
     } else {
-        p.error("expected a delimited routine body (AS $$ … $$ or AS '…')");
+        p.error("expected a routine body (AS $$ … $$, AS '…', or AS BEGIN … END)");
     }
 }
 
-/// At `AS` immediately followed by a delimited body token (so we don't stop on `EXECUTE AS`).
+/// At `AS` immediately followed by a routine body (so we don't stop on `EXECUTE AS`).
 fn at_routine_body(p: &Parser) -> bool {
-    p.at(AS_KW) && (p.nth_at(1, DOLLAR_STRING) || p.nth_at(1, STRING))
+    p.at(AS_KW)
+        && (p.nth_at(1, DOLLAR_STRING)
+            || p.nth_at(1, STRING)
+            || p.nth_at(1, DECLARE_KW)
+            || (p.nth_at(1, BEGIN_KW)
+                && !p.nth_at(2, SEMICOLON)
+                && !p.nth_contextual(2, ContextualKeyword::Transaction)
+                && !p.nth_contextual(2, ContextualKeyword::Work)))
 }
 
 // ---- COPY INTO (Phase 6) ----
@@ -1562,7 +1573,11 @@ fn select_list(p: &mut Parser) {
     let m = p.start();
     select_item(p);
     while p.eat(COMMA) {
-        if p.at_eof() || at_clause_end(p) {
+        if p.at_eof() {
+            p.error("expected a select item after ','");
+            break;
+        }
+        if at_clause_end(p) {
             break; // tolerate a trailing comma
         }
         select_item(p);

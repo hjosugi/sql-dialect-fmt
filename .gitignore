@@ -1,5 +1,7 @@
 /target
 .tree-sitter-cache/
+tree-sitter-snowflake/node_modules/
+tree-sitter-snowflake/package-lock.json
 **/*.rs.bk
 
 # Personal learning notes — kept local, not committed

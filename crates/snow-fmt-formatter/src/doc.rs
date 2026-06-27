@@ -617,7 +617,7 @@ mod tests {
         // The ASCII fast path agrees with the per-char fold.
         assert_eq!(
             text_width("SELECT a, b"),
-            "SELECT a, b".chars().map(char_width).sum()
+            "SELECT a, b".chars().map(char_width).sum::<usize>()
         );
     }
 
