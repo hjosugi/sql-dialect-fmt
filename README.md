@@ -28,6 +28,19 @@ cat query.sql | snow-fmt           # stdin → stdout
 # オプション: --line-width N（既定100） / --indent-width N（既定4） / --no-uppercase
 ```
 
+## Snowsight / Chrome 拡張
+
+Snowsight 上で使う Chrome 拡張を `extensions/chrome` に置いています。Rust formatter を
+WebAssembly にして同梱するので、ローカルサーバは不要です。
+
+```sh
+./scripts/build-chrome-extension.sh
+```
+
+その後、Chrome の `chrome://extensions` で Developer mode を有効にし、`extensions/chrome`
+を Load unpacked してください。Snowsight の worksheet editor にフォーカスして、右下の
+`snow-fmt` ボタン、拡張アイコン、または `Alt+Shift+F` で整形できます。
+
 ## 開発
 
 ```sh
@@ -38,7 +51,7 @@ cargo fmt --all --check
 
 ## 状態
 
-SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・DDL（CREATE TABLE/VIEW/CTAS, DROP, ALTER）・CREATE PROCEDURE/FUNCTION の骨格までパース＋整形。看板機能は **magic trailing comma**。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
+SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。LSP/semantic tokens/hover、Tree-sitter grammar、CLI、Snowsight 用 Chrome/WASM 拡張も入っています。看板機能は **magic trailing comma**。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
 
 ## クレート構成
 
@@ -52,6 +65,7 @@ SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・DDL（CREATE TABLE/VIEW/CT
 | `snow-fmt-hover` | 型・手続き・タスクの hover テキスト |
 | `snow-fmt-tree-sitter` | 同梱 Tree-sitter grammar の Rust バインディング |
 | `snow-fmt-lsp` | Language Server（formatting / semanticTokens / 診断、stdio） |
+| `snow-fmt-wasm` | Snowsight/Chrome 拡張向けの WebAssembly bridge |
 | `snow-fmt-cli` | CLI エントリポイント |
 
 ## ライセンス

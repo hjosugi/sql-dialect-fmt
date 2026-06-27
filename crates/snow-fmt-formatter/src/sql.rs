@@ -13,23 +13,26 @@
 //! punctuation token), the whole statement falls back to a **verbatim** copy, so the formatter
 //! never drops or mangles a comment. Round-trip and idempotency tests guard these guarantees.
 
-use std::collections::HashMap;
-
-use biome_formatter::{IndentStyle, IndentWidth, LineWidth};
-use biome_js_formatter::{context::JsFormatOptions, format_range as format_js_range};
-use biome_js_parser::{parse as parse_js, JsParserOptions};
-use biome_js_syntax::{JsFileSource, TextRange, TextSize};
-use ruff_formatter::{
-    IndentStyle as PyIndentStyle, IndentWidth as PyIndentWidth, LineWidth as PyLineWidth,
-};
-use ruff_python_formatter::{format_module_source, PyFormatOptions};
 use snow_fmt_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use SyntaxKind::*;
 
 use crate::doc::{
     break_parent, concat, empty, group, group_expanded, hard_line, indent, join, line, line_suffix,
-    print, soft_line, space, text, Doc, PrintOptions,
+    soft_line, space, text, Doc,
 };
+
+mod comments;
+mod options;
+mod routine_body;
+mod spacing;
+
+use comments::{directive_comment_same_line_after_stmt, CommentInfo, Comments};
+use options::{is_option_flag, is_option_key};
+use routine_body::{
+    format_embedded_body_token, is_create_routine, is_routine_header_word, routine_body_language,
+    RoutineBodyLanguage,
+};
+use spacing::{is_value_end, must_separate_to_preserve_tokens, needs_space};
 
 /// Formatting context.
 #[derive(Clone, Copy)]
@@ -50,7 +53,7 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
     let source = root.text().to_string();
     let mut parts = Vec::new();
     let mut emitted = false;
-    let mut last_stmt_end = None;
+    let mut last_stmt_end: Option<usize> = None;
     for stmt in root.children() {
         if emitted {
             parts.push(hard_line());
@@ -69,7 +72,7 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
             }
         }
         emitted = true;
-        last_stmt_end = Some(stmt.text_range().end());
+        last_stmt_end = Some(stmt.text_range().end().into());
     }
 
     // Root-level (trailing) comments, kept verbatim each on its own line.
@@ -80,15 +83,7 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
         .filter(|t| t.kind().is_comment())
     {
         if need_break {
-            let same_line_as_last_stmt = is_directive_comment(token.text())
-                && last_stmt_end.is_some_and(|end| {
-                    let end: usize = end.into();
-                    let start: usize = token.text_range().start().into();
-                    source
-                        .get(end..start)
-                        .is_some_and(|between| !between.contains(['\n', '\r']))
-                });
-            if same_line_as_last_stmt {
+            if directive_comment_same_line_after_stmt(&source, last_stmt_end, &token) {
                 parts.push(space());
             } else {
                 parts.push(hard_line());
@@ -123,137 +118,9 @@ fn lower_stmt(stmt: &SyntaxNode, ctx: Ctx) -> LoweredStmt {
     LoweredStmt { body, end_comments }
 }
 
-// ---- comment attachment ----
-
 struct LoweredStmt {
     body: Doc,
     end_comments: Vec<CommentInfo>,
-}
-
-/// A single comment, ready to render.
-struct CommentInfo {
-    text: String,
-    /// A `--`/`//` line comment (must end its line) vs a `/* */` block comment (can sit inline).
-    is_line: bool,
-    /// Line-level tool directives such as `-- noqa` and `-- snow-fmt:` must stay associated with
-    /// the code line they annotate when the formatter synthesizes a statement terminator.
-    is_directive: bool,
-}
-
-/// Comments of one statement, keyed by the start offset of the significant token they attach to.
-/// Entries are *removed* as they are emitted, so a non-empty map afterwards means something was
-/// left unplaced.
-#[derive(Default)]
-struct Comments {
-    leading: HashMap<u32, Vec<CommentInfo>>,
-    trailing: HashMap<u32, Vec<CommentInfo>>,
-}
-
-impl Comments {
-    /// Walk the statement's tokens in order, assigning each comment to a significant token: trailing
-    /// the previous token when on the same line, otherwise leading the next one.
-    fn build(stmt: &SyntaxNode) -> Self {
-        let mut comments = Comments::default();
-        let mut last_significant: Option<u32> = None;
-        let mut newline_since = true; // statement start behaves like "on its own line"
-        let mut pending_leading: Vec<CommentInfo> = Vec::new();
-
-        for token in stmt
-            .descendants_with_tokens()
-            .filter_map(|el| el.into_token())
-        {
-            let kind = token.kind();
-            if kind == NEWLINE {
-                newline_since = true;
-                continue;
-            }
-            if kind == WHITESPACE {
-                continue;
-            }
-            if kind.is_comment() {
-                let info = CommentInfo {
-                    text: token.text().trim_end().to_string(),
-                    is_line: kind == COMMENT,
-                    is_directive: is_directive_comment(token.text()),
-                };
-                match last_significant {
-                    Some(anchor) if !newline_since => {
-                        comments.trailing.entry(anchor).or_default().push(info);
-                    }
-                    _ => pending_leading.push(info),
-                }
-                newline_since = false;
-                continue;
-            }
-            // A comma is transparent: we synthesize list separators ourselves and never emit the
-            // real comma token, so a comment written after one (`col, -- note`) belongs to the item
-            // before it. Keep the anchor and pending leads pointed at the surrounding real tokens.
-            if kind == COMMA {
-                newline_since = false;
-                continue;
-            }
-            // A significant token: it owns any pending leading comments and becomes the new anchor.
-            let start = offset(&token);
-            if !pending_leading.is_empty() {
-                comments
-                    .leading
-                    .entry(start)
-                    .or_default()
-                    .append(&mut pending_leading);
-            }
-            last_significant = Some(start);
-            newline_since = false;
-        }
-
-        // Comments with no following token become trailing of the last significant token (dangling).
-        if !pending_leading.is_empty() {
-            if let Some(anchor) = last_significant {
-                comments
-                    .trailing
-                    .entry(anchor)
-                    .or_default()
-                    .append(&mut pending_leading);
-            }
-        }
-        comments
-    }
-
-    fn all_placed(&self) -> bool {
-        self.leading.is_empty() && self.trailing.is_empty()
-    }
-
-    /// Pull comments attached to the final significant token out of the statement body. The source
-    /// has no semicolon token there, but the formatter synthesizes one. Emitting those comments
-    /// after that synthesized semicolon, each on its own line, keeps `format(format(x)) == format(x)`
-    /// for statement-end comments.
-    fn take_statement_end_comments(&mut self, stmt: &SyntaxNode) -> Vec<CommentInfo> {
-        let last = stmt
-            .descendants_with_tokens()
-            .filter_map(|el| el.into_token())
-            .filter(|t| !t.kind().is_trivia() && t.kind() != COMMA)
-            .last();
-        last.and_then(|token| self.trailing.remove(&offset(&token)))
-            .unwrap_or_default()
-    }
-}
-
-fn offset(token: &SyntaxToken) -> u32 {
-    token.text_range().start().into()
-}
-
-fn is_directive_comment(text: &str) -> bool {
-    let Some(body) = text
-        .trim_start()
-        .strip_prefix("--")
-        .or_else(|| text.trim_start().strip_prefix("//"))
-    else {
-        return false;
-    };
-    let lower = body.trim_start().to_ascii_lowercase();
-    lower.starts_with("noqa")
-        || lower.starts_with("snow-fmt:")
-        || lower.starts_with("snowfmt:")
-        || lower.starts_with("fmt:")
 }
 
 // ---- the lowerer ----
@@ -321,12 +188,7 @@ impl Lowerer {
             return empty();
         };
         let mut parts = Vec::new();
-        for comment in self
-            .comments
-            .leading
-            .remove(&offset(&token))
-            .unwrap_or_default()
-        {
+        for comment in self.comments.take_leading(&token) {
             parts.push(text(comment.text));
             parts.push(hard_line());
         }
@@ -349,9 +211,8 @@ impl Lowerer {
     /// routine bodies: the CST token is still a single `DOLLAR_STRING`, but its body may be
     /// reformatted if it is declared as SQL.
     fn token_rendered(&mut self, token: &SyntaxToken, rendered: Doc) -> Doc {
-        let start = offset(token);
-        let leading = self.comments.leading.remove(&start).unwrap_or_default();
-        let trailing = self.comments.trailing.remove(&start).unwrap_or_default();
+        let leading = self.comments.take_leading(token);
+        let trailing = self.comments.take_trailing(token);
 
         let mut parts = Vec::new();
         if self.line_comment_pending {
@@ -584,21 +445,9 @@ impl Lowerer {
                     continue;
                 }
                 if matches!(token.kind(), DOLLAR_STRING | STRING) && prev_sig == Some(AS_KW) {
-                    if let Some(formatted) = match body_language {
-                        RoutineBodyLanguage::Sql => {
-                            format_embedded_sql_body_token(token.text(), self.ctx)
-                        }
-                        RoutineBodyLanguage::Javascript => {
-                            format_embedded_javascript_body_token(token.text(), self.ctx)
-                        }
-                        RoutineBodyLanguage::Python => {
-                            format_embedded_python_body_token(token.text(), self.ctx)
-                        }
-                        RoutineBodyLanguage::Java | RoutineBodyLanguage::Scala => {
-                            format_embedded_brace_language_body_token(token.text(), self.ctx)
-                        }
-                        RoutineBodyLanguage::Other => None,
-                    } {
+                    if let Some(formatted) =
+                        format_embedded_body_token(token.text(), body_language, self.ctx)
+                    {
                         parts.push(self.token_rendered(token, text(formatted)));
                         prev_sig = Some(token.kind());
                         continue;
@@ -1538,456 +1387,6 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
     last == Some(R_PAREN) && prev == Some(COMMA)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RoutineBodyLanguage {
-    Sql,
-    Javascript,
-    Python,
-    Java,
-    Scala,
-    Other,
-}
-
-fn is_create_routine(node: &SyntaxNode) -> bool {
-    node.children_with_tokens()
-        .filter(|el| !el.kind().is_trivia())
-        .any(|el| matches!(el.kind(), PROCEDURE_KW | FUNCTION_KW))
-}
-
-fn routine_body_language(node: &SyntaxNode) -> Option<RoutineBodyLanguage> {
-    let mut after_language = false;
-    for token in node
-        .children_with_tokens()
-        .filter_map(|el| el.into_token())
-        .filter(|token| !token.kind().is_trivia())
-    {
-        if after_language {
-            return Some(
-                if token.kind() == SQL_KW || token.text().eq_ignore_ascii_case("sql") {
-                    RoutineBodyLanguage::Sql
-                } else if token.kind() == JAVASCRIPT_KW
-                    || token.text().eq_ignore_ascii_case("javascript")
-                {
-                    RoutineBodyLanguage::Javascript
-                } else if token.kind() == PYTHON_KW || token.text().eq_ignore_ascii_case("python") {
-                    RoutineBodyLanguage::Python
-                } else if token.kind() == JAVA_KW || token.text().eq_ignore_ascii_case("java") {
-                    RoutineBodyLanguage::Java
-                } else if token.kind() == SCALA_KW || token.text().eq_ignore_ascii_case("scala") {
-                    RoutineBodyLanguage::Scala
-                } else {
-                    RoutineBodyLanguage::Other
-                },
-            );
-        }
-        after_language = token.kind() == LANGUAGE_KW;
-    }
-    None
-}
-
-fn is_routine_header_word(token: &SyntaxToken) -> bool {
-    if !matches!(token.kind(), IDENT | CONTEXTUAL_KEYWORD) {
-        return false;
-    }
-    ROUTINE_HEADER_WORDS
-        .binary_search(&token.text().to_ascii_lowercase().as_str())
-        .is_ok()
-}
-
-const ROUTINE_HEADER_WORDS: &[&str] = &[
-    "artifact_repository",
-    "called",
-    "caller",
-    "copy",
-    "external_access_integrations",
-    "handler",
-    "immutable",
-    "imports",
-    "input",
-    "memoizable",
-    "null",
-    "owner",
-    "packages",
-    "restricted",
-    "runtime_version",
-    "secrets",
-    "strict",
-    "target_path",
-    "user",
-    "volatile",
-];
-
-fn body_token_content(text: &str) -> Option<String> {
-    if let Some(body) = text
-        .strip_prefix("$$")
-        .and_then(|body| body.strip_suffix("$$"))
-    {
-        return Some(body.to_string());
-    }
-    decode_single_quoted_string(text)
-}
-
-fn render_body_token(original: &str, formatted: &str) -> Option<String> {
-    if original.starts_with("$$") {
-        Some(format!("$$\n{formatted}\n$$"))
-    } else if original.starts_with('\'') {
-        Some(format!(
-            "'\n{}\n'",
-            encode_single_quoted_string_body(formatted)
-        ))
-    } else {
-        None
-    }
-}
-
-fn decode_single_quoted_string(text: &str) -> Option<String> {
-    let inner = text.strip_prefix('\'')?.strip_suffix('\'')?;
-    let mut out = String::with_capacity(inner.len());
-    let mut chars = inner.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\'' {
-            if chars.peek() == Some(&'\'') {
-                chars.next();
-                out.push('\'');
-            } else {
-                return None;
-            }
-        } else if ch == '\\' {
-            // Keep backslash escapes literal. If they are required to make the embedded source
-            // parse, the language formatter will reject and the original token stays verbatim.
-            out.push(ch);
-            if let Some(next) = chars.next() {
-                out.push(next);
-            }
-        } else {
-            out.push(ch);
-        }
-    }
-    Some(out)
-}
-
-fn encode_single_quoted_string_body(text: &str) -> String {
-    text.replace('\'', "''")
-}
-
-fn format_embedded_javascript_body_token(text: &str, ctx: Ctx) -> Option<String> {
-    let body = body_token_content(text)?;
-    let source = body.trim();
-    if source.is_empty() {
-        return None;
-    }
-
-    let formatted = format_javascript_body_once(source, ctx)?;
-    if format_javascript_body_once(&formatted, ctx)? != formatted {
-        return None;
-    }
-
-    render_body_token(text, formatted.trim_end())
-}
-
-fn format_javascript_body_once(source: &str, ctx: Ctx) -> Option<String> {
-    let source_type = JsFileSource::js_script();
-    let wrapper_prefix = "function __snow_fmt_snowflake_body__() {\n";
-    let wrapped = format!("{wrapper_prefix}{source}\n}}\n");
-    let parse = parse_js(&wrapped, source_type, JsParserOptions::default());
-    if parse.has_errors() {
-        return None;
-    }
-
-    let line_width = LineWidth::try_from(
-        ctx.line_width
-            .clamp(LineWidth::MIN as usize, LineWidth::MAX as usize) as u16,
-    )
-    .ok()?;
-    let indent_width_value = ctx.indent_width.clamp(1, u8::MAX as usize);
-    let indent_width = IndentWidth::from(indent_width_value as u8);
-    let options = JsFormatOptions::new(source_type)
-        .with_indent_style(IndentStyle::Space)
-        .with_indent_width(indent_width)
-        .with_line_width(line_width);
-    let syntax = parse.syntax();
-    let range_start = TextSize::try_from(wrapper_prefix.len()).ok()?;
-    let range_end = TextSize::try_from(wrapper_prefix.len() + source.len()).ok()?;
-    let printed = format_js_range(options, &syntax, TextRange::new(range_start, range_end)).ok()?;
-    let formatted = printed.as_code().trim();
-    if formatted.is_empty() {
-        None
-    } else {
-        Some(formatted.trim_end().to_string())
-    }
-}
-
-fn format_embedded_python_body_token(text: &str, ctx: Ctx) -> Option<String> {
-    let body = body_token_content(text)?;
-    let source = body.trim();
-    if source.is_empty() {
-        return None;
-    }
-
-    let formatted = format_python_body_once(source, ctx)?;
-    if format_python_body_once(&formatted, ctx)? != formatted {
-        return None;
-    }
-
-    render_body_token(text, formatted.trim_end())
-}
-
-fn format_python_body_once(source: &str, ctx: Ctx) -> Option<String> {
-    let line_width =
-        PyLineWidth::try_from(ctx.line_width.clamp(1, u16::MAX as usize) as u16).ok()?;
-    let indent_width =
-        PyIndentWidth::try_from(ctx.indent_width.clamp(1, u8::MAX as usize) as u8).ok()?;
-    let options = PyFormatOptions::default()
-        .with_indent_style(PyIndentStyle::Space)
-        .with_indent_width(indent_width)
-        .with_line_width(line_width);
-    let printed = format_module_source(source, options).ok()?;
-    let formatted = printed.as_code().trim();
-    if formatted.is_empty() {
-        None
-    } else {
-        Some(formatted.trim_end().to_string())
-    }
-}
-
-fn format_embedded_brace_language_body_token(text: &str, ctx: Ctx) -> Option<String> {
-    let body = body_token_content(text)?;
-    let source = body.trim();
-    if source.is_empty() {
-        return None;
-    }
-
-    let formatted = format_brace_language_body_once(source, ctx.indent_width)?;
-    if format_brace_language_body_once(&formatted, ctx.indent_width)? != formatted {
-        return None;
-    }
-
-    render_body_token(text, formatted.trim_end())
-}
-
-fn format_brace_language_body_once(source: &str, indent_width: usize) -> Option<String> {
-    let mut rough = String::new();
-    let mut chars = source.chars().peekable();
-    let mut paren_depth = 0usize;
-    let mut bracket_depth = 0usize;
-    let mut brace_depth = 0usize;
-
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' if starts_triple_quote(&chars) => {
-                rough.push_str("\"\"\"");
-                chars.next()?;
-                chars.next()?;
-                copy_triple_quoted_literal(&mut chars, &mut rough)?;
-            }
-            '"' | '\'' => {
-                rough.push(ch);
-                copy_quoted_literal(ch, &mut chars, &mut rough)?;
-            }
-            '/' if chars.peek() == Some(&'/') => {
-                rough.push('/');
-                rough.push(chars.next()?);
-                for next in chars.by_ref() {
-                    rough.push(next);
-                    if next == '\n' {
-                        break;
-                    }
-                }
-            }
-            '/' if chars.peek() == Some(&'*') => {
-                rough.push('/');
-                rough.push(chars.next()?);
-                let mut closed = false;
-                let mut prev = '\0';
-                for next in chars.by_ref() {
-                    rough.push(next);
-                    if prev == '*' && next == '/' {
-                        closed = true;
-                        break;
-                    }
-                    prev = next;
-                }
-                if !closed {
-                    return None;
-                }
-            }
-            '(' => {
-                paren_depth += 1;
-                rough.push(ch);
-            }
-            ')' => {
-                paren_depth = paren_depth.checked_sub(1)?;
-                rough.push(ch);
-            }
-            '[' => {
-                bracket_depth += 1;
-                rough.push(ch);
-            }
-            ']' => {
-                bracket_depth = bracket_depth.checked_sub(1)?;
-                rough.push(ch);
-            }
-            '{' => {
-                brace_depth += 1;
-                rough.push(ch);
-                push_newline_if_needed(&mut rough);
-            }
-            '}' => {
-                brace_depth = brace_depth.checked_sub(1)?;
-                ensure_newline_before(&mut rough);
-                rough.push(ch);
-                push_newline_if_needed(&mut rough);
-            }
-            ';' if paren_depth == 0 && bracket_depth == 0 => {
-                rough.push(ch);
-                push_newline_if_needed(&mut rough);
-            }
-            _ => rough.push(ch),
-        }
-    }
-
-    if paren_depth != 0 || bracket_depth != 0 || brace_depth != 0 {
-        return None;
-    }
-
-    let indent_unit = " ".repeat(indent_width.clamp(1, 16));
-    let mut indent = 0usize;
-    let mut lines = Vec::new();
-    for raw_line in rough.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if line.starts_with('}') {
-            indent = indent.saturating_sub(1);
-        }
-        lines.push(format!("{}{}", indent_unit.repeat(indent), line));
-        if line.ends_with('{') {
-            indent += 1;
-        }
-    }
-
-    let formatted = lines.join("\n");
-    if formatted.is_empty() {
-        None
-    } else {
-        Some(formatted)
-    }
-}
-
-fn copy_quoted_literal(
-    quote: char,
-    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
-    out: &mut String,
-) -> Option<()> {
-    let mut escaped = false;
-    for ch in chars.by_ref() {
-        out.push(ch);
-        if escaped {
-            escaped = false;
-        } else if ch == '\\' {
-            escaped = true;
-        } else if ch == quote {
-            return Some(());
-        } else if ch == '\n' {
-            return None;
-        }
-    }
-    None
-}
-
-fn starts_triple_quote(chars: &std::iter::Peekable<std::str::Chars<'_>>) -> bool {
-    let mut lookahead = chars.clone();
-    lookahead.next() == Some('"') && lookahead.next() == Some('"')
-}
-
-fn copy_triple_quoted_literal(
-    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
-    out: &mut String,
-) -> Option<()> {
-    let mut quote_run = 0u8;
-    for ch in chars.by_ref() {
-        out.push(ch);
-        if ch == '"' {
-            quote_run += 1;
-            if quote_run == 3 {
-                return Some(());
-            }
-        } else {
-            quote_run = 0;
-        }
-    }
-    None
-}
-
-fn push_newline_if_needed(out: &mut String) {
-    if !out.ends_with('\n') {
-        out.push('\n');
-    }
-}
-
-fn ensure_newline_before(out: &mut String) {
-    if out.trim_end().is_empty() {
-        return;
-    }
-    let trimmed_len = out.trim_end().len();
-    out.truncate(trimmed_len);
-    if !out.ends_with('\n') {
-        out.push('\n');
-    }
-}
-
-fn format_embedded_sql_body_token(text: &str, ctx: Ctx) -> Option<String> {
-    let body = body_token_content(text)?;
-    let source = body.trim();
-    if source.is_empty() {
-        return None;
-    }
-    if text.starts_with('\'') && !is_sql_scripting_body(source) {
-        return None;
-    }
-    let lexed = snow_fmt_lexer::tokenize(source);
-    if !lexed.errors.is_empty()
-        || lexed.tokens.iter().any(|token| {
-            !token.kind.is_trivia() && crate::multiline_token_has_line_trailing_space(token.text)
-        })
-    {
-        return None;
-    }
-
-    let parse = snow_fmt_parser::parse(source);
-    if !parse.errors().is_empty() {
-        return None;
-    }
-    let doc = lower_source(&parse.syntax(), ctx);
-    let formatted = print(
-        &doc,
-        &PrintOptions {
-            line_width: ctx.line_width,
-            indent_width: ctx.indent_width,
-        },
-    );
-    if formatted.is_empty() {
-        None
-    } else {
-        let formatted = formatted.trim_end();
-        if text.starts_with("$$") {
-            Some(format!("$$\n{formatted}\n$$"))
-        } else {
-            Some(format!(
-                "'\n{}\n'",
-                encode_single_quoted_string_body(formatted)
-            ))
-        }
-    }
-}
-
-fn is_sql_scripting_body(source: &str) -> bool {
-    source.split_whitespace().next().is_some_and(|word| {
-        word.eq_ignore_ascii_case("begin") || word.eq_ignore_ascii_case("declare")
-    })
-}
-
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.
 ///
 /// `force_keyword` treats the token as a keyword for casing even though it is a plain identifier in
@@ -2003,249 +1402,6 @@ fn keyword_text_forced(token: &SyntaxToken, ctx: Ctx, force_keyword: bool) -> Do
     } else {
         text(token.text().to_string())
     }
-}
-
-/// Whether `word` (case-insensitively) is a canonical Snowflake COPY / object-DDL option **key** —
-/// a word the formatter up-cases when it appears in key position (see [`Lowerer::lower_option_node`]).
-///
-/// The list is the union of the documented `copyOptions`, `formatTypeOptions`, `CREATE … <object>`
-/// property keys, and the nested file-format / stage option keys
-/// (docs.snowflake.com `copy-into-table`, `copy-into-location`, `create-file-format`,
-/// `create-stage`, `create-warehouse`, `create-dynamic-table`, `create-task`, `create-sequence`,
-/// `create-stream`, `create-schema`). It is matched case-insensitively against the lower-case
-/// canonical spelling. Adding a word here only changes the *casing* of a recognized key in key
-/// position — never a value, identifier, or literal.
-fn is_option_key(word: &str) -> bool {
-    OPTION_KEYS
-        .binary_search(&word.to_ascii_lowercase().as_str())
-        .is_ok()
-}
-
-/// A no-value option flag word (`ORDER` / `NOORDER`): a recognized key that stands alone with no
-/// `= value`. Used so a trailing flag still up-cases even though no `=` follows it.
-fn is_option_flag(word: &str) -> bool {
-    OPTION_FLAGS
-        .binary_search(&word.to_ascii_lowercase().as_str())
-        .is_ok()
-}
-
-/// Canonical option-key spellings, lower-cased and **kept sorted** for `binary_search`. (Multi-word
-/// keys such as `PARTITION BY`, `START WITH`, `CLUSTER BY`, `COPY GRANTS` are recognized via their
-/// already-reserved leading keyword and the `WITH`/`BY` connector, so only single identifier words
-/// live here.) Verified against docs.snowflake.com.
-const OPTION_KEYS: &[&str] = &[
-    "ai_question_categorization",
-    "ai_sql_generation",
-    "ai_verified_queries",
-    "allow_duplicate",
-    "allowed_values",
-    "append_only",
-    "auto_refresh",
-    "auto_resume",
-    "auto_suspend",
-    "base_location",
-    "binary_as_text",
-    "binary_format",
-    "catalog",
-    "change_tracking",
-    "classification_profile",
-    "comment",
-    "compression",
-    "config",
-    "contact",
-    "credentials",
-    "data_metric_schedule",
-    "data_retention_time_in_days",
-    "date_format",
-    "default_ddl_collation",
-    "detailed_output",
-    "directory",
-    "disable_auto_convert",
-    "empty_field_as_null",
-    "enable",
-    "enable_octal",
-    "enable_query_acceleration",
-    "enable_schema_evolution",
-    "encoding",
-    "encryption",
-    "enforce_length",
-    "error_integration",
-    "error_on_column_count_mismatch",
-    "escape",
-    "escape_unenclosed_field",
-    "event_table",
-    "execute_as",
-    "exempt_other_policies",
-    "external_table_auto_refresh",
-    "external_volume",
-    "field_delimiter",
-    "field_optionally_enclosed_by",
-    "file_extension",
-    "file_format",
-    "files",
-    "finalize",
-    "force",
-    "format_name",
-    "ignore_utf8_errors",
-    "include_metadata",
-    "include_query_id",
-    "increment",
-    "initialize",
-    "initially_suspended",
-    "insert_only",
-    "log_level",
-    "master_key",
-    "match_by_column_name",
-    "max_cluster_count",
-    "max_concurrency_level",
-    "max_data_extension_time_in_days",
-    "max_file_size",
-    "min_cluster_count",
-    "multi_line",
-    "null_if",
-    "on_error",
-    "overlap_policy",
-    "overwrite",
-    "parse_header",
-    "pattern",
-    "pipe_execution_paused",
-    "preserve_space",
-    "propagate",
-    "purge",
-    "query_acceleration_max_scale_factor",
-    "record_delimiter",
-    "refresh_mode",
-    "refresh_on_create",
-    "replace_invalid_characters",
-    "resource_constraint",
-    "resource_monitor",
-    "return_failed_only",
-    "runtime_version",
-    "scaling_policy",
-    "schedule",
-    "serverless_task_max_statement_size",
-    "serverless_task_min_statement_size",
-    "show_initial_rows",
-    "single",
-    "size_limit",
-    "skip_blank_lines",
-    "skip_byte_order_mark",
-    "skip_header",
-    "snappy_compression",
-    "start",
-    "statement_queued_timeout_in_seconds",
-    "statement_timeout_in_seconds",
-    "storage_integration",
-    "strip_null_values",
-    "strip_outer_array",
-    "strip_outer_element",
-    "suspend_task_after_num_failures",
-    "target_completion_interval",
-    "target_lag",
-    "task_auto_retry_attempts",
-    "time_format",
-    "timestamp_format",
-    "trace_level",
-    "trim_space",
-    "truncatecolumns",
-    "type",
-    "url",
-    "use_logical_type",
-    "use_vectorized_scanner",
-    "user_task_managed_initial_warehouse_size",
-    "user_task_minimum_trigger_interval_in_seconds",
-    "user_task_timeout_ms",
-    "validation_mode",
-    "warehouse",
-    "warehouse_size",
-    "warehouse_type",
-];
-
-/// No-value option flag words, lower-cased and **kept sorted** (see [`is_option_flag`]).
-const OPTION_FLAGS: &[&str] = &["noorder", "order"];
-
-/// Whether a single space belongs between adjacent tokens `prev` and `cur`.
-fn needs_space(prev: SyntaxKind, cur: SyntaxKind) -> bool {
-    // Keep a numeric literal followed by a standalone dot from merging into a different token
-    // (`0 .` must not become the float literal `0.` in lenient statement tails).
-    if matches!(prev, INT_NUMBER | FLOAT_NUMBER) && cur == DOT {
-        return true;
-    }
-    if prev == DOT && matches!(cur, INT_NUMBER | FLOAT_NUMBER) {
-        return true;
-    }
-    // Tokens that hug what precedes them.
-    if matches!(
-        cur,
-        COMMA | SEMICOLON | R_PAREN | R_BRACKET | DOT | COLON | COLON2
-    ) {
-        return false;
-    }
-    // Tokens that the following token hugs.
-    if matches!(prev, DOT | COLON | COLON2 | L_PAREN | L_BRACKET | AT) {
-        return false;
-    }
-    // `(` opens a call/grouping with no space after a callee or another close bracket; `CAST(`
-    // and `TRY_CAST(` are spelled tight too.
-    if cur == L_PAREN
-        && matches!(
-            prev,
-            IDENT
-                | QUOTED_IDENT
-                | R_PAREN
-                | R_BRACKET
-                | CAST_KW
-                | TRY_CAST_KW
-                | FLATTEN_KW
-                | TABLE_KW
-        )
-    {
-        return false;
-    }
-    // `[` indexes a value with no leading space: `col[0]`.
-    if cur == L_BRACKET && is_value_end(prev) {
-        return false;
-    }
-    true
-}
-
-fn must_separate_to_preserve_tokens(prev: SyntaxKind, cur: SyntaxKind) -> bool {
-    matches!(
-        (prev, cur),
-        (MINUS, GT)
-            | (MINUS, MINUS)
-            | (EQ, GT)
-            | (LT, EQ)
-            | (LT, GT)
-            | (GT, EQ)
-            | (COLON, EQ)
-            | (COLON, COLON)
-            | (PIPE, GT)
-            | (PIPE, PIPE)
-            | (BANG, EQ)
-            | (SLASH, SLASH)
-            | (SLASH, STAR)
-    )
-}
-
-/// Token kinds that end a value expression — used to tell a binary `-`/`+` (after a value) from a
-/// unary one, and to recognize an indexable expression before `[`.
-fn is_value_end(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        IDENT
-            | QUOTED_IDENT
-            | STRING
-            | INT_NUMBER
-            | FLOAT_NUMBER
-            | VARIABLE
-            | R_PAREN
-            | R_BRACKET
-            | NULL_KW
-            | TRUE_KW
-            | FALSE_KW
-            | END_KW
-    )
 }
 
 /// A node's source text with surrounding whitespace removed, materialized in a single allocation.

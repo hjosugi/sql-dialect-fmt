@@ -1,0 +1,18 @@
+[package]
+name = "snow-fmt-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Raw WebAssembly bindings for snow-fmt, intended for browser extensions."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+snow-fmt-formatter = { path = "../snow-fmt-formatter", version = "0.1.0" }

@@ -11,5 +11,8 @@ tree-sitter-snowflake/package-lock.json
 /spec/snowflake_spec.db
 /spec/snapshots/
 
+# Generated Chrome extension WebAssembly bundle
+/extensions/chrome/vendor/*.wasm
+
 # Claude Code session & worktrees
 .claude/

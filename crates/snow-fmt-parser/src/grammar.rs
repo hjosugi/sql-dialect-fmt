@@ -12,6 +12,9 @@ use snow_fmt_syntax::SyntaxKind::*;
 
 use crate::parser::{CompletedMarker, ContextualKeyword, Parser};
 
+mod dml;
+mod stmt;
+
 // Binding powers for the Pratt parser. Higher binds tighter; (left, right) for infix.
 const BP_OR: (u8, u8) = (1, 2);
 const BP_AND: (u8, u8) = (3, 4);
@@ -29,288 +32,13 @@ pub(crate) fn source_file(p: &mut Parser) {
     while !p.at_eof() {
         if p.at(SEMICOLON) {
             p.bump(SEMICOLON); // statement separator / empty statement
-        } else if at_stmt_start(p) {
-            statement_or_flow(p);
+        } else if stmt::at_stmt_start(p) {
+            stmt::statement_or_flow(p);
         } else {
             p.err_and_bump("expected a statement");
         }
     }
     m.complete(p, SOURCE_FILE);
-}
-
-/// Parse a statement, then — if it is followed by the flow operator `->>` — the rest of the chain,
-/// wrapping the whole pipeline in a [`FLOW_STMT`]. A lone statement abandons the wrapper. Flow
-/// chains carry no semicolons between steps; a later step references an earlier one via `$n` in its
-/// FROM clause. See <https://docs.snowflake.com/en/sql-reference/operators-flow>.
-fn statement_or_flow(p: &mut Parser) {
-    let m = p.start();
-    statement(p);
-    if p.at(FLOW_PIPE) {
-        while p.eat(FLOW_PIPE) {
-            if at_stmt_start(p) {
-                statement(p);
-            } else {
-                p.error("expected a statement after '->>'");
-                break;
-            }
-        }
-        m.complete(p, FLOW_STMT);
-    } else {
-        m.abandon(p);
-    }
-}
-
-fn at_stmt_start(p: &Parser) -> bool {
-    p.at(SELECT_KW)
-        || p.at(WITH_KW)
-        || p.at(VALUES_KW)
-        || p.at(INSERT_KW)
-        || p.at(UPDATE_KW)
-        || p.at(DELETE_KW)
-        || p.at(MERGE_KW)
-        || p.at(CREATE_KW)
-        || p.at(DROP_KW)
-        || p.at(ALTER_KW)
-        || p.at(GRANT_KW)
-        || p.at(REVOKE_KW)
-        || p.at(USE_KW)
-        || p.at(SHOW_KW)
-        || p.at(DESCRIBE_KW)
-        || p.at(DESC_KW)
-        || p.at(TRUNCATE_KW)
-        || at_block_start(p)
-        || p.at(COMMIT_KW)
-        || p.at(ROLLBACK_KW)
-        || at_begin_transaction(p)
-        || p.at(UNDROP_KW)
-        || at_comment_stmt(p)
-        || p.at(CALL_KW)
-        || p.at(SET_KW)
-        || p.at(EXECUTE_KW)
-        || p.at(COPY_KW)
-        || at_expr_start(p)
-}
-
-fn statement(p: &mut Parser) {
-    if p.at(WITH_KW) {
-        with_query(p);
-    } else if p.at(INSERT_KW) {
-        insert_stmt(p);
-    } else if p.at(UPDATE_KW) {
-        update_stmt(p);
-    } else if p.at(DELETE_KW) {
-        delete_stmt(p);
-    } else if p.at(MERGE_KW) {
-        merge_stmt(p);
-    } else if p.at(CREATE_KW) {
-        create_stmt(p);
-    } else if p.at(DROP_KW) {
-        drop_stmt(p);
-    } else if p.at(ALTER_KW) {
-        alter_stmt(p);
-    } else if p.at(GRANT_KW) {
-        grant_stmt(p);
-    } else if p.at(REVOKE_KW) {
-        revoke_stmt(p);
-    } else if p.at(USE_KW) {
-        lenient_stmt(p, USE_STMT);
-    } else if p.at(SHOW_KW) {
-        lenient_stmt(p, SHOW_STMT);
-    } else if p.at(DESCRIBE_KW) || p.at(DESC_KW) {
-        lenient_stmt(p, DESCRIBE_STMT);
-    } else if p.at(TRUNCATE_KW) {
-        lenient_stmt(p, TRUNCATE_STMT);
-    } else if at_block_start(p) {
-        block_stmt(p);
-    } else if p.at(COMMIT_KW) || p.at(ROLLBACK_KW) || at_begin_transaction(p) {
-        lenient_stmt(p, TRANSACTION_STMT);
-    } else if p.at(UNDROP_KW) {
-        lenient_stmt(p, UNDROP_STMT);
-    } else if at_comment_stmt(p) {
-        comment_stmt(p);
-    } else if p.at(CALL_KW) {
-        call_stmt(p);
-    } else if p.at(SET_KW) {
-        set_stmt(p);
-    } else if p.at(EXECUTE_KW) {
-        execute_stmt(p);
-    } else if p.at(COPY_KW) {
-        copy_stmt(p);
-    } else if p.at(SELECT_KW)
-        || p.at(VALUES_KW)
-        || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
-    {
-        query_expr(p);
-    } else {
-        let m = p.start();
-        let before = p.pos();
-        expr(p);
-        if p.pos() == before {
-            p.err_and_bump("expected an expression");
-        }
-        m.complete(p, EXPR_STMT);
-    }
-}
-
-// ---- DML (Phase 6) ----
-
-fn insert_stmt(p: &mut Parser) {
-    let m = p.start();
-    p.bump(INSERT_KW);
-    p.eat(OVERWRITE_KW);
-    if p.at(ALL_KW) || p.at(FIRST_KW) {
-        multi_table_insert(p);
-    } else {
-        // Single-table: INSERT [OVERWRITE] INTO t [(cols)] VALUES/<query>.
-        p.expect(INTO_KW);
-        name_ref(p);
-        if p.at(L_PAREN) {
-            column_list(p);
-        }
-        if p.at(VALUES_KW) {
-            values_clause(p);
-        } else {
-            query_expr(p);
-        }
-    }
-    m.complete(p, INSERT_STMT);
-}
-
-/// `INSERT [OVERWRITE] ALL <into>+ <query>` (unconditional) or
-/// `INSERT [OVERWRITE] {ALL|FIRST} (WHEN <cond> THEN <into>+)+ [ELSE <into>+] <query>`.
-fn multi_table_insert(p: &mut Parser) {
-    p.bump_any(); // ALL or FIRST
-    if p.at(WHEN_KW) {
-        while p.at(WHEN_KW) {
-            insert_when(p);
-        }
-        if p.eat(ELSE_KW) {
-            while p.at(INTO_KW) {
-                into_clause(p);
-            }
-        }
-    } else {
-        while p.at(INTO_KW) {
-            into_clause(p);
-        }
-    }
-    query_expr(p); // the source rows
-}
-
-fn insert_when(p: &mut Parser) {
-    let m = p.start();
-    p.bump(WHEN_KW);
-    expr(p);
-    p.expect(THEN_KW);
-    while p.at(INTO_KW) {
-        into_clause(p);
-    }
-    m.complete(p, INSERT_WHEN);
-}
-
-fn into_clause(p: &mut Parser) {
-    let m = p.start();
-    p.bump(INTO_KW);
-    name_ref(p);
-    if p.at(L_PAREN) {
-        column_list(p);
-    }
-    if p.at(VALUES_KW) {
-        values_clause(p);
-    }
-    m.complete(p, INTO_CLAUSE);
-}
-
-fn update_stmt(p: &mut Parser) {
-    let m = p.start();
-    p.bump(UPDATE_KW);
-    table_ref(p);
-    set_clause(p);
-    if p.at(FROM_KW) {
-        from_clause(p);
-    }
-    if p.at(WHERE_KW) {
-        where_clause(p);
-    }
-    m.complete(p, UPDATE_STMT);
-}
-
-fn delete_stmt(p: &mut Parser) {
-    let m = p.start();
-    p.bump(DELETE_KW);
-    p.expect(FROM_KW);
-    table_ref(p);
-    if p.eat(USING_KW) {
-        table_ref(p);
-        while p.eat(COMMA) {
-            table_ref(p);
-        }
-    }
-    if p.at(WHERE_KW) {
-        where_clause(p);
-    }
-    m.complete(p, DELETE_STMT);
-}
-
-fn set_clause(p: &mut Parser) {
-    let m = p.start();
-    p.expect(SET_KW);
-    assignment(p);
-    while p.eat(COMMA) {
-        assignment(p);
-    }
-    m.complete(p, SET_CLAUSE);
-}
-
-fn assignment(p: &mut Parser) {
-    let m = p.start();
-    name_ref(p);
-    p.expect(EQ);
-    expr(p);
-    m.complete(p, ASSIGNMENT);
-}
-
-fn merge_stmt(p: &mut Parser) {
-    let m = p.start();
-    p.bump(MERGE_KW);
-    p.expect(INTO_KW);
-    table_ref(p);
-    p.expect(USING_KW);
-    table_ref(p);
-    p.expect(ON_KW);
-    expr(p);
-    while p.at(WHEN_KW) {
-        merge_when(p);
-    }
-    m.complete(p, MERGE_STMT);
-}
-
-fn merge_when(p: &mut Parser) {
-    let m = p.start();
-    p.bump(WHEN_KW);
-    p.eat(NOT_KW);
-    p.expect(MATCHED_KW);
-    if p.eat(AND_KW) {
-        expr(p); // WHEN MATCHED AND <cond>
-    }
-    p.expect(THEN_KW);
-    if p.at(UPDATE_KW) {
-        p.bump(UPDATE_KW);
-        set_clause(p);
-    } else if p.at(DELETE_KW) {
-        p.bump(DELETE_KW);
-    } else if p.at(INSERT_KW) {
-        p.bump(INSERT_KW);
-        if p.at(L_PAREN) {
-            column_list(p);
-        }
-        if p.at(VALUES_KW) {
-            values_clause(p);
-        }
-    } else {
-        p.error("expected UPDATE, DELETE, or INSERT after THEN");
-    }
-    m.complete(p, MERGE_WHEN);
 }
 
 // ---- DDL (Phase 7) ----
@@ -756,13 +484,13 @@ fn create_body(p: &mut Parser) {
     {
         query_expr(p);
     } else if p.at(INSERT_KW) {
-        insert_stmt(p);
+        dml::insert_stmt(p);
     } else if p.at(UPDATE_KW) {
-        update_stmt(p);
+        dml::update_stmt(p);
     } else if p.at(DELETE_KW) {
-        delete_stmt(p);
+        dml::delete_stmt(p);
     } else if p.at(MERGE_KW) {
-        merge_stmt(p);
+        dml::merge_stmt(p);
     } else if p.at(CALL_KW) {
         call_stmt(p);
     } else if at_block_start(p) {
@@ -1461,7 +1189,7 @@ fn block_statement(p: &mut Parser) {
     } else if p.at(RETURN_KW) {
         simple_script_stmt(p, RETURN_STMT);
     } else if at_sql_statement_start(p) {
-        statement(p);
+        stmt::statement(p);
     } else if p.at_name() && p.nth_at(1, ASSIGN) {
         simple_script_stmt(p, ASSIGN_STMT);
     } else {
@@ -1469,7 +1197,7 @@ fn block_statement(p: &mut Parser) {
     }
 }
 
-/// The SQL statements that the top-level [`statement`] dispatcher handles well, recognized so a
+/// The SQL statements that the top-level [`stmt::statement`] dispatcher handles well, recognized so a
 /// scripting block can delegate to it (and get full structural formatting of nested SQL).
 fn at_sql_statement_start(p: &Parser) -> bool {
     p.at(WITH_KW)

@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "snow-fmt for Snowsight",
+  "version": "0.1.0",
+  "description": "Format Snowflake SQL in Snowsight with snow-fmt.",
+  "minimum_chrome_version": "102",
+  "permissions": ["activeTab"],
+  "host_permissions": [
+    "https://app.snowflake.com/*",
+    "https://*.snowflake.com/*",
+    "https://*.snowflakecomputing.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_title": "Format with snow-fmt"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://app.snowflake.com/*",
+        "https://*.snowflake.com/*",
+        "https://*.snowflakecomputing.com/*"
+      ],
+      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/editor-bridge.js"],
+      "matches": [
+        "https://app.snowflake.com/*",
+        "https://*.snowflake.com/*",
+        "https://*.snowflakecomputing.com/*"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+F",
+        "mac": "Alt+Shift+F"
+      },
+      "description": "Format the active Snowsight editor"
+    }
+  }
+}

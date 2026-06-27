@@ -19,246 +19,190 @@ const INITIAL_FUEL: u32 = 256;
 /// reserved, so the grammar recognizes them by text via [`Parser::nth_contextual`]. Listing them in
 /// one enum keeps the set discoverable and the match texts typo-proof (a misspelling is a compile
 /// error rather than a silently-never-matching string).
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ContextualKeyword {
-    /// `<table> AT (...)` — time travel.
-    At,
-    /// `<table> BEFORE (...)` — time travel.
-    Before,
-    /// `ASOF JOIN` — the join-type word.
-    Asof,
-    /// `ASOF JOIN ... MATCH_CONDITION (...)`.
-    MatchCondition,
-    /// `<table> MATCH_RECOGNIZE (...)`.
-    MatchRecognize,
-    /// `GROUP BY GROUPING SETS (...)` — first word.
-    Grouping,
-    /// `GROUPING SETS (...)` — second word.
-    Sets,
-    // ---- MATCH_RECOGNIZE body vocabulary ----
-    /// `MEASURES <expr> AS <alias> [, ...]`.
-    Measures,
-    /// `PATTERN ( <row pattern> )`.
-    Pattern,
-    /// `DEFINE <symbol> AS <predicate> [, ...]`.
-    Define,
-    /// `SUBSET <name> = ( <symbol>, ... )`.
-    Subset,
-    /// `... PER MATCH`, `AFTER MATCH SKIP`.
-    Match,
-    /// `ONE ROW PER MATCH`.
-    One,
-    /// `AFTER MATCH SKIP ...`.
-    Skip,
-    /// `AFTER MATCH SKIP PAST LAST ROW`.
-    Past,
-    /// `AFTER MATCH SKIP TO NEXT ROW`.
-    Next,
-    /// `AFTER MATCH SKIP TO [FIRST|LAST] <symbol>`.
-    To,
-    /// `CONNECT BY NOCYCLE ...`.
-    NoCycle,
-    /// `<table> CHANGES ( INFORMATION => ... )` — change-tracking queries.
-    Changes,
-    /// `COMMENT ON <object> IS '...'` — recognized only before `ON` so it never shadows the very
-    /// common `comment` column/identifier.
-    Comment,
-    /// `BEGIN TRANSACTION` — distinguishes a transaction start from a Snowflake Scripting block.
-    Transaction,
-    /// `BEGIN WORK` — the SQL-standard spelling of a transaction start.
-    Work,
-    // ---- Snowflake Scripting structural words (not reserved: `default`/`break` are common
-    // identifiers, so they up-case only in their scripting position). The counter-loop `TO` reuses
-    // the `To` variant declared above. ----
-    /// `FOR i IN REVERSE <start> TO <end>` — counts down.
-    Reverse,
-    /// `<name> [<type>] DEFAULT <expr>` — a declaration's default value (also a DDL column default).
-    Default,
-    /// `BREAK [<label>]` — exit a loop.
-    Break,
-    /// `CONTINUE [<label>]` — skip to the next loop iteration.
-    Continue,
-    // ---- Phase 7 object DDL kinds (contextual so they stay usable as identifiers) ----
-    /// `CREATE SCHEMA …`.
-    Schema,
-    /// `CREATE DATABASE …`.
-    Database,
-    /// `CREATE STAGE …` / `… ON STAGE …`.
-    Stage,
-    /// `CREATE SEQUENCE …`.
-    Sequence,
-    /// `CREATE STREAM …`.
-    Stream,
-    /// `CREATE DYNAMIC TABLE …`.
-    Dynamic,
-    /// `CREATE SEMANTIC VIEW …`.
-    Semantic,
-    /// `CREATE FILE FORMAT …`.
-    File,
-    /// `CREATE FILE FORMAT …` — second word.
-    Format,
-    /// `CREATE MASKING POLICY …`.
-    Masking,
-    /// `CREATE MASKING POLICY …` / `CREATE ROW ACCESS POLICY …`.
-    Policy,
-    /// `CREATE ROW ACCESS POLICY …` — middle word.
-    Access,
-    /// `CREATE TAG …`.
-    Tag,
-    /// `CREATE TAG … ALLOWED_VALUES ...`.
-    AllowedValues,
-    /// `CREATE TAG … PROPAGATE = ...`.
-    Propagate,
-    /// `CREATE MASKING POLICY … EXEMPT_OTHER_POLICIES = ...`.
-    ExemptOtherPolicies,
-    // ---- Semantic View vocabulary (Snowflake semantic model DDL). These are contextual because
-    // they remain ordinary identifiers outside `CREATE SEMANTIC VIEW`.
-    Tables,
-    Relationships,
-    Facts,
-    Dimensions,
-    Metrics,
-    Public,
-    Private,
-    Synonyms,
-    Labels,
-    AiSqlGeneration,
-    AiQuestionCategorization,
-    AiVerifiedQueries,
-    Question,
-    VerifiedAt,
-    OnboardingQuestion,
-    VerifiedBy,
-    // ---- Phase 7 GRANT / REVOKE vocabulary ----
-    /// `… TO ROLE r` / `… FROM ROLE r`.
-    Role,
-    /// `… TO USER u`.
-    User,
-    /// `GRANT <role> TO SHARE s`.
-    Share,
-    /// `REVOKE … FROM r RESTRICT|CASCADE` — cascade.
-    Cascade,
-    /// `REVOKE … FROM r RESTRICT` — restrict.
-    Restrict,
-    /// `REVOKE GRANT OPTION FOR …` / `… WITH GRANT OPTION` — option.
-    Option,
-    /// `GRANT ALL PRIVILEGES …`.
-    Privileges,
-    // ---- DDL vocabulary (CREATE TABLE / VIEW, DROP). All double as ordinary identifiers, so they
-    // stay contextual: tagged for up-casing/highlighting only where the grammar expects them.
-    // (`Default`, `Cascade`, and `Restrict` are declared above and reused for DDL too.) ----
-    /// `MATERIALIZED VIEW`.
-    Materialized,
-    /// `LOCAL TEMP[ORARY]` table/view modifier.
-    Local,
-    /// `GLOBAL TEMP[ORARY]` table/view modifier.
-    Global,
-    /// `CLUSTER BY ( ... )`.
-    Cluster,
-    /// `CREATE TABLE <name> CLONE <source>`.
-    Clone,
-    /// A `PRIMARY KEY` constraint (also the first word of the two).
-    Primary,
-    /// The `KEY` of `PRIMARY KEY` / `FOREIGN KEY`.
-    Key,
-    /// A `UNIQUE` constraint.
-    Unique,
-    /// A `FOREIGN KEY` constraint.
-    Foreign,
-    /// `FOREIGN KEY ( ... ) REFERENCES <table> ( ... )`.
-    References,
-    /// `CONSTRAINT <name> ...` — names an out-of-line constraint.
-    Constraint,
-    /// A `CHECK ( <expr> )` constraint.
-    Check,
-    /// A column `COLLATE '<spec>'`.
-    Collate,
+macro_rules! contextual_keywords {
+    ($(
+        $(#[$meta:meta])*
+        $variant:ident => $text:literal,
+    )*) => {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub(crate) enum ContextualKeyword {
+            $(
+                $(#[$meta])*
+                $variant,
+            )*
+        }
+
+        impl ContextualKeyword {
+            /// The lowercase source text this word matches case-insensitively.
+            fn text(self) -> &'static str {
+                match self {
+                    $(
+                        ContextualKeyword::$variant => $text,
+                    )*
+                }
+            }
+        }
+    };
 }
 
-impl ContextualKeyword {
-    /// The lowercase source text this word matches case-insensitively.
-    fn text(self) -> &'static str {
-        match self {
-            ContextualKeyword::At => "at",
-            ContextualKeyword::Before => "before",
-            ContextualKeyword::Asof => "asof",
-            ContextualKeyword::MatchCondition => "match_condition",
-            ContextualKeyword::MatchRecognize => "match_recognize",
-            ContextualKeyword::Grouping => "grouping",
-            ContextualKeyword::Sets => "sets",
-            ContextualKeyword::Measures => "measures",
-            ContextualKeyword::Pattern => "pattern",
-            ContextualKeyword::Define => "define",
-            ContextualKeyword::Subset => "subset",
-            ContextualKeyword::Match => "match",
-            ContextualKeyword::One => "one",
-            ContextualKeyword::Skip => "skip",
-            ContextualKeyword::Past => "past",
-            ContextualKeyword::Next => "next",
-            ContextualKeyword::To => "to",
-            ContextualKeyword::NoCycle => "nocycle",
-            ContextualKeyword::Changes => "changes",
-            ContextualKeyword::Comment => "comment",
-            ContextualKeyword::Transaction => "transaction",
-            ContextualKeyword::Work => "work",
-            ContextualKeyword::Reverse => "reverse",
-            ContextualKeyword::Default => "default",
-            ContextualKeyword::Break => "break",
-            ContextualKeyword::Continue => "continue",
-            ContextualKeyword::Schema => "schema",
-            ContextualKeyword::Database => "database",
-            ContextualKeyword::Stage => "stage",
-            ContextualKeyword::Sequence => "sequence",
-            ContextualKeyword::Stream => "stream",
-            ContextualKeyword::Dynamic => "dynamic",
-            ContextualKeyword::Semantic => "semantic",
-            ContextualKeyword::File => "file",
-            ContextualKeyword::Format => "format",
-            ContextualKeyword::Masking => "masking",
-            ContextualKeyword::Policy => "policy",
-            ContextualKeyword::Access => "access",
-            ContextualKeyword::Tag => "tag",
-            ContextualKeyword::AllowedValues => "allowed_values",
-            ContextualKeyword::Propagate => "propagate",
-            ContextualKeyword::ExemptOtherPolicies => "exempt_other_policies",
-            ContextualKeyword::Tables => "tables",
-            ContextualKeyword::Relationships => "relationships",
-            ContextualKeyword::Facts => "facts",
-            ContextualKeyword::Dimensions => "dimensions",
-            ContextualKeyword::Metrics => "metrics",
-            ContextualKeyword::Public => "public",
-            ContextualKeyword::Private => "private",
-            ContextualKeyword::Synonyms => "synonyms",
-            ContextualKeyword::Labels => "labels",
-            ContextualKeyword::AiSqlGeneration => "ai_sql_generation",
-            ContextualKeyword::AiQuestionCategorization => "ai_question_categorization",
-            ContextualKeyword::AiVerifiedQueries => "ai_verified_queries",
-            ContextualKeyword::Question => "question",
-            ContextualKeyword::VerifiedAt => "verified_at",
-            ContextualKeyword::OnboardingQuestion => "onboarding_question",
-            ContextualKeyword::VerifiedBy => "verified_by",
-            ContextualKeyword::Role => "role",
-            ContextualKeyword::User => "user",
-            ContextualKeyword::Share => "share",
-            ContextualKeyword::Cascade => "cascade",
-            ContextualKeyword::Restrict => "restrict",
-            ContextualKeyword::Option => "option",
-            ContextualKeyword::Privileges => "privileges",
-            ContextualKeyword::Materialized => "materialized",
-            ContextualKeyword::Local => "local",
-            ContextualKeyword::Global => "global",
-            ContextualKeyword::Cluster => "cluster",
-            ContextualKeyword::Clone => "clone",
-            ContextualKeyword::Primary => "primary",
-            ContextualKeyword::Key => "key",
-            ContextualKeyword::Unique => "unique",
-            ContextualKeyword::Foreign => "foreign",
-            ContextualKeyword::References => "references",
-            ContextualKeyword::Constraint => "constraint",
-            ContextualKeyword::Check => "check",
-            ContextualKeyword::Collate => "collate",
-        }
-    }
+contextual_keywords! {
+    /// `<table> AT (...)` — time travel.
+    At => "at",
+    /// `<table> BEFORE (...)` — time travel.
+    Before => "before",
+    /// `ASOF JOIN` — the join-type word.
+    Asof => "asof",
+    /// `ASOF JOIN ... MATCH_CONDITION (...)`.
+    MatchCondition => "match_condition",
+    /// `<table> MATCH_RECOGNIZE (...)`.
+    MatchRecognize => "match_recognize",
+    /// `GROUP BY GROUPING SETS (...)` — first word.
+    Grouping => "grouping",
+    /// `GROUPING SETS (...)` — second word.
+    Sets => "sets",
+    /// `MEASURES <expr> AS <alias> [, ...]`.
+    Measures => "measures",
+    /// `PATTERN ( <row pattern> )`.
+    Pattern => "pattern",
+    /// `DEFINE <symbol> AS <predicate> [, ...]`.
+    Define => "define",
+    /// `SUBSET <name> = ( <symbol>, ... )`.
+    Subset => "subset",
+    /// `... PER MATCH`, `AFTER MATCH SKIP`.
+    Match => "match",
+    /// `ONE ROW PER MATCH`.
+    One => "one",
+    /// `AFTER MATCH SKIP ...`.
+    Skip => "skip",
+    /// `AFTER MATCH SKIP PAST LAST ROW`.
+    Past => "past",
+    /// `AFTER MATCH SKIP TO NEXT ROW`.
+    Next => "next",
+    /// `AFTER MATCH SKIP TO [FIRST|LAST] <symbol>`.
+    To => "to",
+    /// `CONNECT BY NOCYCLE ...`.
+    NoCycle => "nocycle",
+    /// `<table> CHANGES ( INFORMATION => ... )` — change-tracking queries.
+    Changes => "changes",
+    /// `COMMENT ON <object> IS '...'` — recognized only before `ON` so it never shadows the very
+    /// common `comment` column/identifier.
+    Comment => "comment",
+    /// `BEGIN TRANSACTION` — distinguishes a transaction start from a Snowflake Scripting block.
+    Transaction => "transaction",
+    /// `BEGIN WORK` — the SQL-standard spelling of a transaction start.
+    Work => "work",
+    /// `FOR i IN REVERSE <start> TO <end>` — counts down.
+    Reverse => "reverse",
+    /// `<name> [<type>] DEFAULT <expr>` — a declaration's default value (also a DDL column default).
+    Default => "default",
+    /// `BREAK [<label>]` — exit a loop.
+    Break => "break",
+    /// `CONTINUE [<label>]` — skip to the next loop iteration.
+    Continue => "continue",
+    /// `CREATE SCHEMA …`.
+    Schema => "schema",
+    /// `CREATE DATABASE …`.
+    Database => "database",
+    /// `CREATE STAGE …` / `… ON STAGE …`.
+    Stage => "stage",
+    /// `CREATE SEQUENCE …`.
+    Sequence => "sequence",
+    /// `CREATE STREAM …`.
+    Stream => "stream",
+    /// `CREATE DYNAMIC TABLE …`.
+    Dynamic => "dynamic",
+    /// `CREATE SEMANTIC VIEW …`.
+    Semantic => "semantic",
+    /// `CREATE FILE FORMAT …`.
+    File => "file",
+    /// `CREATE FILE FORMAT …` — second word.
+    Format => "format",
+    /// `CREATE MASKING POLICY …`.
+    Masking => "masking",
+    /// `CREATE MASKING POLICY …` / `CREATE ROW ACCESS POLICY …`.
+    Policy => "policy",
+    /// `CREATE ROW ACCESS POLICY …` — middle word.
+    Access => "access",
+    /// `CREATE TAG …`.
+    Tag => "tag",
+    /// `CREATE TAG … ALLOWED_VALUES ...`.
+    AllowedValues => "allowed_values",
+    /// `CREATE TAG … PROPAGATE = ...`.
+    Propagate => "propagate",
+    /// `CREATE MASKING POLICY … EXEMPT_OTHER_POLICIES = ...`.
+    ExemptOtherPolicies => "exempt_other_policies",
+    /// `CREATE SEMANTIC VIEW … WITH TABLES`.
+    Tables => "tables",
+    /// `CREATE SEMANTIC VIEW … WITH RELATIONSHIPS`.
+    Relationships => "relationships",
+    /// `CREATE SEMANTIC VIEW … WITH FACTS`.
+    Facts => "facts",
+    /// `CREATE SEMANTIC VIEW … WITH DIMENSIONS`.
+    Dimensions => "dimensions",
+    /// `CREATE SEMANTIC VIEW … WITH METRICS`.
+    Metrics => "metrics",
+    /// `CREATE SEMANTIC VIEW … PUBLIC`.
+    Public => "public",
+    /// `CREATE SEMANTIC VIEW … PRIVATE`.
+    Private => "private",
+    /// Semantic View `SYNONYMS` attribute.
+    Synonyms => "synonyms",
+    /// Semantic View `LABELS` attribute.
+    Labels => "labels",
+    /// Semantic View `AI_SQL_GENERATION` attribute.
+    AiSqlGeneration => "ai_sql_generation",
+    /// Semantic View `AI_QUESTION_CATEGORIZATION` attribute.
+    AiQuestionCategorization => "ai_question_categorization",
+    /// Semantic View `AI_VERIFIED_QUERIES` attribute.
+    AiVerifiedQueries => "ai_verified_queries",
+    /// Semantic View verified-query `QUESTION`.
+    Question => "question",
+    /// Semantic View verified-query `VERIFIED_AT`.
+    VerifiedAt => "verified_at",
+    /// Semantic View verified-query `ONBOARDING_QUESTION`.
+    OnboardingQuestion => "onboarding_question",
+    /// Semantic View verified-query `VERIFIED_BY`.
+    VerifiedBy => "verified_by",
+    /// `… TO ROLE r` / `… FROM ROLE r`.
+    Role => "role",
+    /// `… TO USER u`.
+    User => "user",
+    /// `GRANT <role> TO SHARE s`.
+    Share => "share",
+    /// `REVOKE … FROM r RESTRICT|CASCADE` — cascade.
+    Cascade => "cascade",
+    /// `REVOKE … FROM r RESTRICT` — restrict.
+    Restrict => "restrict",
+    /// `REVOKE GRANT OPTION FOR …` / `… WITH GRANT OPTION` — option.
+    Option => "option",
+    /// `GRANT ALL PRIVILEGES …`.
+    Privileges => "privileges",
+    /// `MATERIALIZED VIEW`.
+    Materialized => "materialized",
+    /// `LOCAL TEMP[ORARY]` table/view modifier.
+    Local => "local",
+    /// `GLOBAL TEMP[ORARY]` table/view modifier.
+    Global => "global",
+    /// `CLUSTER BY ( ... )`.
+    Cluster => "cluster",
+    /// `CREATE TABLE <name> CLONE <source>`.
+    Clone => "clone",
+    /// A `PRIMARY KEY` constraint (also the first word of the two).
+    Primary => "primary",
+    /// The `KEY` of `PRIMARY KEY` / `FOREIGN KEY`.
+    Key => "key",
+    /// A `UNIQUE` constraint.
+    Unique => "unique",
+    /// A `FOREIGN KEY` constraint.
+    Foreign => "foreign",
+    /// `FOREIGN KEY ( ... ) REFERENCES <table> ( ... )`.
+    References => "references",
+    /// `CONSTRAINT <name> ...` — names an out-of-line constraint.
+    Constraint => "constraint",
+    /// A `CHECK ( <expr> )` constraint.
+    Check => "check",
+    /// A column `COLLATE '<spec>'`.
+    Collate => "collate",
 }
 
 pub(crate) struct Parser<'a> {
