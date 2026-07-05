@@ -2,6 +2,7 @@
 name = "sql-dialect-fmt-test-fixtures"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Embedded Snowflake SQL golden fixtures used by sql-dialect-fmt tests."

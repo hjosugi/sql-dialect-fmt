@@ -23,6 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: external-corpus
       - name: Run external-corpus harness
         env:
           DISPATCH_CORPUS_URL: ${{ github.event.inputs.corpus_url }}

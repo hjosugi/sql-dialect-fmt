@@ -5,6 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
+rust-version = "1.94"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/hjosugi/sql-dialect-fmt"
 homepage = "https://github.com/hjosugi/sql-dialect-fmt"

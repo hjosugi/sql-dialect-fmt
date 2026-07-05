@@ -36,9 +36,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: extensions
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/package.json
       - name: Resolve package version
         id: version
         run: |
@@ -50,6 +55,8 @@ jobs:
             version="$(awk -F'"' '/^version =/ { print $2; exit }' Cargo.toml)"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Check version consistency
+        run: python3 scripts/check-version-consistency.py "${{ steps.version.outputs.version }}"
       - name: Resolve publish plan
         id: publish
         env:

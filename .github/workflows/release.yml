@@ -21,12 +21,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/package.json
       - name: Resolve version
         id: version
         run: echo "version=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_OUTPUT"
+      - name: Check version consistency
+        run: python3 scripts/check-version-consistency.py "${{ steps.version.outputs.version }}"
       - name: Build release binary
         run: cargo build --release -p sql-dialect-fmt --bin sql-dialect-fmt
       - name: Package binary

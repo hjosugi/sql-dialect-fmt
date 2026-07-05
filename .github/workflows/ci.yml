@@ -6,21 +6,110 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  MSRV: "1.94.0"
+
 jobs:
   rust:
-    name: Rust
-    runs-on: ubuntu-latest
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rust-${{ matrix.os }}
       - name: Format
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: cargo fmt --all --check
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  msrv:
+    name: MSRV (1.94.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.MSRV }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-${{ env.MSRV }}
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --locked
+
+  wasm:
+    name: Wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32-unknown-unknown
+      - name: Build wasm package
+        run: cargo build -p sql-dialect-fmt-wasm --target wasm32-unknown-unknown --locked
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: ${{ env.MSRV }}
+          command: check
+          command-arguments: advisories bans licenses sources
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Generate coverage report
+        run: |
+          mkdir -p target/coverage
+          cargo llvm-cov --workspace --locked --lcov --output-path target/coverage/lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: target/coverage/lcov.info
+          if-no-files-found: error
+      - name: Upload coverage to Codecov
+        if: ${{ env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: target/coverage/lcov.info
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   tree-sitter:
     name: Tree-sitter
@@ -30,6 +119,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: tree-sitter-snowflake/package.json
       - name: Generate parser
         working-directory: tree-sitter-snowflake
         run: npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate

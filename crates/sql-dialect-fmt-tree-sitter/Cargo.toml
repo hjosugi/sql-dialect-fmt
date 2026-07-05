@@ -2,6 +2,7 @@
 name = "sql-dialect-fmt-tree-sitter"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust bindings for the bundled tree-sitter-snowflake grammar."
