@@ -36,7 +36,13 @@ use sql_dialect_fmt_lsp::{
     token_modifiers, token_types,
 };
 
-type Docs = HashMap<Uri, String>;
+#[derive(Debug)]
+struct Document {
+    text: String,
+    version: Option<i32>,
+}
+
+type Docs = HashMap<Uri, Document>;
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     let (connection, io_threads) = Connection::stdio();
@@ -119,17 +125,17 @@ fn handle_request(request: Request, docs: &Docs) -> Response {
 }
 
 fn formatting(params: DocumentFormattingParams, docs: &Docs) -> Vec<lsp_types::TextEdit> {
-    let Some(text) = docs.get(&params.text_document.uri) else {
+    let Some(document) = docs.get(&params.text_document.uri) else {
         return Vec::new();
     };
     // Honor the editor's indent width; keep the other opinionated defaults.
     let options =
         FormatOptions::default().with_indent_width((params.options.tab_size as usize).max(1));
-    format_edits(text, &options)
+    format_edits(&document.text, &options)
 }
 
 fn semantic_tokens_full(params: SemanticTokensParams, docs: &Docs) -> Option<SemanticTokens> {
-    let text = docs.get(&params.text_document.uri)?;
+    let text = &docs.get(&params.text_document.uri)?.text;
     Some(SemanticTokens {
         result_id: None,
         data: semantic_tokens(text),
@@ -138,12 +144,12 @@ fn semantic_tokens_full(params: SemanticTokensParams, docs: &Docs) -> Option<Sem
 
 fn hover_request(params: HoverParams, docs: &Docs) -> Option<Hover> {
     let position = params.text_document_position_params;
-    let text = docs.get(&position.text_document.uri)?;
+    let text = &docs.get(&position.text_document.uri)?.text;
     hover(text, position.position)
 }
 
 fn folding_request(params: FoldingRangeParams, docs: &Docs) -> Option<Vec<FoldingRange>> {
-    let text = docs.get(&params.text_document.uri)?;
+    let text = &docs.get(&params.text_document.uri)?.text;
     Some(folding_ranges(text))
 }
 
@@ -157,7 +163,13 @@ fn handle_notification(
             let params: DidOpenTextDocumentParams =
                 notification.extract(DidOpenTextDocument::METHOD)?;
             let uri = params.text_document.uri;
-            docs.insert(uri.clone(), params.text_document.text);
+            docs.insert(
+                uri.clone(),
+                Document {
+                    text: params.text_document.text,
+                    version: Some(params.text_document.version),
+                },
+            );
             publish_diagnostics(connection, docs, &uri)?;
         }
         DidChangeTextDocument::METHOD => {
@@ -166,19 +178,28 @@ fn handle_notification(
             let uri = params.text_document.uri;
             // Incremental sync: apply each change in order, splicing range edits and honoring
             // whole-document replacements (a change with no range).
-            let mut text = docs.remove(&uri).unwrap_or_default();
+            let mut text = docs
+                .remove(&uri)
+                .map(|document| document.text)
+                .unwrap_or_default();
             for change in params.content_changes {
                 text = apply_change(&text, change.range, &change.text);
             }
-            docs.insert(uri.clone(), text);
+            docs.insert(
+                uri.clone(),
+                Document {
+                    text,
+                    version: Some(params.text_document.version),
+                },
+            );
             publish_diagnostics(connection, docs, &uri)?;
         }
         DidCloseTextDocument::METHOD => {
             let params: DidCloseTextDocumentParams =
                 notification.extract(DidCloseTextDocument::METHOD)?;
             let uri = params.text_document.uri;
-            docs.remove(&uri);
-            send_diagnostics(connection, uri, Vec::new())?; // clear on close
+            let version = docs.remove(&uri).and_then(|document| document.version);
+            send_diagnostics(connection, uri, Vec::new(), version)?; // clear on close
         }
         _ => {}
     }
@@ -192,20 +213,22 @@ fn publish_diagnostics(
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let diags = docs
         .get(uri)
-        .map(|text| diagnostics(text))
+        .map(|document| diagnostics(&document.text))
         .unwrap_or_default();
-    send_diagnostics(connection, uri.clone(), diags)
+    let version = docs.get(uri).and_then(|document| document.version);
+    send_diagnostics(connection, uri.clone(), diags, version)
 }
 
 fn send_diagnostics(
     connection: &Connection,
     uri: Uri,
     diagnostics: Vec<lsp_types::Diagnostic>,
+    version: Option<i32>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let params = PublishDiagnosticsParams {
         uri,
         diagnostics,
-        version: None,
+        version,
     };
     let notification = Notification::new(PublishDiagnostics::METHOD.to_string(), params);
     connection
@@ -237,4 +260,121 @@ where
             format!("method mismatch: {}", request.method),
         )),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lsp_types::{
+        TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
+        VersionedTextDocumentIdentifier,
+    };
+
+    fn test_uri() -> Uri {
+        "file:///workspace/query.sql".parse().expect("valid URI")
+    }
+
+    fn recv_diagnostics(client: &Connection) -> PublishDiagnosticsParams {
+        let Message::Notification(notification) =
+            client.receiver.recv().expect("diagnostics notification")
+        else {
+            panic!("expected diagnostics notification")
+        };
+        assert_eq!(notification.method, PublishDiagnostics::METHOD);
+        serde_json::from_value(notification.params).expect("publishDiagnostics params")
+    }
+
+    #[test]
+    fn did_open_stores_and_publishes_document_version() {
+        let (server, client) = Connection::memory();
+        let mut docs = Docs::new();
+        let uri = test_uri();
+        let notification = Notification::new(
+            DidOpenTextDocument::METHOD.to_string(),
+            DidOpenTextDocumentParams {
+                text_document: TextDocumentItem {
+                    uri: uri.clone(),
+                    language_id: "sql".to_string(),
+                    version: 7,
+                    text: "select * from".to_string(),
+                },
+            },
+        );
+
+        handle_notification(&server, notification, &mut docs).expect("handle didOpen");
+
+        assert_eq!(
+            docs.get(&uri).and_then(|document| document.version),
+            Some(7)
+        );
+        let params = recv_diagnostics(&client);
+        assert_eq!(params.uri, uri);
+        assert_eq!(params.version, Some(7));
+        assert!(!params.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn did_change_updates_and_publishes_document_version() {
+        let (server, client) = Connection::memory();
+        let mut docs = Docs::new();
+        let uri = test_uri();
+        docs.insert(
+            uri.clone(),
+            Document {
+                text: "select * from".to_string(),
+                version: Some(7),
+            },
+        );
+        let notification = Notification::new(
+            DidChangeTextDocument::METHOD.to_string(),
+            DidChangeTextDocumentParams {
+                text_document: VersionedTextDocumentIdentifier {
+                    uri: uri.clone(),
+                    version: 8,
+                },
+                content_changes: vec![TextDocumentContentChangeEvent {
+                    range: None,
+                    range_length: None,
+                    text: "select * from t".to_string(),
+                }],
+            },
+        );
+
+        handle_notification(&server, notification, &mut docs).expect("handle didChange");
+
+        let document = docs.get(&uri).expect("document retained");
+        assert_eq!(document.text, "select * from t");
+        assert_eq!(document.version, Some(8));
+        let params = recv_diagnostics(&client);
+        assert_eq!(params.uri, uri);
+        assert_eq!(params.version, Some(8));
+    }
+
+    #[test]
+    fn did_close_clears_diagnostics_with_last_document_version() {
+        let (server, client) = Connection::memory();
+        let mut docs = Docs::new();
+        let uri = test_uri();
+        docs.insert(
+            uri.clone(),
+            Document {
+                text: "select * from".to_string(),
+                version: Some(9),
+            },
+        );
+        let notification = Notification::new(
+            DidCloseTextDocument::METHOD.to_string(),
+            DidCloseTextDocumentParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+            },
+        );
+
+        handle_notification(&server, notification, &mut docs).expect("handle didClose");
+
+        assert!(!docs.contains_key(&uri));
+        let params = recv_diagnostics(&client);
+        assert_eq!(params.uri, uri);
+        assert_eq!(params.version, Some(9));
+        assert!(params.diagnostics.is_empty());
+    }
 }
