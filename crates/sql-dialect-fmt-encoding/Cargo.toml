@@ -11,6 +11,4 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Byte-to-text decoding and re-encoding helpers for sql-dialect-fmt."
-
-license = "0BSD"
 [dependencies]

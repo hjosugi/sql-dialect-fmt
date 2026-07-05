@@ -11,8 +11,6 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Syntax kinds and lossless-tree (rowan) language definition for sql-dialect-fmt, a Snowflake SQL toolchain."
-
-license = "0BSD"
 [dependencies]
 # rowan provides the green/red lossless syntax tree (the same library rust-analyzer uses).
 # It is optional so that SyntaxKind + the lexer build and test with zero network/deps;

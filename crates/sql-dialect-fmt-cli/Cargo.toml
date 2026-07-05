@@ -11,8 +11,6 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "sql-dialect-fmt: an opinionated SQL dialect formatter (command-line)."
-
-license = "0BSD"
 [dependencies]
 globset = "0.4"
 ignore = "0.4"

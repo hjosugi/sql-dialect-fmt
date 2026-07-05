@@ -11,8 +11,6 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Generic Wadler/Prettier-style Doc IR + width-aware printer, plus the Snowflake SQL formatting rules built on the lossless CST."
-
-license = "0BSD"
 [dependencies]
 biome_formatter = "=0.5.7"
 biome_js_formatter = "=0.5.7"
