@@ -9,6 +9,7 @@ description = "Shared assertion helpers for sql-dialect-fmt integration tests."
 # Internal-only: shared test helpers, never published to crates.io.
 publish = false
 
+license = "0BSD"
 [dependencies]
 sql-dialect-fmt-highlight = { path = "../sql-dialect-fmt-highlight", version = "1.0.0" }
 sql-dialect-fmt-lexer = { path = "../sql-dialect-fmt-lexer", version = "1.0.0" }

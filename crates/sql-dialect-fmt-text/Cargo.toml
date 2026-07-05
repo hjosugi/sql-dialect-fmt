@@ -12,4 +12,5 @@ keywords.workspace = true
 categories.workspace = true
 description = "Shared source text position helpers for sql-dialect-fmt."
 
+license = "0BSD"
 [dependencies]

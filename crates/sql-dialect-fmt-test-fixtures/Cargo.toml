@@ -9,4 +9,5 @@ description = "Embedded Snowflake SQL golden fixtures used by sql-dialect-fmt te
 # Internal-only: test fixtures, never published to crates.io.
 publish = false
 
+license = "0BSD"
 [dependencies]

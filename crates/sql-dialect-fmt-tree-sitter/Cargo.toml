@@ -11,6 +11,7 @@ description = "Rust bindings for the bundled tree-sitter-snowflake grammar."
 # tarball cannot find parser.c and `cargo publish` verification fails to build.
 publish = false
 
+license = "0BSD"
 [dependencies]
 tree-sitter = "0.26.9"
 tree-sitter-language = "0.1.7"
