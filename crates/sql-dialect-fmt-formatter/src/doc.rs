@@ -15,6 +15,8 @@
 
 use std::borrow::Cow;
 
+use unicode_width::UnicodeWidthStr;
+
 /// The pretty-printer intermediate representation.
 ///
 /// Construct values through the builder functions rather than the variants directly; the shape is
@@ -314,9 +316,9 @@ struct Cmd<'a> {
     doc: &'a Doc,
 }
 
-/// Display width of a string in terminal columns: the sum of each character's column width, so a
-/// line of CJK text is measured by how wide it actually renders, not by its scalar count. This only
-/// feeds the fit/break decision, so refining it never changes which tokens are emitted.
+/// Display width of a string in terminal columns. CJK text, combining marks, and emoji sequences
+/// are measured by their rendered column width rather than by scalar count. This only feeds the
+/// fit/break decision, so refining it never changes which tokens are emitted.
 ///
 /// Pure ASCII — the overwhelmingly common case in SQL — has width equal to its byte length, so we
 /// short-circuit on it and only decode/classify code points when a non-ASCII byte is present.
@@ -324,7 +326,7 @@ fn text_width(s: &str) -> usize {
     if s.is_ascii() {
         return s.len();
     }
-    s.chars().map(char_width).sum()
+    UnicodeWidthStr::width(s)
 }
 
 /// Display width of the last line of a possibly multi-line slice: everything after the final
@@ -333,34 +335,6 @@ fn last_line_width(s: &str) -> usize {
     match s.rfind('\n') {
         Some(nl) => text_width(&s[nl + 1..]),
         None => text_width(s),
-    }
-}
-
-/// Column width of a single character: `2` for East Asian Wide / Fullwidth code points (per Unicode
-/// Annex #11 — CJK ideographs, kana, Hangul syllables, fullwidth forms, most emoji), `1` otherwise.
-/// Combining marks are not special-cased (rare in SQL), so this is an upper bound there.
-fn char_width(c: char) -> usize {
-    let cp = c as u32;
-    let wide = matches!(cp,
-        0x1100..=0x115F   // Hangul Jamo
-        | 0x2E80..=0x303E // CJK radicals, Kangxi, CJK symbols & punctuation
-        | 0x3041..=0x33FF // Hiragana, Katakana, Bopomofo, CJK compat
-        | 0x3400..=0x4DBF // CJK Unified Ideographs Extension A
-        | 0x4E00..=0x9FFF // CJK Unified Ideographs
-        | 0xA000..=0xA4CF // Yi syllables
-        | 0xAC00..=0xD7A3 // Hangul syllables
-        | 0xF900..=0xFAFF // CJK compatibility ideographs
-        | 0xFE10..=0xFE19 // vertical forms
-        | 0xFE30..=0xFE6F // CJK compatibility & small form variants
-        | 0xFF00..=0xFF60 // fullwidth forms
-        | 0xFFE0..=0xFFE6 // fullwidth signs
-        | 0x1F300..=0x1FAFF // symbols, pictographs & emoji (wide)
-        | 0x20000..=0x3FFFD // supplementary ideographic planes
-    );
-    if wide {
-        2
-    } else {
-        1
     }
 }
 
@@ -714,6 +688,17 @@ mod tests {
     }
 
     #[test]
+    fn non_ascii_width_uses_unicode_sequence_width() {
+        assert_eq!(text_width("e\u{301}"), 1); // e + combining acute accent
+        assert_eq!(text_width("👩\u{200d}💻"), 2); // woman technologist ZWJ sequence
+
+        // Flat width is é(1) + space(1) + 👩‍💻(2) = 4: fits at 4, breaks at 3.
+        let doc = group(concat(vec![text("e\u{301}"), line(), text("👩\u{200d}💻")]));
+        assert_eq!(p(&doc, 3), "e\u{301}\n👩\u{200d}💻\n");
+        assert_eq!(p(&doc, 4), "e\u{301} 👩\u{200d}💻\n");
+    }
+
+    #[test]
     fn group_stays_flat_when_it_fits() {
         let doc = group(concat(vec![text("a"), line(), text("b")]));
         assert_eq!(p(&doc, 80), "a b\n");
@@ -856,10 +841,10 @@ mod tests {
                 other => panic!("text() should build a Text node, got {other:?}"),
             }
         }
-        // The ASCII fast path agrees with the per-char fold.
+        // The ASCII fast path agrees with the Unicode width implementation.
         assert_eq!(
             text_width("SELECT a, b"),
-            "SELECT a, b".chars().map(char_width).sum::<usize>()
+            UnicodeWidthStr::width("SELECT a, b")
         );
     }
 

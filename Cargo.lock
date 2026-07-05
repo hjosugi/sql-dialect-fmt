@@ -2314,6 +2314,7 @@ dependencies = [
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-test-fixtures",
  "sql-dialect-fmt-test-support",
+ "unicode-width 0.2.2",
 ]
 
 [[package]]
