@@ -5,12 +5,13 @@
 //! `sql_dialect_fmt_alloc`; this module owns the last formatted result until the next call or
 //! `sql_dialect_fmt_clear_result`.
 
-use std::{mem, ptr, slice, str};
+use std::{cell::RefCell, mem, ptr, slice, str};
 
 use sql_dialect_fmt_formatter::{format, FormatOptions};
 
-static mut LAST_RESULT_PTR: *mut u8 = ptr::null_mut();
-static mut LAST_RESULT_LEN: u32 = 0;
+thread_local! {
+    static LAST_RESULT: RefCell<Option<Box<[u8]>>> = const { RefCell::new(None) };
+}
 
 /// Allocate a writable byte buffer in Wasm memory.
 ///
@@ -67,10 +68,7 @@ pub unsafe extern "C" fn sql_dialect_fmt_format(
         .with_indent_width(indent_width.clamp(1, 16) as usize)
         .with_uppercase_keywords(uppercase_keywords != 0);
 
-    let mut result = format(source, &options).into_bytes().into_boxed_slice();
-    LAST_RESULT_LEN = result.len() as u32;
-    LAST_RESULT_PTR = result.as_mut_ptr();
-    mem::forget(result);
+    store_last_result(format(source, &options).into_bytes().into_boxed_slice());
     0
 }
 
@@ -82,7 +80,7 @@ pub unsafe extern "C" fn sql_dialect_fmt_format(
 /// call. Callers must pair it with `sql_dialect_fmt_result_len` and copy the bytes before releasing it.
 #[no_mangle]
 pub unsafe extern "C" fn sql_dialect_fmt_result_ptr() -> u32 {
-    LAST_RESULT_PTR as u32
+    last_result_ptr() as u32
 }
 
 /// Byte length of the most recent formatted result.
@@ -93,7 +91,7 @@ pub unsafe extern "C" fn sql_dialect_fmt_result_ptr() -> u32 {
 /// `sql_dialect_fmt_format` or `sql_dialect_fmt_clear_result` call.
 #[no_mangle]
 pub unsafe extern "C" fn sql_dialect_fmt_result_len() -> u32 {
-    LAST_RESULT_LEN
+    last_result_len() as u32
 }
 
 /// Release the most recent formatted result, if any.
@@ -106,16 +104,84 @@ pub unsafe extern "C" fn sql_dialect_fmt_clear_result() {
     clear_last_result();
 }
 
-unsafe fn clear_last_result() {
-    if !LAST_RESULT_PTR.is_null() {
-        let len = LAST_RESULT_LEN as usize;
-        if len > 0 {
-            drop(Box::from_raw(ptr::slice_from_raw_parts_mut(
-                LAST_RESULT_PTR,
-                len,
-            )));
+fn clear_last_result() {
+    LAST_RESULT.with(|last_result| {
+        last_result.borrow_mut().take();
+    });
+}
+
+fn store_last_result(result: Box<[u8]>) {
+    LAST_RESULT.with(|last_result| {
+        *last_result.borrow_mut() = Some(result);
+    });
+}
+
+fn last_result_ptr() -> *const u8 {
+    LAST_RESULT.with(|last_result| {
+        last_result
+            .borrow()
+            .as_deref()
+            .map_or(ptr::null(), |result| result.as_ptr())
+    })
+}
+
+fn last_result_len() -> usize {
+    LAST_RESULT.with(|last_result| last_result.borrow().as_deref().map_or(0, <[u8]>::len))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn last_result_bytes() -> Vec<u8> {
+        let ptr = last_result_ptr();
+        let len = last_result_len();
+
+        if len == 0 {
+            return Vec::new();
         }
-        LAST_RESULT_PTR = ptr::null_mut();
-        LAST_RESULT_LEN = 0;
+
+        assert!(!ptr.is_null());
+        unsafe { slice::from_raw_parts(ptr, len).to_vec() }
+    }
+
+    #[test]
+    fn stores_result_bytes() {
+        clear_last_result();
+
+        store_last_result(b"select 1".to_vec().into_boxed_slice());
+
+        assert_eq!(last_result_len(), 8);
+        assert_eq!(last_result_bytes(), b"select 1");
+
+        clear_last_result();
+    }
+
+    #[test]
+    fn replacing_result_exposes_only_new_bytes() {
+        clear_last_result();
+
+        store_last_result(b"old result".to_vec().into_boxed_slice());
+        store_last_result(b"new".to_vec().into_boxed_slice());
+
+        assert_eq!(last_result_len(), 3);
+        assert_eq!(last_result_bytes(), b"new");
+
+        clear_last_result();
+    }
+
+    #[test]
+    fn clear_result_removes_state_and_is_idempotent() {
+        clear_last_result();
+        store_last_result(b"temporary".to_vec().into_boxed_slice());
+
+        clear_last_result();
+        assert!(last_result_ptr().is_null());
+        assert_eq!(last_result_len(), 0);
+        assert_eq!(last_result_bytes(), b"");
+
+        clear_last_result();
+        assert!(last_result_ptr().is_null());
+        assert_eq!(last_result_len(), 0);
     }
 }
