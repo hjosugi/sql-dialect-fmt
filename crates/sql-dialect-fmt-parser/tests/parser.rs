@@ -553,6 +553,7 @@ fn never_panics_on_adversarial_input() {
         "1 +",
         "exists = + select$$(a(a$$ and null cluster select ",
         "cluster = + select$$(a(a$$ and null cluster select ",
+        "[ ( $$$$ and [ $$$$ cluster ",
         ")",
     ] {
         assert_parse_roundtrip(s);

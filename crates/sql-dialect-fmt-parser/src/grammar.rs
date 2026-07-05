@@ -2704,7 +2704,7 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         let m = p.start();
         p.bump(L_PAREN);
         expr(p);
-        p.expect(R_PAREN);
+        expect_closing(p, R_PAREN);
         m.complete(p, PAREN_EXPR)
     } else if p.at(L_BRACKET) {
         array_literal(p)
@@ -2827,7 +2827,7 @@ fn array_literal(p: &mut Parser) -> CompletedMarker {
             expr(p);
         }
     }
-    p.expect(R_BRACKET);
+    expect_closing(p, R_BRACKET);
     m.complete(p, ARRAY_LITERAL)
 }
 
@@ -2843,8 +2843,20 @@ fn object_literal(p: &mut Parser) -> CompletedMarker {
             object_field(p);
         }
     }
-    p.expect(R_BRACE);
+    expect_closing(p, R_BRACE);
     m.complete(p, OBJECT_LITERAL)
+}
+
+fn expect_closing(p: &mut Parser, kind: SyntaxKind) {
+    if p.eat(kind) {
+        return;
+    }
+    let msg = format!("expected {}", kind.describe());
+    if p.at_eof() || p.at(SEMICOLON) || p.at(R_PAREN) || p.at(R_BRACKET) || p.at(R_BRACE) {
+        p.error(msg);
+    } else {
+        p.err_and_bump(msg);
+    }
 }
 
 fn object_field(p: &mut Parser) {
