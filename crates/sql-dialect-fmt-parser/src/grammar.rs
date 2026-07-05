@@ -1518,6 +1518,9 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     } else if p.at(ALL_KW) {
         p.bump(ALL_KW);
     }
+    if p.at(TOP_KW) {
+        top_clause(p);
+    }
     select_list(p);
     if p.at(FROM_KW) {
         from_clause(p);
@@ -1542,6 +1545,9 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.at(QUALIFY_KW) {
         qualify_clause(p);
     }
+    if p.at(WINDOW_KW) {
+        window_clause(p);
+    }
     if p.at(ORDER_KW) {
         order_by_clause(p);
     }
@@ -1551,7 +1557,24 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.at(OFFSET_KW) {
         offset_clause(p);
     }
+    if p.at(FETCH_KW) {
+        fetch_clause(p);
+    }
     m.complete(p, SELECT_STMT)
+}
+
+/// Snowflake `SELECT TOP <n>` header. Keep the count as direct header tokens instead of an
+/// expression node so the SELECT-list formatter sees `TOP n` as part of the header, not as a child
+/// to ignore. Parenthesized counts are accepted as a balanced token run.
+fn top_clause(p: &mut Parser) {
+    p.bump(TOP_KW);
+    if p.at(L_PAREN) {
+        balanced_parens(p);
+    } else if p.at(INT_NUMBER) || p.at(FLOAT_NUMBER) || p.at(VARIABLE) || p.at_name() {
+        p.bump_any();
+    } else {
+        p.error("expected a row count after TOP");
+    }
 }
 
 // ---- SELECT list ----
@@ -1579,17 +1602,17 @@ fn at_clause_end(p: &Parser) -> bool {
         || p.at(GROUP_KW)
         || p.at(HAVING_KW)
         || p.at(QUALIFY_KW)
+        || p.at(WINDOW_KW)
         || p.at(ORDER_KW)
         || p.at(LIMIT_KW)
         || p.at(OFFSET_KW)
+        || p.at(FETCH_KW)
 }
 
 fn select_item(p: &mut Parser) {
     let m = p.start();
-    if p.at(STAR) {
-        let s = p.start();
-        p.bump(STAR);
-        s.complete(p, STAR_EXPR);
+    if p.at(STAR) || at_qualified_star(p) {
+        star_select_expr(p);
     } else if at_expr_start(p) {
         expr(p);
         let explicit_alias = p.eat(AS_KW);
@@ -1600,6 +1623,100 @@ fn select_item(p: &mut Parser) {
         p.error("expected a select item");
     }
     m.complete(p, SELECT_ITEM);
+}
+
+fn at_qualified_star(p: &Parser) -> bool {
+    if !p.at_name() {
+        return false;
+    }
+    let mut i = 1;
+    while i < 32 {
+        if !p.nth_at(i, DOT) {
+            return false;
+        }
+        if p.nth_at(i + 1, STAR) {
+            return true;
+        }
+        if !(p.nth_at(i + 1, IDENT) || p.nth_at(i + 1, QUOTED_IDENT)) {
+            return false;
+        }
+        i += 2;
+    }
+    false
+}
+
+fn star_select_expr(p: &mut Parser) {
+    let s = p.start();
+    if p.at(STAR) {
+        p.bump(STAR);
+    } else {
+        // Qualified star: `t.*`, `"db"."schema".t.*`.
+        name_ref(p);
+    }
+    while at_star_modifier(p) {
+        star_modifier(p);
+    }
+    s.complete(p, STAR_EXPR);
+}
+
+fn at_star_modifier(p: &Parser) -> bool {
+    p.at(ILIKE_KW)
+        || p.at(REPLACE_KW)
+        || (p.dialect().supports_delta_commands() && p.at(EXCEPT_KW))
+        || (p.dialect().supports_semantic_view() && p.at_name())
+}
+
+fn star_modifier(p: &mut Parser) {
+    if p.at(ILIKE_KW) {
+        p.bump(ILIKE_KW);
+        expr_bp(p, BP_CMP.1);
+    } else if p.at(REPLACE_KW) {
+        p.bump(REPLACE_KW);
+        star_modifier_parens(p);
+    } else if p.at(EXCEPT_KW) {
+        p.bump(EXCEPT_KW);
+        star_modifier_parens(p);
+    } else if p.at_name() {
+        // Snowflake's `EXCLUDE` and `RENAME` are contextual here. The parser does not reserve those
+        // words globally, so recognize the modifier by position after `*`.
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        if p.at(L_PAREN) {
+            star_modifier_parens(p);
+        } else if p.at_name() {
+            name_ref(p);
+            if p.eat(AS_KW) && p.at_name() {
+                name(p);
+            }
+        }
+    }
+}
+
+fn star_modifier_parens(p: &mut Parser) {
+    p.expect(L_PAREN);
+    if !p.at(R_PAREN) {
+        star_modifier_item(p);
+        while p.eat(COMMA) {
+            if p.at(R_PAREN) {
+                break;
+            }
+            star_modifier_item(p);
+        }
+    }
+    p.expect(R_PAREN);
+}
+
+fn star_modifier_item(p: &mut Parser) {
+    if at_expr_start(p) {
+        expr(p);
+    } else if p.at(STAR) {
+        p.bump(STAR);
+    } else {
+        p.error("expected a star modifier item");
+        return;
+    }
+    if p.eat(AS_KW) && p.at_name() {
+        name(p);
+    }
 }
 
 // ---- FROM / JOIN ----
@@ -2181,6 +2298,37 @@ fn qualify_clause(p: &mut Parser) {
     m.complete(p, QUALIFY_CLAUSE);
 }
 
+/// SQL named window definitions: `WINDOW w AS (...), w2 AS (w ORDER BY ts)`.
+///
+/// There is no dedicated `WINDOW_CLAUSE` node yet, so this reuses the generic select-clause
+/// formatting path through `QUALIFY_CLAUSE`; the contained definitions still use `WINDOW_SPEC`.
+fn window_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(WINDOW_KW);
+    window_definition(p);
+    while p.eat(COMMA) {
+        if at_clause_end(p) {
+            break;
+        }
+        window_definition(p);
+    }
+    m.complete(p, QUALIFY_CLAUSE);
+}
+
+fn window_definition(p: &mut Parser) {
+    if p.at_name() {
+        name(p);
+    } else {
+        p.error("expected a window name");
+    }
+    p.expect(AS_KW);
+    if p.at(L_PAREN) {
+        window_spec(p);
+    } else {
+        p.error("expected a window specification");
+    }
+}
+
 fn order_by_clause(p: &mut Parser) {
     let m = p.start();
     p.bump(ORDER_KW);
@@ -2221,6 +2369,25 @@ fn offset_clause(p: &mut Parser) {
     p.bump(OFFSET_KW);
     expr(p);
     m.complete(p, OFFSET_CLAUSE);
+}
+
+fn fetch_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(FETCH_KW);
+    p.eat(FIRST_KW);
+    expr(p);
+    if p.at(ROW_KW) || p.at(ROWS_KW) {
+        p.bump_any();
+    } else {
+        p.error("expected ROW or ROWS after FETCH count");
+    }
+    // `ONLY` is contextual and intentionally not reserved globally.
+    if p.at_name() {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    } else {
+        p.error("expected ONLY after FETCH ... ROWS");
+    }
+    m.complete(p, LIMIT_CLAUSE);
 }
 
 // ---- names ----
@@ -2410,14 +2577,14 @@ fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
             lhs = m.complete(p, IN_EXPR);
             continue;
         }
-        if neg && (p.nth_at(1, LIKE_KW) || p.nth_at(1, ILIKE_KW)) {
+        if at_like_predicate(p) || (neg && at_like_predicate_after_not(p)) {
             if BP_CMP.0 < min_bp {
                 break;
             }
             let m = lhs.precede(p);
-            p.bump(NOT_KW);
-            p.bump_any(); // LIKE / ILIKE
-            expr_bp(p, BP_CMP.1);
+            p.eat(NOT_KW);
+            p.bump_any(); // LIKE / ILIKE / RLIKE / REGEXP
+            like_rhs(p);
             lhs = m.complete(p, BIN_EXPR);
             continue;
         }
@@ -2436,6 +2603,27 @@ fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
         lhs = m.complete(p, BIN_EXPR);
     }
     Some(lhs)
+}
+
+fn at_like_predicate(p: &Parser) -> bool {
+    p.at(LIKE_KW) || p.at(ILIKE_KW) || p.at(RLIKE_KW) || p.at(REGEXP_KW)
+}
+
+fn at_like_predicate_after_not(p: &Parser) -> bool {
+    p.nth_at(1, LIKE_KW) || p.nth_at(1, ILIKE_KW) || p.nth_at(1, RLIKE_KW) || p.nth_at(1, REGEXP_KW)
+}
+
+fn like_rhs(p: &mut Parser) {
+    if p.at(ANY_KW) || p.at(ALL_KW) {
+        p.bump_any();
+        p.expect(L_PAREN);
+        if !p.at(R_PAREN) {
+            expr_list(p);
+        }
+        p.expect(R_PAREN);
+    } else {
+        expr_bp(p, BP_CMP.1);
+    }
 }
 
 fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
@@ -2659,6 +2847,9 @@ fn type_name(p: &mut Parser) {
 fn window_spec(p: &mut Parser) {
     let m = p.start();
     p.bump(L_PAREN);
+    if p.at_name() {
+        name_ref(p); // base window name in `WINDOW w AS (base ORDER BY ts)`
+    }
     if p.at(PARTITION_KW) {
         partition_by_clause(p);
     }

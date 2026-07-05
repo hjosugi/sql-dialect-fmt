@@ -93,11 +93,16 @@ fn error_at_eof_is_zero_width_at_source_end() {
 
 #[test]
 fn parse_error_displays_human_message_with_location() {
-    // The `Display` impl (std::error::Error) renders the message plus its byte offset.
-    let err = only_error("SELECT a FROM");
+    // The `Display` impl (std::error::Error) renders the message plus line/column and byte offset.
+    let err = only_error("SELECT a\nFROM");
     let shown = err.to_string();
     assert!(shown.starts_with("expected a table reference"), "{shown}");
-    assert!(shown.contains("at byte 13"), "{shown}");
+    assert!(shown.contains("at line 2, column 5"), "{shown}");
+    assert!(shown.contains("(byte 13)"), "{shown}");
+    assert_eq!(
+        err.line_column,
+        Some(sql_dialect_fmt_parser::LineColumn::new(2, 5))
+    );
     // It is a real std::error::Error.
     let _: &dyn std::error::Error = &err;
 }

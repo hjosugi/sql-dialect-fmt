@@ -2257,6 +2257,7 @@ dependencies = [
  "sql-dialect-fmt-encoding",
  "sql-dialect-fmt-formatter",
  "sql-dialect-fmt-parser",
+ "sql-dialect-fmt-text",
  "tempfile",
  "toml",
 ]
@@ -2306,6 +2307,7 @@ dependencies = [
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-test-fixtures",
  "sql-dialect-fmt-test-support",
+ "sql-dialect-fmt-text",
 ]
 
 [[package]]
@@ -2323,6 +2325,7 @@ dependencies = [
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-test-fixtures",
  "sql-dialect-fmt-test-support",
+ "sql-dialect-fmt-text",
 ]
 
 [[package]]
@@ -2337,6 +2340,7 @@ dependencies = [
  "sql-dialect-fmt-highlight",
  "sql-dialect-fmt-hover",
  "sql-dialect-fmt-parser",
+ "sql-dialect-fmt-text",
 ]
 
 [[package]]
@@ -2349,6 +2353,7 @@ dependencies = [
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-test-fixtures",
  "sql-dialect-fmt-test-support",
+ "sql-dialect-fmt-text",
 ]
 
 [[package]]
@@ -2370,6 +2375,10 @@ dependencies = [
  "sql-dialect-fmt-lexer",
  "sql-dialect-fmt-parser",
 ]
+
+[[package]]
+name = "sql-dialect-fmt-text"
+version = "1.0.0"
 
 [[package]]
 name = "sql-dialect-fmt-tree-sitter"

@@ -28,7 +28,7 @@ pub enum SyntaxKind {
     R_PAREN,   // )
     L_BRACKET, // [
     R_BRACKET, // ]
-    L_BRACE,   // {
+    L_BRACE,   // {   (lexed for lossless recovery; no grammar support yet)
     R_BRACE,   // }
     COMMA,     // ,
     DOT,       // .
@@ -49,17 +49,17 @@ pub enum SyntaxKind {
     PERCENT,   // %
     CONCAT,    // ||
     PIPE,      // |
-    PIPE_GT,   // |>  (GoogleSQL-style pipe; kept for compatibility and corpus coverage)
+    PIPE_GT,   // |>  (unsupported but lexed for compatibility and corpus coverage)
     FLOW_PIPE, // ->> (Snowflake flow / pipe operator)
     ARROW,     // ->  (lambda)
     FAT_ARROW, // =>  (named argument)
-    AMP,       // &
-    CARET,     // ^
+    AMP,       // &   (unsupported but lexed for lossless recovery)
+    CARET,     // ^   (unsupported but lexed for lossless recovery)
     TILDE,     // ~
     AT,        // @   (stage reference)
     DOLLAR,    // $   (lone dollar, not a variable or $$ )
-    QUESTION,  // ?   (bind marker)
-    BANG,      // !   (only valid as part of !=; standalone is an error)
+    QUESTION,  // ?   (bind marker token; unsupported by the grammar today)
+    BANG,      // !   (unsupported standalone; only `!=` is accepted as NEQ)
 
     // ---- Keywords (case-insensitive; recognized via keyword_kind) ----
     // NOTE: this is an intentionally partial but representative set covering the SELECT
@@ -603,6 +603,24 @@ mod tests {
         assert_eq!(SyntaxKind::IDENT.describe(), "an identifier");
         assert_eq!(SyntaxKind::STRING.describe(), "a string literal");
         assert_eq!(SyntaxKind::EOF.describe(), "end of input");
+    }
+
+    #[test]
+    fn unsupported_but_lexed_tokens_are_documented() {
+        // These token kinds intentionally remain in the syntax vocabulary for lossless lexing,
+        // highlighting, and corpus compatibility. This is not grammar support; `?` is retained as
+        // the bind marker spelling for dialects that use it.
+        for (kind, text) in [
+            (SyntaxKind::PIPE_GT, "'|>'"),
+            (SyntaxKind::L_BRACE, "'{'"),
+            (SyntaxKind::QUESTION, "'?'"),
+            (SyntaxKind::BANG, "'!'"),
+            (SyntaxKind::AMP, "'&'"),
+            (SyntaxKind::CARET, "'^'"),
+        ] {
+            assert_eq!(kind.describe(), text);
+            assert!(!kind.is_keyword(), "{kind:?} must not be reserved grammar");
+        }
     }
 
     #[test]

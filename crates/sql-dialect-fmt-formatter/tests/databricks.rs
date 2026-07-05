@@ -74,3 +74,11 @@ fn keeps_backtick_quoted_identifiers() {
         "SELECT `a b`\nFROM `catalog`.`schema`.`table`;\n",
     );
 }
+
+#[test]
+fn formats_star_except_modifiers() {
+    assert_databricks_format(
+        "select c.* except (internal_id, deleted_at) from customers c",
+        "SELECT c.* EXCEPT (internal_id, deleted_at)\nFROM customers c;\n",
+    );
+}

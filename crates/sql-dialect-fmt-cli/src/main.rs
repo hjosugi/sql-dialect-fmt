@@ -28,6 +28,7 @@ use std::process::ExitCode;
 use rayon::prelude::*;
 use sql_dialect_fmt_formatter::FormatOptions;
 use sql_dialect_fmt_parser::Dialect;
+use sql_dialect_fmt_text::LineIndex;
 
 use config::Config;
 
@@ -366,32 +367,17 @@ fn collect_parse_error_messages(
         Some(path) => path.display().to_string(),
         None => "<stdin>".to_string(),
     };
+    let line_index = LineIndex::new(text);
     errors
         .iter()
         .map(|error| {
-            let (line, col) = line_col(text, error.offset);
+            let position = line_index.line_column(error.offset);
             format!(
-                "sql-dialect-fmt: parse error in {where_}:{line}:{col}: {}",
-                error.message
+                "sql-dialect-fmt: parse error in {where_}:{}:{}: {}",
+                position.line, position.column, error.message
             )
         })
         .collect()
-}
-
-/// Translate a byte offset into 1-based line and column numbers (columns counted in `char`s).
-fn line_col(text: &str, offset: usize) -> (usize, usize) {
-    let offset = offset.min(text.len());
-    let mut line = 1usize;
-    let mut col = 1usize;
-    for ch in text[..offset].chars() {
-        if ch == '\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-    }
-    (line, col)
 }
 
 /// Format `bytes` while preserving its encoding (BOM/UTF-16) and passing through any non-text bytes.
@@ -630,16 +616,6 @@ mod tests {
     fn invalid_dialect_arg_errors() {
         assert!(parse_args(["--dialect", "oracle"].map(Into::into)).is_err());
         assert!(parse_args(["--dialect"].map(Into::into)).is_err());
-    }
-
-    #[test]
-    fn line_col_maps_offsets() {
-        let text = "abc\ndefg\nhi";
-        assert_eq!(line_col(text, 0), (1, 1));
-        assert_eq!(line_col(text, 4), (2, 1)); // first char of line 2
-        assert_eq!(line_col(text, 6), (2, 3));
-        // Out-of-range offsets clamp to the end rather than panicking.
-        assert_eq!(line_col(text, 999), (3, 3));
     }
 
     #[test]

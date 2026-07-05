@@ -3,6 +3,7 @@
 use crate::token::{LexError, Lexed, Token};
 use crate::{BodyDelimiter, LexOptions};
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind};
+use sql_dialect_fmt_text::LineIndex;
 
 /// Tokenize Snowflake SQL into a lossless token stream.
 ///
@@ -26,6 +27,7 @@ pub fn tokenize_for_dialect(input: &str, dialect: Dialect) -> Lexed<'_> {
 struct Lexer<'a, 'cfg> {
     input: &'a str,
     bytes: &'a [u8],
+    line_index: LineIndex<'a>,
     options: LexOptions<'cfg>,
     pos: usize,
     tokens: Vec<Token<'a>>,
@@ -37,6 +39,7 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
         Lexer {
             input,
             bytes: input.as_bytes(),
+            line_index: LineIndex::new(input),
             options,
             pos: 0,
             tokens: Vec::new(),
@@ -106,6 +109,7 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
             message: message.into(),
             offset,
             len: self.pos.saturating_sub(offset),
+            line_column: Some(self.line_index.line_column(offset)),
         });
     }
 

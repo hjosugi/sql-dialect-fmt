@@ -14,6 +14,7 @@
 //! editor can either re-highlight them with the embedded grammar or shade the whole body.
 
 use crate::{highlight, HighlightKind, HighlightToken};
+use sql_dialect_fmt_text::{utf16_len, LineIndex};
 
 /// The standard LSP semantic token types this highlighter emits.
 ///
@@ -425,58 +426,23 @@ pub fn semantic_tokens(input: &str) -> SemanticTokens {
     }
 }
 
-/// Maps byte offsets to LSP `(line, utf16-column)` positions. Self-contained so this module needs
-/// no `lsp_types` dependency; it mirrors the `LineIndex` in `sql-dialect-fmt-lsp`.
-struct LineMap<'a> {
-    text: &'a str,
-    line_starts: Vec<usize>,
-}
-
-impl<'a> LineMap<'a> {
-    fn new(text: &'a str) -> Self {
-        let mut line_starts = vec![0];
-        line_starts.extend(
-            text.bytes()
-                .enumerate()
-                .filter(|&(_, b)| b == b'\n')
-                .map(|(i, _)| i + 1),
-        );
-        LineMap { text, line_starts }
-    }
-
-    /// `(line, utf16_col)` of a byte offset, clamped to the document end.
-    fn position(&self, offset: usize) -> (u32, u32) {
-        let offset = offset.min(self.text.len());
-        let line = match self.line_starts.binary_search(&offset) {
-            Ok(line) => line,
-            Err(next) => next - 1,
-        };
-        let line_start = self.line_starts[line];
-        let col: usize = self.text[line_start..offset]
-            .chars()
-            .map(char::len_utf16)
-            .sum();
-        (line as u32, col as u32)
-    }
-}
-
 /// Lower resolved tokens to LSP [`LineToken`]s: split multi-line tokens (block comments,
 /// dollar-quoted bodies) into one token per line — the LSP encoding forbids a token spanning a
 /// newline — and compute UTF-16 positions and lengths. Output is sorted by `(line, start_char)`.
 pub fn line_tokens(input: &str) -> Vec<LineToken> {
     let resolved = resolve_tokens(input);
-    let map = LineMap::new(input);
+    let index = LineIndex::new(input);
     let mut out = Vec::new();
 
     for token in &resolved {
         let mut piece_start = token.range.start;
         for piece in input[token.range.clone()].split('\n') {
-            let length: u32 = piece.chars().map(|c| c.len_utf16() as u32).sum();
+            let length = utf16_len(piece);
             if length > 0 {
-                let (line, start_char) = map.position(piece_start);
+                let position = index.utf16_position(piece_start);
                 out.push(LineToken {
-                    line,
-                    start_char,
+                    line: position.line,
+                    start_char: position.character,
                     length,
                     token_type: token.token_type.index(),
                     modifiers: token.modifiers.bits(),

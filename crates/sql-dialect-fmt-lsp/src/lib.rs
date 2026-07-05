@@ -13,6 +13,7 @@ use lsp_types::{
 };
 use sql_dialect_fmt_formatter::{format, FormatOptions};
 use sql_dialect_fmt_highlight::{semantic, HighlightKind};
+use sql_dialect_fmt_text::{LineIndex, Utf16Position};
 
 /// The semantic-token type legend, mirrored from the single source of truth in
 /// `sql-dialect-fmt-highlight` ([`semantic::SemanticTokenType::LEGEND`]). A token's `token_type` field is
@@ -36,64 +37,18 @@ pub fn token_modifiers() -> Vec<SemanticTokenModifier> {
         .collect()
 }
 
-/// Maps byte offsets into a document to LSP [`Position`]s (UTF-16 columns).
-pub struct LineIndex<'a> {
-    text: &'a str,
-    /// Byte offset of the start of each line.
-    line_starts: Vec<usize>,
+fn lsp_position(index: &LineIndex<'_>, offset: usize) -> Position {
+    let position = index.utf16_position(offset);
+    Position::new(position.line, position.character)
 }
 
-impl<'a> LineIndex<'a> {
-    pub fn new(text: &'a str) -> Self {
-        let mut line_starts = vec![0];
-        line_starts.extend(
-            text.bytes()
-                .enumerate()
-                .filter(|&(_, b)| b == b'\n')
-                .map(|(i, _)| i + 1),
-        );
-        LineIndex { text, line_starts }
-    }
+fn lsp_end_position(index: &LineIndex<'_>) -> Position {
+    let position = index.end_utf16_position();
+    Position::new(position.line, position.character)
+}
 
-    /// The LSP position of a byte `offset` (clamped to the document end).
-    pub fn position(&self, offset: usize) -> Position {
-        let offset = offset.min(self.text.len());
-        let line = match self.line_starts.binary_search(&offset) {
-            Ok(line) => line,
-            Err(next) => next - 1,
-        };
-        let line_start = self.line_starts[line];
-        let col: usize = self.text[line_start..offset]
-            .chars()
-            .map(char::len_utf16)
-            .sum();
-        Position::new(line as u32, col as u32)
-    }
-
-    /// The position one past the last character — the end of the document.
-    pub fn end(&self) -> Position {
-        self.position(self.text.len())
-    }
-
-    /// The byte offset of an LSP [`Position`] (the inverse of [`Self::position`]). Out-of-range
-    /// lines/columns clamp to the line or document end.
-    pub fn offset(&self, position: Position) -> usize {
-        let line = position.line as usize;
-        let Some(&line_start) = self.line_starts.get(line) else {
-            return self.text.len();
-        };
-        let mut remaining = position.character as usize; // UTF-16 units to consume
-        let mut offset = line_start;
-        for ch in self.text[line_start..].chars() {
-            let width = ch.len_utf16();
-            if remaining < width || ch == '\n' {
-                break;
-            }
-            remaining -= width;
-            offset += ch.len_utf8();
-        }
-        offset
-    }
+fn lsp_offset(index: &LineIndex<'_>, position: Position) -> usize {
+    index.offset_for_utf16_position(Utf16Position::new(position.line, position.character))
 }
 
 /// The edits to apply for `textDocument/formatting`: a single whole-document replacement, or an
@@ -105,7 +60,7 @@ pub fn format_edits(text: &str, options: &FormatOptions) -> Vec<TextEdit> {
     }
     let index = LineIndex::new(text);
     vec![TextEdit {
-        range: Range::new(Position::new(0, 0), index.end()),
+        range: Range::new(Position::new(0, 0), lsp_end_position(&index)),
         new_text: formatted,
     }]
 }
@@ -121,7 +76,10 @@ pub fn format_edits(text: &str, options: &FormatOptions) -> Vec<TextEdit> {
 pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
     let index = LineIndex::new(text);
     let to_range = |span: std::ops::Range<usize>| {
-        Range::new(index.position(span.start), index.position(span.end))
+        Range::new(
+            lsp_position(&index, span.start),
+            lsp_position(&index, span.end),
+        )
     };
     let make = |range: Range, message: String| Diagnostic {
         range,
@@ -160,7 +118,10 @@ fn lint_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagnostic> {
 
 fn lint_warning(index: &LineIndex<'_>, range: std::ops::Range<usize>, message: &str) -> Diagnostic {
     Diagnostic {
-        range: Range::new(index.position(range.start), index.position(range.end)),
+        range: Range::new(
+            lsp_position(index, range.start),
+            lsp_position(index, range.end),
+        ),
         severity: Some(DiagnosticSeverity::WARNING),
         source: Some("sql-dialect-fmt".to_string()),
         message: message.to_string(),
@@ -328,7 +289,7 @@ fn embedded_language_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagn
                     if let Some((word, range)) = language_name.take() {
                         if !is_supported_embedded_language(word) {
                             diagnostics.push(Diagnostic {
-                                range: Range::new(index.position(range.start), index.position(range.end)),
+                                range: Range::new(lsp_position(index, range.start), lsp_position(index, range.end)),
                                 severity: Some(DiagnosticSeverity::WARNING),
                                 source: Some("sql-dialect-fmt".to_string()),
                                 message: format!(
@@ -377,7 +338,7 @@ fn is_supported_embedded_language(word: &str) -> bool {
 /// rendered as Markdown with an optional docs link, scoped to the hovered token's range.
 pub fn hover(text: &str, position: Position) -> Option<Hover> {
     let index = LineIndex::new(text);
-    let info = sql_dialect_fmt_hover::hover_at(text, index.offset(position))?;
+    let info = sql_dialect_fmt_hover::hover_at(text, lsp_offset(&index, position))?;
     let mut value = format!("**{}**\n\n{}", info.title, info.body);
     if let Some(url) = info.docs_url {
         value.push_str(&format!("\n\n[Snowflake docs]({url})"));
@@ -388,8 +349,8 @@ pub fn hover(text: &str, position: Position) -> Option<Hover> {
             value,
         }),
         range: Some(Range::new(
-            index.position(info.range.start),
-            index.position(info.range.end),
+            lsp_position(&index, info.range.start),
+            lsp_position(&index, info.range.end),
         )),
     })
 }
@@ -409,8 +370,8 @@ pub fn folding_ranges(text: &str) -> Vec<FoldingRange> {
                 .filter(|t| !t.kind().is_trivia());
             let first = tokens.next()?;
             let last = tokens.last().unwrap_or_else(|| first.clone());
-            let start = index.position(first.text_range().start().into()).line;
-            let end = index.position(last.text_range().end().into()).line;
+            let start = lsp_position(&index, first.text_range().start().into()).line;
+            let end = lsp_position(&index, last.text_range().end().into()).line;
             (end > start).then_some(FoldingRange {
                 start_line: start,
                 end_line: end,
@@ -431,8 +392,8 @@ pub fn apply_change(text: &str, range: Option<Range>, new_text: &str) -> String 
         return new_text.to_string();
     };
     let index = LineIndex::new(text);
-    let a = index.offset(range.start);
-    let b = index.offset(range.end);
+    let a = lsp_offset(&index, range.start);
+    let b = lsp_offset(&index, range.end);
     let (start, end) = (a.min(b), a.max(b));
     let mut out = String::with_capacity(text.len() - (end - start) + new_text.len());
     out.push_str(&text[..start]);
@@ -473,12 +434,12 @@ mod tests {
     fn line_index_maps_offsets_to_utf16_positions() {
         let text = "SELECT a\nFROM 芋;\n"; // 芋 is one UTF-16 unit but 3 bytes
         let index = LineIndex::new(text);
-        assert_eq!(index.position(0), Position::new(0, 0));
-        assert_eq!(index.position(7), Position::new(0, 7)); // the `a`
+        assert_eq!(lsp_position(&index, 0), Position::new(0, 0));
+        assert_eq!(lsp_position(&index, 7), Position::new(0, 7)); // the `a`
         let from = text.find("FROM").unwrap();
-        assert_eq!(index.position(from), Position::new(1, 0));
+        assert_eq!(lsp_position(&index, from), Position::new(1, 0));
         let semicolon = text.find(';').unwrap();
-        assert_eq!(index.position(semicolon), Position::new(1, 6)); // FROM<sp>芋 = 6 utf16 units
+        assert_eq!(lsp_position(&index, semicolon), Position::new(1, 6)); // FROM<sp>芋 = 6 utf16 units
     }
 
     #[test]
@@ -641,7 +602,7 @@ mod tests {
             text.find("FROM").unwrap(),
             text.find(';').unwrap(),
         ] {
-            assert_eq!(index.offset(index.position(offset)), offset);
+            assert_eq!(lsp_offset(&index, lsp_position(&index, offset)), offset);
         }
     }
 

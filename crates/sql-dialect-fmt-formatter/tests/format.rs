@@ -92,6 +92,42 @@ fn distinct_is_part_of_the_header() {
 }
 
 #[test]
+fn formats_select_top_fetch_and_named_window() {
+    assert_eq!(
+        fmt("select top 10 * from orders order by created_at desc"),
+        "SELECT TOP 10 *\nFROM orders\nORDER BY created_at DESC;\n"
+    );
+    assert_eq!(
+        fmt("select id from orders order by created_at fetch first 5 rows only"),
+        "SELECT id\nFROM orders\nORDER BY created_at\nFETCH FIRST 5 ROWS ONLY;\n"
+    );
+    assert_eq!(
+        fmt("select sum(amount) over w from orders window w as (partition by customer_id order by created_at)"),
+        "SELECT sum(amount) OVER w\nFROM orders\nWINDOW w AS (PARTITION BY customer_id ORDER BY created_at);\n"
+    );
+}
+
+#[test]
+fn formats_regex_like_quantifiers_and_snowflake_star_modifiers() {
+    assert_eq!(
+        fmt("select * from users where email rlike '.*@example[.]com'"),
+        "SELECT *\nFROM users\nWHERE email RLIKE '.*@example[.]com';\n"
+    );
+    assert_eq!(
+        fmt("select * from users where name ilike any ('A%', 'B%')"),
+        "SELECT *\nFROM users\nWHERE name ILIKE ANY ('A%', 'B%');\n"
+    );
+    assert_eq!(
+        fmt("select c.* exclude (internal_id, deleted_at) from customers c"),
+        "SELECT c.* EXCLUDE (internal_id, deleted_at)\nFROM customers c;\n"
+    );
+    assert_eq!(
+        fmt("select * replace (upper(name) as name) rename customer_id as id from customers"),
+        "SELECT * REPLACE (upper(name) AS name) RENAME customer_id AS id\nFROM customers;\n"
+    );
+}
+
+#[test]
 fn long_select_list_breaks_one_item_per_line() {
     let src = "select alpha, bravo, charlie, delta, echo, foxtrot, golf, hotel from t";
     let out = format(src, &FormatOptions::default().with_line_width(40));

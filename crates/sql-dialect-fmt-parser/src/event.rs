@@ -9,7 +9,13 @@ use sql_dialect_fmt_syntax::SyntaxKind;
 pub(crate) enum Event {
     /// Open a node. The kind is a placeholder ([`SyntaxKind::ERROR`]) until the matching
     /// `Marker` is completed, at which point it is overwritten with the real kind.
-    Open { kind: SyntaxKind },
+    Open {
+        kind: SyntaxKind,
+        /// Distance to a later `Open` event that should wrap this node. This keeps
+        /// `CompletedMarker::precede` O(1): the parser appends the parent and the
+        /// builder follows this link when replaying the child open.
+        forward_parent: Option<usize>,
+    },
     /// Close the most recently opened, still-open node.
     Close,
     /// Consume the next meaningful (non-trivia) token, tagging it with `kind` (which may be a

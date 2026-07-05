@@ -1,0 +1,14 @@
+[package]
+name = "sql-dialect-fmt-text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Shared source text position helpers for sql-dialect-fmt."
+
+[dependencies]

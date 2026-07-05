@@ -1,6 +1,7 @@
 //! The token types produced by the lexer.
 
 use sql_dialect_fmt_syntax::SyntaxKind;
+use sql_dialect_fmt_text::LineColumn;
 
 /// A single lexed token. `text` borrows the source, so the lexer allocates nothing per token.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -18,6 +19,8 @@ pub struct LexError {
     /// Byte length of the offending token's text, so a diagnostic can underline the whole token
     /// rather than a single character. May be `0` for a zero-width point at end of input.
     pub len: usize,
+    /// One-based line/column position, when the full source text was available.
+    pub line_column: Option<LineColumn>,
 }
 
 impl LexError {
@@ -29,7 +32,14 @@ impl LexError {
 
 impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} at byte {}", self.message, self.offset)
+        match self.line_column {
+            Some(pos) => write!(
+                f,
+                "{} at line {}, column {} (byte {})",
+                self.message, pos.line, pos.column, self.offset
+            ),
+            None => write!(f, "{} at byte {}", self.message, self.offset),
+        }
     }
 }
 

@@ -20,6 +20,7 @@ mod parser;
 
 pub use ast::*;
 pub use sql_dialect_fmt_syntax::{Dialect, SyntaxKind, SyntaxNode};
+pub use sql_dialect_fmt_text::LineColumn;
 
 /// A diagnostic produced while parsing, located at a byte span into the source.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,6 +32,8 @@ pub struct ParseError {
     /// rather than a single character. `0` for a zero-width point (e.g. an error at end of input,
     /// where there is no token to point at).
     pub len: usize,
+    /// One-based line/column position, when the full source text was available.
+    pub line_column: Option<LineColumn>,
 }
 
 impl ParseError {
@@ -42,7 +45,14 @@ impl ParseError {
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} at byte {}", self.message, self.offset)
+        match self.line_column {
+            Some(pos) => write!(
+                f,
+                "{} at line {}, column {} (byte {})",
+                self.message, pos.line, pos.column, self.offset
+            ),
+            None => write!(f, "{} at byte {}", self.message, self.offset),
+        }
     }
 }
 
@@ -81,7 +91,11 @@ pub fn parse(text: &str) -> Parse {
 pub fn parse_with_dialect(text: &str, dialect: Dialect) -> Parse {
     let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(text, dialect);
     let input = input::Input::new(lexed);
-    let (events, errors) = parser::Parser::new(&input, dialect).parse();
+    let (events, mut errors) = parser::Parser::new(&input, dialect).parse();
+    let line_index = sql_dialect_fmt_text::LineIndex::new(text);
+    for error in &mut errors {
+        error.line_column = Some(line_index.line_column(error.offset));
+    }
     let green = builder::build_tree(input.all(), events);
     Parse { green, errors }
 }

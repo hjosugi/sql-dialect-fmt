@@ -2,7 +2,7 @@
 //!
 //! The grammar (in [`crate::grammar`]) drives this via a small vocabulary: `at`/`eat`/`bump`
 //! for tokens, `start`/`complete`/`precede` for nodes. A `fuel` counter turns any accidental
-//! non-advancing loop into a loud panic instead of a hang.
+//! non-advancing loop into a debug assertion instead of a hang.
 
 use std::cell::Cell;
 
@@ -254,6 +254,7 @@ pub(crate) struct Parser<'a> {
     dialect: Dialect,
     pos: usize,
     fuel: Cell<u32>,
+    exhausted_fuel_at: Cell<Option<usize>>,
     events: Vec<Event>,
     errors: Vec<ParseError>,
 }
@@ -265,6 +266,7 @@ impl<'a> Parser<'a> {
             dialect,
             pos: 0,
             fuel: Cell::new(INITIAL_FUEL),
+            exhausted_fuel_at: Cell::new(None),
             events: Vec::new(),
             errors: Vec::new(),
         }
@@ -278,6 +280,14 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn parse(mut self) -> (Vec<Event>, Vec<ParseError>) {
         crate::grammar::source_file(&mut self);
+        if let Some(pos) = self.exhausted_fuel_at.get() {
+            self.errors.push(ParseError {
+                message: "parser fuel exhausted; recovered at current token".into(),
+                offset: self.input.offset(pos),
+                len: self.input.token_len(pos),
+                line_column: None,
+            });
+        }
         (self.events, self.errors)
     }
 
@@ -296,12 +306,18 @@ impl<'a> Parser<'a> {
         if self.pos + n >= self.input.len() {
             return SyntaxKind::EOF;
         }
-        assert_ne!(
+        debug_assert_ne!(
             self.fuel.get(),
             0,
             "parser stuck — no progress at pos {}",
             self.pos
         );
+        if self.fuel.get() == 0 {
+            if self.exhausted_fuel_at.get().is_none() {
+                self.exhausted_fuel_at.set(Some(self.pos));
+            }
+            return SyntaxKind::EOF;
+        }
         self.fuel.set(self.fuel.get() - 1);
         self.input.kind(self.pos + n)
     }
@@ -448,6 +464,7 @@ impl<'a> Parser<'a> {
             message: msg.into(),
             offset,
             len,
+            line_column: None,
         });
     }
 
@@ -469,6 +486,7 @@ impl<'a> Parser<'a> {
         let index = self.events.len();
         self.events.push(Event::Open {
             kind: SyntaxKind::ERROR,
+            forward_parent: None,
         });
         Marker {
             index,
@@ -498,7 +516,10 @@ pub(crate) struct Marker {
 impl Marker {
     pub(crate) fn complete(mut self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
         self.completed = true;
-        p.events[self.index] = Event::Open { kind };
+        p.events[self.index] = Event::Open {
+            kind,
+            forward_parent: None,
+        };
         p.events.push(Event::Close);
         CompletedMarker { index: self.index }
     }
@@ -528,16 +549,26 @@ pub(crate) struct CompletedMarker {
 
 impl CompletedMarker {
     /// Start a new node that begins where this one began (left-associative wrapping, e.g. for
-    /// binary expressions). Inserts an `Open` before this node's `Open`.
+    /// binary expressions). The new parent is appended and linked from this node's `Open`, so long
+    /// expression chains stay linear instead of repeatedly inserting into the event vector.
     pub(crate) fn precede(self, p: &mut Parser) -> Marker {
-        p.events.insert(
-            self.index,
-            Event::Open {
-                kind: SyntaxKind::ERROR,
-            },
-        );
+        let new_index = p.events.len();
+        match &mut p.events[self.index] {
+            Event::Open { forward_parent, .. } => {
+                debug_assert!(
+                    forward_parent.is_none(),
+                    "node already has a forward parent"
+                );
+                *forward_parent = Some(new_index - self.index);
+            }
+            _ => debug_assert!(false, "precede must point at an open event"),
+        }
+        p.events.push(Event::Open {
+            kind: SyntaxKind::ERROR,
+            forward_parent: None,
+        });
         Marker {
-            index: self.index,
+            index: new_index,
             completed: false,
         }
     }

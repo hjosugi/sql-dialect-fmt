@@ -574,11 +574,12 @@ fn lex_error_span_covers_the_offending_token() {
 
 #[test]
 fn lex_error_displays_human_message_with_location() {
-    let lexed = tokenize("ab 'x");
+    let lexed = tokenize("ab\n'x");
     let err = &lexed.errors[0];
     let shown = err.to_string();
     assert!(shown.contains("unterminated string literal"), "{shown}");
-    assert!(shown.contains("at byte 3"), "{shown}");
+    assert!(shown.contains("(byte 3)"), "{shown}");
+    assert!(shown.contains("at line 2, column 1"), "{shown}");
     let _: &dyn std::error::Error = err;
 }
 
