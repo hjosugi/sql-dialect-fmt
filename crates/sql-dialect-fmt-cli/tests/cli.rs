@@ -145,6 +145,115 @@ fn directory_is_recursed_for_sql_files() {
 }
 
 #[test]
+fn directory_recursion_skips_standard_ignored_dirs() {
+    let tmp = TempDir::new().unwrap();
+    write(tmp.path(), "src/keep.sql", "select 1");
+    write(tmp.path(), ".cache/hidden.sql", "select 2");
+    write(tmp.path(), ".git/internal.sql", "select 3");
+    write(tmp.path(), "node_modules/vendor.sql", "select 4");
+    write(tmp.path(), "target/generated.sql", "select 5");
+
+    let (code, _out, err) = run(tmp.path(), &["--write", "."], None);
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("src/keep.sql")).unwrap(),
+        "SELECT 1;\n"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join(".cache/hidden.sql")).unwrap(),
+        "select 2"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join(".git/internal.sql")).unwrap(),
+        "select 3"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("node_modules/vendor.sql")).unwrap(),
+        "select 4"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("target/generated.sql")).unwrap(),
+        "select 5"
+    );
+    assert!(err.contains("1 file"), "summary missing: {err}");
+}
+
+#[test]
+fn directory_recursion_respects_gitignore() {
+    let tmp = TempDir::new().unwrap();
+    write(tmp.path(), ".git/HEAD", "ref: refs/heads/main\n");
+    write(tmp.path(), ".gitignore", "ignored/\n*.generated.sql\n");
+    write(tmp.path(), "keep.sql", "select 1");
+    write(tmp.path(), "ignored/query.sql", "select 2");
+    write(tmp.path(), "report.generated.sql", "select 3");
+
+    let (code, _out, err) = run(tmp.path(), &["--write", "."], None);
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("keep.sql")).unwrap(),
+        "SELECT 1;\n"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("ignored/query.sql")).unwrap(),
+        "select 2"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("report.generated.sql")).unwrap(),
+        "select 3"
+    );
+    assert!(err.contains("1 file"), "summary missing: {err}");
+}
+
+#[test]
+fn config_exclude_filters_directory_recursion() {
+    let tmp = TempDir::new().unwrap();
+    write(
+        tmp.path(),
+        "sql-dialect-fmt.toml",
+        "exclude = [\"generated/**\", \"*.skip.sql\"]\n",
+    );
+    write(tmp.path(), "keep.sql", "select 1");
+    write(tmp.path(), "generated/report.sql", "select 2");
+    write(tmp.path(), "manual.skip.sql", "select 3");
+
+    let (code, _out, err) = run(tmp.path(), &["--write", "."], None);
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("keep.sql")).unwrap(),
+        "SELECT 1;\n"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("generated/report.sql")).unwrap(),
+        "select 2"
+    );
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("manual.skip.sql")).unwrap(),
+        "select 3"
+    );
+    assert!(err.contains("1 file"), "summary missing: {err}");
+}
+
+#[test]
+fn explicit_file_paths_bypass_recursive_excludes() {
+    let tmp = TempDir::new().unwrap();
+    write(
+        tmp.path(),
+        "sql-dialect-fmt.toml",
+        "exclude = [\"generated/**\"]\n",
+    );
+    let file = write(tmp.path(), "generated/report.sql", "select 1");
+
+    let (code, _out, err) = run(tmp.path(), &["--write", file.to_str().unwrap()], None);
+
+    assert_eq!(code, 0);
+    assert_eq!(fs::read_to_string(file).unwrap(), "SELECT 1;\n");
+    assert!(err.contains("1 file"), "summary missing: {err}");
+}
+
+#[test]
 fn write_in_place_changes_files() {
     let tmp = TempDir::new().unwrap();
     let f = write(tmp.path(), "q.sql", "select a,b");

@@ -25,6 +25,8 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use ignore::WalkBuilder;
 use rayon::prelude::*;
 use sql_dialect_fmt_formatter::FormatOptions;
 use sql_dialect_fmt_parser::Dialect;
@@ -36,6 +38,20 @@ use config::Config;
 /// (`0`) is expressed via [`ExitCode::SUCCESS`]; the two non-zero codes are named here.
 const EXIT_CHECK_FAILED: u8 = 1;
 const EXIT_ERROR: u8 = 2;
+const DEFAULT_EXCLUDE_PATTERNS: &[&str] = &[
+    ".git",
+    ".git/**",
+    "**/.git",
+    "**/.git/**",
+    "node_modules",
+    "node_modules/**",
+    "**/node_modules",
+    "**/node_modules/**",
+    "target",
+    "target/**",
+    "**/target",
+    "**/target/**",
+];
 
 fn main() -> ExitCode {
     match run(std::env::args_os().skip(1)) {
@@ -192,7 +208,7 @@ struct FileOutcome {
 }
 
 fn run_paths(args: &Args) -> Result<ExitCode, String> {
-    let files = collect_files(&args.paths)?;
+    let files = collect_files(args)?;
     let outcomes = files
         .par_iter()
         .map(|file| process_file(args, file))
@@ -319,12 +335,13 @@ fn errors_suffix(with_errors: usize) -> String {
 /// Directories are recursed for `*.sql` files (case-insensitive extension); explicitly named
 /// files are taken as-is regardless of extension. Order is deterministic: command-line order is
 /// preserved, and files discovered under a directory are sorted by path.
-fn collect_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+fn collect_files(args: &Args) -> Result<Vec<PathBuf>, String> {
     let mut out = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
-    for path in paths {
+    for path in &args.paths {
         if path.is_dir() {
-            collect_dir(path, &mut out, &mut seen)?;
+            let exclusions = Exclusions::for_input(args, path)?;
+            collect_dir(path, &exclusions, &mut out, &mut seen)?;
         } else if path.is_file() {
             push_unique(path.clone(), &mut out, &mut seen);
         } else {
@@ -336,27 +353,74 @@ fn collect_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 
 fn collect_dir(
     dir: &Path,
+    exclusions: &Exclusions,
     out: &mut Vec<PathBuf>,
     seen: &mut std::collections::BTreeSet<PathBuf>,
 ) -> Result<(), String> {
-    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
-        .map_err(|err| format!("failed to read directory {}: {err}", dir.display()))?
-        .map(|entry| {
-            entry
-                .map(|e| e.path())
-                .map_err(|err| format!("failed to read entry in {}: {err}", dir.display()))
-        })
-        .collect::<Result<_, _>>()?;
-    entries.sort();
+    let mut walker = WalkBuilder::new(dir);
+    walker.standard_filters(true);
+    let root = dir.to_path_buf();
+    let exclusions = exclusions.clone();
+    walker.filter_entry(move |entry| !exclusions.matches(&root, entry.path()));
 
-    for entry in entries {
-        if entry.is_dir() {
-            collect_dir(&entry, out, seen)?;
-        } else if is_sql_file(&entry) {
-            push_unique(entry, out, seen);
+    let mut files = Vec::new();
+    for entry in walker.build() {
+        let entry = entry.map_err(|err| format!("failed to walk {}: {err}", dir.display()))?;
+        let path = entry.path();
+        if path == dir {
+            continue;
+        }
+        if entry.file_type().is_some_and(|kind| kind.is_file()) && is_sql_file(path) {
+            files.push(path.to_path_buf());
         }
     }
+    files.sort();
+    for file in files {
+        push_unique(file, out, seen);
+    }
     Ok(())
+}
+
+#[derive(Clone)]
+struct Exclusions {
+    globset: GlobSet,
+}
+
+impl Exclusions {
+    fn for_input(args: &Args, input: &Path) -> Result<Self, String> {
+        let mut patterns = DEFAULT_EXCLUDE_PATTERNS
+            .iter()
+            .map(|pattern| (*pattern).to_string())
+            .collect::<Vec<_>>();
+
+        if !args.no_config {
+            if let Some(config_path) = config::discover(input) {
+                patterns.extend(Config::load(&config_path)?.exclude);
+            }
+        }
+
+        let mut builder = GlobSetBuilder::new();
+        for pattern in patterns {
+            builder.add(
+                Glob::new(&pattern)
+                    .map_err(|err| format!("invalid exclude pattern {pattern:?}: {err}"))?,
+            );
+        }
+        let globset = builder
+            .build()
+            .map_err(|err| format!("invalid exclude patterns: {err}"))?;
+        Ok(Self { globset })
+    }
+
+    fn matches(&self, root: &Path, path: &Path) -> bool {
+        let Ok(relative) = path.strip_prefix(root) else {
+            return false;
+        };
+        if relative.as_os_str().is_empty() {
+            return false;
+        }
+        self.globset.is_match(relative)
+    }
 }
 
 fn push_unique(
