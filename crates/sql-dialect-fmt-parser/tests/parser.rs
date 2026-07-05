@@ -4,7 +4,10 @@
 //! parsed tree's text reproduces the source byte-for-byte. We also check that clean SQL parses
 //! without diagnostics, that the node structure is sensible, and that errors recover.
 
-use sql_dialect_fmt_parser::{parse, AstNode, SelectStmt, SourceFile, SyntaxKind};
+use sql_dialect_fmt_parser::{
+    parse, AstNode, BlockStmt, ColumnDef, ColumnDefList, CreateStmt, LetStmt, MergeStmt, MergeWhen,
+    ObjectProperty, ReturnStmt, SelectStmt, SourceFile, StmtList, SyntaxKind,
+};
 use sql_dialect_fmt_test_support::parser::{assert_parse_clean, assert_parse_roundtrip};
 
 #[test]
@@ -396,6 +399,54 @@ fn ast_accessors_work() {
     assert_eq!(select.select_list().unwrap().items().count(), 2);
     assert!(select.from_clause().is_some());
     assert!(select.where_clause().is_none());
+}
+
+#[test]
+fn ast_accessors_cover_more_statement_families() {
+    let p = parse(
+        "CREATE WAREHOUSE wh WITH WAREHOUSE_SIZE = 'XSMALL'; \
+         MERGE INTO tgt t USING src s ON t.id = s.id \
+         WHEN MATCHED THEN UPDATE SET t.v = s.v \
+         WHEN NOT MATCHED THEN INSERT (id, v) VALUES (s.id, s.v); \
+         BEGIN LET x := 1; RETURN x; END",
+    );
+    assert!(p.errors().is_empty(), "{:?}", p.errors());
+    let file = SourceFile::cast(p.syntax()).expect("source file");
+
+    let create = file
+        .statements_of::<CreateStmt>()
+        .next()
+        .expect("create statement");
+    assert!(create.child::<ObjectProperty>().is_some());
+
+    let merge = file
+        .statements_of::<MergeStmt>()
+        .next()
+        .expect("merge statement");
+    assert_eq!(merge.children::<MergeWhen>().count(), 2);
+
+    let block = file
+        .statements_of::<BlockStmt>()
+        .next()
+        .expect("block statement");
+    let stmt_list = block.child::<StmtList>().expect("block statement list");
+    assert!(stmt_list.child::<LetStmt>().is_some());
+    assert!(stmt_list.child::<ReturnStmt>().is_some());
+}
+
+#[test]
+fn ast_accessors_cover_column_lists() {
+    let p = parse("CREATE TABLE t (a INT, b NUMBER(10, 2) DEFAULT 0)");
+    assert!(p.errors().is_empty(), "{:?}", p.errors());
+    let file = SourceFile::cast(p.syntax()).expect("source file");
+    let create = file
+        .statements_of::<CreateStmt>()
+        .next()
+        .expect("create statement");
+    let columns = create
+        .child::<ColumnDefList>()
+        .expect("create table column list");
+    assert_eq!(columns.children::<ColumnDef>().count(), 2);
 }
 
 #[test]

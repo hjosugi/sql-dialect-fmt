@@ -13,6 +13,7 @@
 
 mod ast;
 mod builder;
+mod contextual;
 mod event;
 mod grammar;
 mod input;

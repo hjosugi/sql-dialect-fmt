@@ -26,6 +26,115 @@ const BP_MUL: (u8, u8) = (13, 14);
 const BP_PREFIX_NOT: u8 = 6; // looser than comparison: `NOT a = b` == `NOT (a = b)`
 const BP_PREFIX_NEG: u8 = 15; // unary +/- bind tighter than `*`
 
+const CREATE_MODIFIER_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Materialized,
+    ContextualKeyword::Local,
+    ContextualKeyword::Global,
+];
+
+const NAMED_OBJECT_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Schema,
+    ContextualKeyword::Database,
+    ContextualKeyword::Stage,
+    ContextualKeyword::Sequence,
+    ContextualKeyword::Stream,
+    ContextualKeyword::Dynamic,
+    ContextualKeyword::Semantic,
+    ContextualKeyword::File,
+    ContextualKeyword::Tag,
+];
+
+const SEMANTIC_VIEW_CLAUSE_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Tables,
+    ContextualKeyword::Relationships,
+    ContextualKeyword::Facts,
+    ContextualKeyword::Dimensions,
+    ContextualKeyword::Metrics,
+    ContextualKeyword::AiSqlGeneration,
+    ContextualKeyword::AiQuestionCategorization,
+    ContextualKeyword::AiVerifiedQueries,
+];
+
+const SEMANTIC_VIEW_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Tables,
+    ContextualKeyword::Relationships,
+    ContextualKeyword::Facts,
+    ContextualKeyword::Dimensions,
+    ContextualKeyword::Metrics,
+    ContextualKeyword::Public,
+    ContextualKeyword::Private,
+    ContextualKeyword::Primary,
+    ContextualKeyword::Key,
+    ContextualKeyword::References,
+    ContextualKeyword::Synonyms,
+    ContextualKeyword::Labels,
+    ContextualKeyword::AiSqlGeneration,
+    ContextualKeyword::AiQuestionCategorization,
+    ContextualKeyword::AiVerifiedQueries,
+    ContextualKeyword::Question,
+    ContextualKeyword::VerifiedAt,
+    ContextualKeyword::OnboardingQuestion,
+    ContextualKeyword::VerifiedBy,
+    ContextualKeyword::Tag,
+];
+
+const DDL_CONSTRAINT_START_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Constraint,
+    ContextualKeyword::Primary,
+    ContextualKeyword::Unique,
+    ContextualKeyword::Foreign,
+    ContextualKeyword::Check,
+];
+
+const DDL_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Default,
+    ContextualKeyword::Primary,
+    ContextualKeyword::Key,
+    ContextualKeyword::Unique,
+    ContextualKeyword::Foreign,
+    ContextualKeyword::References,
+    ContextualKeyword::Constraint,
+    ContextualKeyword::Check,
+    ContextualKeyword::Collate,
+    ContextualKeyword::Comment,
+    ContextualKeyword::Cluster,
+    ContextualKeyword::Clone,
+    ContextualKeyword::Cascade,
+    ContextualKeyword::Restrict,
+    ContextualKeyword::Materialized,
+    ContextualKeyword::Masking,
+    ContextualKeyword::Policy,
+    ContextualKeyword::Access,
+    ContextualKeyword::Tag,
+    ContextualKeyword::AllowedValues,
+    ContextualKeyword::Propagate,
+    ContextualKeyword::ExemptOtherPolicies,
+];
+
+const OBJECT_TYPE_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Schema,
+    ContextualKeyword::Database,
+    ContextualKeyword::Stage,
+    ContextualKeyword::Sequence,
+    ContextualKeyword::Stream,
+];
+
+const GRANTEE_KIND_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Role,
+    ContextualKeyword::User,
+    ContextualKeyword::Share,
+    ContextualKeyword::Database,
+];
+
+const GRANT_TAIL_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Option,
+    ContextualKeyword::Cascade,
+    ContextualKeyword::Restrict,
+];
+
+const GRANT_TAIL_START_CONTEXTUAL_WORDS: &[ContextualKeyword] =
+    &[ContextualKeyword::Cascade, ContextualKeyword::Restrict];
+
 // ---- top level ----
 
 pub(crate) fn source_file(p: &mut Parser) {
@@ -77,10 +186,7 @@ fn create_stmt(p: &mut Parser) {
     while !at_object_kind(p) && !at_stmt_terminator(p) && !at_create_body(p) {
         // Contextual modifier words (`MATERIALIZED`, `LOCAL`, `GLOBAL`) precede the object kind;
         // up-case them like keywords. Reserved modifiers (SECURE/TEMP/TRANSIENT/…) up-case already.
-        if p.nth_contextual(0, ContextualKeyword::Materialized)
-            || p.nth_contextual(0, ContextualKeyword::Local)
-            || p.nth_contextual(0, ContextualKeyword::Global)
-        {
+        if p.nth_any_contextual(0, CREATE_MODIFIER_CONTEXTUAL_WORDS) {
             p.bump_as(CONTEXTUAL_KEYWORD);
         } else {
             p.bump_any();
@@ -118,17 +224,7 @@ fn at_object_kind(p: &Parser) -> bool {
 /// (`SCHEMA`/`DATABASE`/`WAREHOUSE`/`STAGE`/`SEQUENCE`/`STREAM`/`TASK`/`DYNAMIC TABLE`/
 /// `SEMANTIC VIEW`/`FILE FORMAT`).
 fn at_named_object_kind(p: &Parser) -> bool {
-    p.at(TASK_KW)
-        || p.at(WAREHOUSE_KW)
-        || p.nth_contextual(0, ContextualKeyword::Schema)
-        || p.nth_contextual(0, ContextualKeyword::Database)
-        || p.nth_contextual(0, ContextualKeyword::Stage)
-        || p.nth_contextual(0, ContextualKeyword::Sequence)
-        || p.nth_contextual(0, ContextualKeyword::Stream)
-        || p.nth_contextual(0, ContextualKeyword::Dynamic)
-        || p.nth_contextual(0, ContextualKeyword::Semantic)
-        || p.nth_contextual(0, ContextualKeyword::File)
-        || p.nth_contextual(0, ContextualKeyword::Tag)
+    p.at(TASK_KW) || p.at(WAREHOUSE_KW) || p.nth_any_contextual(0, NAMED_OBJECT_CONTEXTUAL_WORDS)
 }
 
 /// `CREATE MASKING POLICY` / `CREATE ROW ACCESS POLICY`.
@@ -292,14 +388,7 @@ fn semantic_view_clause(p: &mut Parser) {
 }
 
 fn at_semantic_view_clause_start(p: &Parser) -> bool {
-    p.nth_contextual(0, ContextualKeyword::Tables)
-        || p.nth_contextual(0, ContextualKeyword::Relationships)
-        || p.nth_contextual(0, ContextualKeyword::Facts)
-        || p.nth_contextual(0, ContextualKeyword::Dimensions)
-        || p.nth_contextual(0, ContextualKeyword::Metrics)
-        || p.nth_contextual(0, ContextualKeyword::AiSqlGeneration)
-        || p.nth_contextual(0, ContextualKeyword::AiQuestionCategorization)
-        || p.nth_contextual(0, ContextualKeyword::AiVerifiedQueries)
+    p.nth_any_contextual(0, SEMANTIC_VIEW_CLAUSE_CONTEXTUAL_WORDS)
         || (p.at(WITH_KW) && p.nth_contextual(1, ContextualKeyword::Tag))
         || (p.at(COPY_KW) && p.nth_at(1, GRANTS_KW))
 }
@@ -320,21 +409,7 @@ fn semantic_view_paren_list(p: &mut Parser) {
 
 fn semantic_view_item(p: &mut Parser) {
     let m = p.start();
-    let mut depth = 0u32;
-    while !p.at_eof() {
-        if depth == 0 && (p.at(COMMA) || p.at(R_PAREN)) {
-            break;
-        }
-        if p.at(L_PAREN) {
-            depth += 1;
-            p.bump(L_PAREN);
-        } else if p.at(R_PAREN) {
-            depth -= 1;
-            p.bump(R_PAREN);
-        } else {
-            semantic_view_word(p);
-        }
-    }
+    balanced_token_run_until(p, |p| p.at(COMMA) || p.at(R_PAREN), semantic_view_word);
     m.complete(p, SEMANTIC_VIEW_ITEM);
 }
 
@@ -347,26 +422,7 @@ fn semantic_view_word(p: &mut Parser) {
 }
 
 fn is_semantic_view_contextual_word(p: &Parser) -> bool {
-    p.nth_contextual(0, ContextualKeyword::Tables)
-        || p.nth_contextual(0, ContextualKeyword::Relationships)
-        || p.nth_contextual(0, ContextualKeyword::Facts)
-        || p.nth_contextual(0, ContextualKeyword::Dimensions)
-        || p.nth_contextual(0, ContextualKeyword::Metrics)
-        || p.nth_contextual(0, ContextualKeyword::Public)
-        || p.nth_contextual(0, ContextualKeyword::Private)
-        || p.nth_contextual(0, ContextualKeyword::Primary)
-        || p.nth_contextual(0, ContextualKeyword::Key)
-        || p.nth_contextual(0, ContextualKeyword::References)
-        || p.nth_contextual(0, ContextualKeyword::Synonyms)
-        || p.nth_contextual(0, ContextualKeyword::Labels)
-        || p.nth_contextual(0, ContextualKeyword::AiSqlGeneration)
-        || p.nth_contextual(0, ContextualKeyword::AiQuestionCategorization)
-        || p.nth_contextual(0, ContextualKeyword::AiVerifiedQueries)
-        || p.nth_contextual(0, ContextualKeyword::Question)
-        || p.nth_contextual(0, ContextualKeyword::VerifiedAt)
-        || p.nth_contextual(0, ContextualKeyword::OnboardingQuestion)
-        || p.nth_contextual(0, ContextualKeyword::VerifiedBy)
-        || p.nth_contextual(0, ContextualKeyword::Tag)
+    p.nth_any_contextual(0, SEMANTIC_VIEW_CONTEXTUAL_WORDS)
 }
 
 /// One object property: `KEY = value`, `KEY = ( … )`, the unset/no-prefixed flags (`NOORDER`), or a
@@ -619,11 +675,7 @@ fn grant_target(p: &mut Parser) {
 /// d`). The reserved ones (`TABLE`/`VIEW`/`WAREHOUSE`) are already up-cased by `bump_any`; this
 /// reaches the contextual ones so the whole securable reads in canonical case.
 fn at_object_type_word(p: &Parser) -> bool {
-    p.nth_contextual(0, ContextualKeyword::Schema)
-        || p.nth_contextual(0, ContextualKeyword::Database)
-        || p.nth_contextual(0, ContextualKeyword::Stage)
-        || p.nth_contextual(0, ContextualKeyword::Sequence)
-        || p.nth_contextual(0, ContextualKeyword::Stream)
+    p.nth_any_contextual(0, OBJECT_TYPE_CONTEXTUAL_WORDS)
 }
 
 /// The `{ TO | FROM } [ROLE|USER|SHARE|DATABASE ROLE] <name>` recipient. A trailing
@@ -651,10 +703,7 @@ fn grantee(p: &mut Parser, intro: GranteeIntro) {
 
 /// A grantee-kind word that precedes the recipient name (`ROLE r`, `USER u`, `SHARE s`).
 fn at_grantee_kind(p: &Parser) -> bool {
-    p.nth_contextual(0, ContextualKeyword::Role)
-        || p.nth_contextual(0, ContextualKeyword::User)
-        || p.nth_contextual(0, ContextualKeyword::Share)
-        || p.nth_contextual(0, ContextualKeyword::Database)
+    p.nth_any_contextual(0, GRANTEE_KIND_CONTEXTUAL_WORDS)
 }
 
 /// The optional statement tail after the grantee: `WITH GRANT OPTION`, `COPY CURRENT GRANTS`,
@@ -663,10 +712,7 @@ fn at_grantee_kind(p: &Parser) -> bool {
 /// contextual so the formatter up-cases them like keywords.
 fn grant_tail(p: &mut Parser) {
     while !at_stmt_terminator(p) {
-        if p.nth_contextual(0, ContextualKeyword::Option)
-            || p.nth_contextual(0, ContextualKeyword::Cascade)
-            || p.nth_contextual(0, ContextualKeyword::Restrict)
-        {
+        if p.nth_any_contextual(0, GRANT_TAIL_CONTEXTUAL_WORDS) {
             p.bump_as(CONTEXTUAL_KEYWORD);
         } else {
             p.bump_any();
@@ -677,9 +723,7 @@ fn grant_tail(p: &mut Parser) {
 /// At the start of a grant/revoke statement tail (`WITH GRANT OPTION`, `CASCADE`, `RESTRICT`, …),
 /// used so `grant_target` does not swallow it.
 fn at_grant_tail(p: &Parser) -> bool {
-    p.at(WITH_KW)
-        || p.nth_contextual(0, ContextualKeyword::Cascade)
-        || p.nth_contextual(0, ContextualKeyword::Restrict)
+    p.at(WITH_KW) || p.nth_any_contextual(0, GRANT_TAIL_START_CONTEXTUAL_WORDS)
 }
 
 /// At an `AS` that introduces a statement/query body (a task's DML, a dynamic-table query, a
@@ -1023,29 +1067,11 @@ fn column_def(p: &mut Parser) {
     // column begins with its name (an identifier — possibly a word that merely *looks* like a DDL
     // option, e.g. a column named `comment`), so that leading token is taken verbatim, never
     // up-cased, before the constraint words that follow it are tagged.
-    let starts_with_constraint = p.nth_contextual(0, ContextualKeyword::Constraint)
-        || p.nth_contextual(0, ContextualKeyword::Primary)
-        || p.nth_contextual(0, ContextualKeyword::Unique)
-        || p.nth_contextual(0, ContextualKeyword::Foreign)
-        || p.nth_contextual(0, ContextualKeyword::Check);
+    let starts_with_constraint = p.nth_any_contextual(0, DDL_CONSTRAINT_START_CONTEXTUAL_WORDS);
     if !starts_with_constraint && !p.at(COMMA) && !p.at(R_PAREN) && !p.at_eof() {
         p.bump_any(); // the column name (verbatim, even if it spells a contextual word)
     }
-    let mut depth = 0u32;
-    while !p.at_eof() {
-        if depth == 0 && (p.at(COMMA) || p.at(R_PAREN)) {
-            break;
-        }
-        if p.at(L_PAREN) {
-            depth += 1;
-            p.bump_any();
-        } else if p.at(R_PAREN) {
-            depth -= 1;
-            p.bump_any();
-        } else {
-            bump_ddl_word(p);
-        }
-    }
+    balanced_token_run_until(p, |p| p.at(COMMA) || p.at(R_PAREN), bump_ddl_word);
     m.complete(p, COLUMN_DEF);
 }
 
@@ -1064,28 +1090,7 @@ fn bump_ddl_word(p: &mut Parser) {
 
 /// Whether the current token is a recognized (non-reserved) DDL constraint/option word.
 fn is_ddl_contextual_word(p: &Parser) -> bool {
-    p.nth_contextual(0, ContextualKeyword::Default)
-        || p.nth_contextual(0, ContextualKeyword::Primary)
-        || p.nth_contextual(0, ContextualKeyword::Key)
-        || p.nth_contextual(0, ContextualKeyword::Unique)
-        || p.nth_contextual(0, ContextualKeyword::Foreign)
-        || p.nth_contextual(0, ContextualKeyword::References)
-        || p.nth_contextual(0, ContextualKeyword::Constraint)
-        || p.nth_contextual(0, ContextualKeyword::Check)
-        || p.nth_contextual(0, ContextualKeyword::Collate)
-        || p.nth_contextual(0, ContextualKeyword::Comment)
-        || p.nth_contextual(0, ContextualKeyword::Cluster)
-        || p.nth_contextual(0, ContextualKeyword::Clone)
-        || p.nth_contextual(0, ContextualKeyword::Cascade)
-        || p.nth_contextual(0, ContextualKeyword::Restrict)
-        || p.nth_contextual(0, ContextualKeyword::Materialized)
-        || p.nth_contextual(0, ContextualKeyword::Masking)
-        || p.nth_contextual(0, ContextualKeyword::Policy)
-        || p.nth_contextual(0, ContextualKeyword::Access)
-        || p.nth_contextual(0, ContextualKeyword::Tag)
-        || p.nth_contextual(0, ContextualKeyword::AllowedValues)
-        || p.nth_contextual(0, ContextualKeyword::Propagate)
-        || p.nth_contextual(0, ContextualKeyword::ExemptOtherPolicies)
+    p.nth_any_contextual(0, DDL_CONTEXTUAL_WORDS)
 }
 
 fn drop_stmt(p: &mut Parser) {
@@ -1261,44 +1266,13 @@ fn block_statement(p: &mut Parser) {
         simple_script_stmt(p, LET_STMT);
     } else if p.at(RETURN_KW) {
         simple_script_stmt(p, RETURN_STMT);
-    } else if at_sql_statement_start(p) {
+    } else if stmt::at_sql_stmt_start(p) {
         stmt::statement(p);
     } else if p.at_name() && p.nth_at(1, ASSIGN) {
         simple_script_stmt(p, ASSIGN_STMT);
     } else {
         simple_script_stmt(p, SCRIPT_STMT);
     }
-}
-
-/// The SQL statements that the top-level [`stmt::statement`] dispatcher handles well, recognized so a
-/// scripting block can delegate to it (and get full structural formatting of nested SQL).
-fn at_sql_statement_start(p: &Parser) -> bool {
-    p.at(WITH_KW)
-        || p.at(SELECT_KW)
-        || p.at(VALUES_KW)
-        || p.at(INSERT_KW)
-        || p.at(UPDATE_KW)
-        || p.at(DELETE_KW)
-        || p.at(MERGE_KW)
-        || p.at(CREATE_KW)
-        || p.at(DROP_KW)
-        || p.at(ALTER_KW)
-        || p.at(GRANT_KW)
-        || p.at(REVOKE_KW)
-        || p.at(USE_KW)
-        || p.at(SHOW_KW)
-        || p.at(DESCRIBE_KW)
-        || p.at(DESC_KW)
-        || p.at(TRUNCATE_KW)
-        || p.at(COMMIT_KW)
-        || p.at(ROLLBACK_KW)
-        || p.at(UNDROP_KW)
-        || at_comment_stmt(p)
-        || p.at(CALL_KW)
-        || p.at(SET_KW)
-        || p.at(EXECUTE_KW)
-        || p.at(COPY_KW)
-        || at_begin_transaction(p)
 }
 
 /// A lenient scripting statement: consume tokens up to (but not including) the terminating `;`. Every
@@ -2090,6 +2064,31 @@ fn balanced_parens(p: &mut Parser) {
             depth -= 1;
         }
         p.bump_any();
+    }
+}
+
+/// Consume a token run that may contain nested parentheses, stopping when `stop` matches at the
+/// top level. Callers supply the non-paren token bumping rule so contextual-word tagging remains
+/// local to the grammar region being scanned.
+fn balanced_token_run_until(
+    p: &mut Parser,
+    stop: impl Fn(&Parser) -> bool,
+    mut bump_word: impl FnMut(&mut Parser),
+) {
+    let mut depth = 0u32;
+    while !p.at_eof() {
+        if depth == 0 && stop(p) {
+            break;
+        }
+        if p.at(L_PAREN) {
+            depth += 1;
+            p.bump_any();
+        } else if p.at(R_PAREN) && depth > 0 {
+            depth -= 1;
+            p.bump_any();
+        } else {
+            bump_word(p);
+        }
     }
 }
 

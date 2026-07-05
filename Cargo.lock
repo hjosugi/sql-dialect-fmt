@@ -2322,6 +2322,7 @@ dependencies = [
 name = "sql-dialect-fmt-lexer"
 version = "1.0.0"
 dependencies = [
+ "criterion",
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-test-fixtures",
  "sql-dialect-fmt-test-support",
@@ -2347,6 +2348,7 @@ dependencies = [
 name = "sql-dialect-fmt-parser"
 version = "1.0.0"
 dependencies = [
+ "criterion",
  "proptest",
  "rowan",
  "sql-dialect-fmt-lexer",

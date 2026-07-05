@@ -14,6 +14,14 @@ use sql_dialect_fmt_syntax::SyntaxKind::*;
 
 use crate::parser::{ContextualKeyword, Parser};
 
+const DELTA_COMMAND_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Vacuum,
+    ContextualKeyword::Optimize,
+    ContextualKeyword::Cache,
+    ContextualKeyword::Uncache,
+    ContextualKeyword::Refresh,
+];
+
 /// At the start of a Delta maintenance/cache statement (`VACUUM`/`OPTIMIZE`/`CACHE`/`UNCACHE`/
 /// `REFRESH`), or a `DESCRIBE HISTORY`/`DESC HISTORY`. Only meaningful under the Databricks dialect;
 /// callers gate on [`crate::Dialect::supports_delta_commands`].
@@ -26,12 +34,7 @@ pub(in crate::grammar) fn at_delta_stmt_start(p: &Parser) -> bool {
 /// path, `TABLE`, `LAZY`, or `IF`) so a lone identifier expression — `SELECT vacuum` has already
 /// been handled, but a top-level `vacuum` expression statement — is not stolen.
 fn at_command_word(p: &Parser) -> bool {
-    let cmd = p.nth_contextual(0, ContextualKeyword::Vacuum)
-        || p.nth_contextual(0, ContextualKeyword::Optimize)
-        || p.nth_contextual(0, ContextualKeyword::Cache)
-        || p.nth_contextual(0, ContextualKeyword::Uncache)
-        || p.nth_contextual(0, ContextualKeyword::Refresh);
-    cmd && at_command_operand(p, 1)
+    p.nth_any_contextual(0, DELTA_COMMAND_WORDS) && at_command_operand(p, 1)
 }
 
 /// Is the token `n` ahead a plausible operand for a Delta command word: a name (identifier / quoted

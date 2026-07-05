@@ -27,6 +27,10 @@ pub(super) fn statement_or_flow(p: &mut Parser) {
 }
 
 pub(super) fn at_stmt_start(p: &Parser) -> bool {
+    at_sql_stmt_start(p) || super::at_expr_start(p)
+}
+
+pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
     p.at(SELECT_KW)
         || p.at(WITH_KW)
         || p.at(VALUES_KW)
@@ -55,7 +59,6 @@ pub(super) fn at_stmt_start(p: &Parser) -> bool {
         || p.at(EXECUTE_KW)
         || (p.dialect().supports_copy_into() && p.at(COPY_KW))
         || (p.dialect().supports_delta_commands() && super::delta::at_delta_stmt_start(p))
-        || super::at_expr_start(p)
 }
 
 pub(super) fn statement(p: &mut Parser) {

@@ -12,7 +12,7 @@
 //! fixture is visible too. Run with `cargo bench -p sql-dialect-fmt-formatter`.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+use sql_dialect_fmt_formatter::{format, Dialect, FormatOptions};
 use sql_dialect_fmt_test_fixtures::EASY_CASES;
 
 /// A wide SELECT: a long projection plus WHERE / GROUP BY / ORDER BY, so many groups are measured.
@@ -69,20 +69,62 @@ fn merge() -> String {
     )
 }
 
+/// A Snowflake Scripting block with repeated lenient statements and a structured IF.
+fn scripting_block() -> String {
+    let mut sql = String::from("declare v number default 0; begin ");
+    for i in 0..20 {
+        sql.push_str(&format!("let v := v + {i}; "));
+    }
+    sql.push_str("if (v > 100) then return v; else return 0; end if; end");
+    sql
+}
+
+/// A semantic view with model clauses, AI clauses, tags, and copy grants.
+fn semantic_view() -> String {
+    String::from(
+        "create semantic view sv tables(orders as mart.orders primary key(order_id), \
+         customers as mart.customers primary key(customer_id)) \
+         relationships(order_customer as orders(customer_id) references customers) \
+         facts(public orders.net_amount as net_amount) \
+         dimensions(public customers.region as region) \
+         metrics(public orders.revenue as sum(orders.net_amount)) \
+         ai_sql_generation 'Use revenue for sales questions.' \
+         ai_question_categorization 'Classify revenue questions.' \
+         ai_verified_queries(top_revenue as(question 'Top revenue?' verified_at 1767225600 \
+         onboarding_question true verified_by 'analyst@example.com' sql 'SELECT 1')) \
+         with tag(governance.owner = 'analytics') copy grants",
+    )
+}
+
+/// Databricks-specific DML with extended MERGE branches.
+fn databricks_merge() -> String {
+    String::from(
+        "merge into catalog.schema.target t using catalog.schema.source s on t.id = s.id \
+         when matched and s.op = 'U' then update set t.a = s.a, t.b = s.b \
+         when matched and s.op = 'D' then delete \
+         when not matched by source then delete \
+         when not matched then insert (id, a, b) values (s.id, s.a, s.b)",
+    )
+}
+
 fn bench_statements(c: &mut Criterion) {
-    let opts = FormatOptions::default();
-    let cases: [(&str, String); 4] = [
-        ("wide_select", wide_select()),
-        ("cte_chain", cte_chain()),
-        ("ddl", ddl()),
-        ("merge", merge()),
+    let snowflake = FormatOptions::default();
+    let databricks = FormatOptions::default().with_dialect(Dialect::Databricks);
+    let cases: [(&str, String, FormatOptions); 7] = [
+        ("wide_select", wide_select(), snowflake),
+        ("cte_chain", cte_chain(), snowflake),
+        ("ddl", ddl(), snowflake),
+        ("merge", merge(), snowflake),
+        ("scripting_block", scripting_block(), snowflake),
+        ("semantic_view", semantic_view(), snowflake),
+        ("databricks_merge", databricks_merge(), databricks),
     ];
 
     let mut group = c.benchmark_group("format_statement");
-    for (name, sql) in &cases {
+    for (name, sql, opts) in &cases {
         group.throughput(Throughput::Bytes(sql.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(name), sql, |b, sql| {
-            b.iter(|| format(std::hint::black_box(sql), &opts));
+            b.iter(|| format(std::hint::black_box(sql), opts));
         });
     }
     group.finish();
