@@ -255,6 +255,11 @@ pub enum SyntaxKind {
     CALL_EXPR,
     INDEX_EXPR,
     CAST_EXPR,
+    BIND_MARKER,
+    INTERVAL_LITERAL,
+    ARRAY_LITERAL,
+    OBJECT_LITERAL,
+    OBJECT_FIELD,
     // queries & set operations (Phase 2)
     WITH_QUERY,
     WITH_CLAUSE,

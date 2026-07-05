@@ -191,6 +191,18 @@ fn function_arguments_stay_inline_without_a_trailing_comma() {
 }
 
 #[test]
+fn formats_expression_literals_and_bind_markers() {
+    assert_eq!(
+        fmt("select interval '1' day + interval 2 hours from t where id=? and tenant_id=:tenant_id"),
+        "SELECT INTERVAL '1' DAY + INTERVAL 2 HOURS\nFROM t\nWHERE id = ? AND tenant_id = :tenant_id;\n"
+    );
+    assert_eq!(
+        fmt("select [1,2,{'nested':true}], {'a':1,'b':[2,3]} from t"),
+        "SELECT [1, 2, {'nested': TRUE}], {'a': 1, 'b': [2, 3]}\nFROM t;\n"
+    );
+}
+
+#[test]
 fn values_rows_honor_a_magic_trailing_comma() {
     insta::assert_snapshot!(fmt("values (1, 2,), (3, 4)"), @"
     VALUES

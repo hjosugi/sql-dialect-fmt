@@ -16,12 +16,15 @@ pub(super) fn needs_space(prev: SyntaxKind, cur: SyntaxKind) -> bool {
     // Tokens that hug what precedes them.
     if matches!(
         cur,
-        COMMA | SEMICOLON | R_PAREN | R_BRACKET | DOT | COLON | COLON2
+        COMMA | SEMICOLON | R_PAREN | R_BRACKET | R_BRACE | DOT | COLON | COLON2
     ) {
         return false;
     }
     // Tokens that the following token hugs.
-    if matches!(prev, DOT | COLON | COLON2 | L_PAREN | L_BRACKET | AT) {
+    if matches!(
+        prev,
+        DOT | COLON | COLON2 | L_PAREN | L_BRACKET | L_BRACE | AT
+    ) {
         return false;
     }
     // `(` opens a call/grouping with no space after a callee or another close bracket; `CAST(`
@@ -78,8 +81,10 @@ pub(super) fn is_value_end(kind: SyntaxKind) -> bool {
             | INT_NUMBER
             | FLOAT_NUMBER
             | VARIABLE
+            | QUESTION
             | R_PAREN
             | R_BRACKET
+            | R_BRACE
             | NULL_KW
             | TRUE_KW
             | FALSE_KW

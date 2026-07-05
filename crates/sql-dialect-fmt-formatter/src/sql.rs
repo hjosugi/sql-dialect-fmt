@@ -988,6 +988,11 @@ impl Lowerer {
         match node.kind() {
             // Parenthesized comma lists, lowered structurally (wrap + magic trailing comma).
             ARG_LIST | VALUES_ROW | COLUMN_LIST | LAMBDA_PARAMS => self.lower_paren_list(node),
+            ARRAY_LITERAL => self.lower_delimited_list(node, L_BRACKET, R_BRACKET, "[", "]"),
+            OBJECT_LITERAL => self.lower_delimited_list(node, L_BRACE, R_BRACE, "{", "}"),
+            OBJECT_FIELD => self.lower_object_field(node),
+            BIND_MARKER => self.lower_bind_marker(node),
+            INTERVAL_LITERAL => self.lower_value_children(node),
             IN_EXPR => self.lower_in_expr(node),
             CASE_EXPR => self.lower_case(node),
             SUBQUERY => self.lower_subquery(node),
@@ -1197,6 +1202,73 @@ impl Lowerer {
         let items = self.lower_items(node.children());
         self.resume_after(R_PAREN);
         concat(vec![open_sep, bracketed(prefix, items, trailing)])
+    }
+
+    fn lower_delimited_list(
+        &mut self,
+        node: &SyntaxNode,
+        open: SyntaxKind,
+        close: SyntaxKind,
+        open_text: &'static str,
+        close_text: &'static str,
+    ) -> Doc {
+        let open_sep = self.sep_before(open);
+        let trailing = delimited_list_has_trailing_comma(node, close);
+        let items = self.lower_items(node.children());
+        self.resume_after(close);
+        concat(vec![
+            open_sep,
+            delimited(open_text, close_text, empty(), items, trailing),
+        ])
+    }
+
+    fn lower_object_field(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token));
+                if token.kind() == COLON {
+                    parts.push(space());
+                    self.reset();
+                }
+            } else if let Some(node) = child.as_node() {
+                parts.push(self.lower_node(node));
+            }
+        }
+        concat(parts)
+    }
+
+    fn lower_bind_marker(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        let mut first_significant = true;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if first_significant && token.kind() == COLON {
+                    let sep = self.sep_before(IDENT);
+                    self.reset();
+                    parts.push(sep);
+                }
+                parts.push(self.token(token));
+                first_significant = false;
+            } else if let Some(node) = child.as_node() {
+                parts.push(self.lower_node(node));
+                first_significant = false;
+            }
+        }
+        self.resume_after(R_PAREN);
+        concat(parts)
+    }
+
+    fn lower_value_children(&mut self, node: &SyntaxNode) -> Doc {
+        let doc = self.lower_children(node);
+        self.resume_after(R_PAREN);
+        doc
     }
 
     /// Dispatch a query expression to its structural rule (a bare `SELECT`) or the generic walker.
@@ -1427,8 +1499,18 @@ impl Lowerer {
 /// the preserved trailing comma) when `trailing` is set. An exploded list propagates the break to
 /// its ancestors, so a multiline collection never sits inline.
 fn bracketed(prefix: Doc, items: Vec<Doc>, trailing: bool) -> Doc {
+    delimited("(", ")", prefix, items, trailing)
+}
+
+fn delimited(
+    open: &'static str,
+    close: &'static str,
+    prefix: Doc,
+    items: Vec<Doc>,
+    trailing: bool,
+) -> Doc {
     if items.is_empty() {
-        return concat(vec![text("("), prefix, text(")")]);
+        return concat(vec![text(open), prefix, text(close)]);
     }
     let joined = join(item_sep(), items);
     let body = if trailing {
@@ -1438,11 +1520,11 @@ fn bracketed(prefix: Doc, items: Vec<Doc>, trailing: bool) -> Doc {
     };
     // `prefix` (e.g. an aggregate `DISTINCT`) hugs the open paren, before the (soft) first break.
     let content = concat(vec![
-        text("("),
+        text(open),
         prefix,
         indent(body),
         soft_line(),
-        text(")"),
+        text(close),
     ]);
     if trailing {
         group_expanded(content)
@@ -1483,6 +1565,10 @@ fn item_sep() -> Doc {
 /// Does a parenthesized list end with `, )` — a tolerated trailing comma? (The last two significant
 /// tokens are `COMMA R_PAREN`.)
 fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
+    delimited_list_has_trailing_comma(node, R_PAREN)
+}
+
+fn delimited_list_has_trailing_comma(node: &SyntaxNode, close: SyntaxKind) -> bool {
     let mut prev = None;
     let mut last = None;
     for el in node.children_with_tokens() {
@@ -1491,7 +1577,7 @@ fn paren_list_has_trailing_comma(node: &SyntaxNode) -> bool {
             last = Some(el.kind());
         }
     }
-    last == Some(R_PAREN) && prev == Some(COMMA)
+    last == Some(close) && prev == Some(COMMA)
 }
 
 /// Token text, upper-cased if it is a keyword and keyword-casing is enabled.

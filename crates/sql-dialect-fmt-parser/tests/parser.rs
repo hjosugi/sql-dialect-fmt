@@ -5,8 +5,9 @@
 //! without diagnostics, that the node structure is sensible, and that errors recover.
 
 use sql_dialect_fmt_parser::{
-    parse, AstNode, BlockStmt, ColumnDef, ColumnDefList, CreateStmt, LetStmt, MergeStmt, MergeWhen,
-    ObjectProperty, ReturnStmt, SelectStmt, SourceFile, StmtList, SyntaxKind,
+    parse, parse_with_dialect, AstNode, BlockStmt, ColumnDef, ColumnDefList, CreateStmt, Dialect,
+    LetStmt, MergeStmt, MergeWhen, ObjectProperty, ReturnStmt, SelectStmt, SourceFile, StmtList,
+    SyntaxKind,
 };
 use sql_dialect_fmt_test_support::parser::{assert_parse_clean, assert_parse_roundtrip};
 
@@ -301,6 +302,69 @@ fn call_parses_into_a_call_stmt() {
             .children()
             .any(|n| n.kind() == SyntaxKind::CALL_STMT),
         "CALL should produce a CALL_STMT"
+    );
+}
+
+#[test]
+fn expression_literals_and_bind_markers_parse_cleanly() {
+    let cases = [
+        (
+            "SELECT CURRENT_TIMESTAMP() - INTERVAL '1 day'",
+            SyntaxKind::INTERVAL_LITERAL,
+        ),
+        (
+            "SELECT INTERVAL '1' DAY + INTERVAL 2 HOURS",
+            SyntaxKind::INTERVAL_LITERAL,
+        ),
+        (
+            "SELECT [1, 2, {'nested': TRUE}] AS payload",
+            SyntaxKind::ARRAY_LITERAL,
+        ),
+        (
+            "SELECT {'a': 1, 'b': [2, 3]} AS payload",
+            SyntaxKind::OBJECT_LITERAL,
+        ),
+        (
+            "SELECT * FROM t WHERE id = ? AND tenant_id = :tenant_id",
+            SyntaxKind::BIND_MARKER,
+        ),
+        (
+            "SELECT OBJECT_CONSTRUCT('metric_date', :v_current_date)",
+            SyntaxKind::BIND_MARKER,
+        ),
+    ];
+
+    for (sql, kind) in cases {
+        let parsed = parse(sql);
+        assert!(parsed.errors().is_empty(), "{sql}: {:?}", parsed.errors());
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == kind),
+            "{sql} should contain {kind:?}"
+        );
+    }
+
+    let databricks = parse_with_dialect("SELECT INTERVAL 1 DAY", Dialect::Databricks);
+    assert!(
+        databricks.errors().is_empty(),
+        "Databricks interval literal should parse cleanly: {:?}",
+        databricks.errors()
+    );
+
+    let identifier = parse("SELECT interval FROM t");
+    assert!(
+        identifier.errors().is_empty(),
+        "contextual INTERVAL identifier should still parse cleanly: {:?}",
+        identifier.errors()
+    );
+    assert!(
+        !identifier
+            .syntax()
+            .descendants()
+            .any(|node| node.kind() == SyntaxKind::INTERVAL_LITERAL),
+        "bare interval identifier should not become an interval literal"
     );
 }
 
