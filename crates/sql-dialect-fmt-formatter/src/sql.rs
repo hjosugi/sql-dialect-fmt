@@ -53,7 +53,6 @@ pub(crate) struct Ctx {
 /// statement lowering. Trivia trailing the final statement — including a comment-only file — lands
 /// as direct token children of the root; those comments are re-emitted here so nothing is dropped.
 pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
-    let source = root.text().to_string();
     let mut parts = Vec::new();
     let mut emitted = false;
     let mut last_stmt_end: Option<usize> = None;
@@ -86,7 +85,7 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
         .filter(|t| t.kind().is_comment())
     {
         if need_break {
-            if directive_comment_same_line_after_stmt(&source, last_stmt_end, &token) {
+            if directive_comment_same_line_after_stmt(last_stmt_end, &token) {
                 parts.push(space());
             } else {
                 parts.push(hard_line());

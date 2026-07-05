@@ -122,16 +122,26 @@ impl Comments {
 }
 
 pub(super) fn directive_comment_same_line_after_stmt(
-    source: &str,
     last_stmt_end: Option<usize>,
     token: &SyntaxToken,
 ) -> bool {
     is_directive_comment(token.text())
         && last_stmt_end.is_some_and(|end| {
-            let start: usize = token.text_range().start().into();
-            source
-                .get(end..start)
-                .is_some_and(|between| !between.contains(['\n', '\r']))
+            let mut previous = token.prev_sibling_or_token();
+            while let Some(element) = previous {
+                let element_end: usize = element.text_range().end().into();
+                if element_end <= end {
+                    return true;
+                }
+                if element
+                    .as_token()
+                    .is_some_and(|token| token.text().contains(['\n', '\r']))
+                {
+                    return false;
+                }
+                previous = element.prev_sibling_or_token();
+            }
+            false
         })
 }
 
