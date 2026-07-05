@@ -20,7 +20,7 @@ sql-dialect-fmt-encoding = { path = "../sql-dialect-fmt-encoding", version = "1.
 sql-dialect-fmt-formatter = { path = "../sql-dialect-fmt-formatter", version = "1.0.0" }
 sql-dialect-fmt-parser = { path = "../sql-dialect-fmt-parser", version = "1.0.0" }
 sql-dialect-fmt-text = { path = "../sql-dialect-fmt-text", version = "1.0.0" }
-toml = "0.8"
+toml = "1.1"
 
 [dev-dependencies]
 tempfile = "3"
