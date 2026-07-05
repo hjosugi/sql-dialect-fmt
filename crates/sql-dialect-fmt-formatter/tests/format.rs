@@ -65,7 +65,11 @@ fn standalone_dot_followed_by_number_does_not_merge_into_float() {
 fn adjacent_operator_tokens_do_not_merge() {
     assert_eq!(fmt("desc - > "), "DESC - >;\n");
     assert_eq!(fmt("desc - - "), "DESC - -;\n");
+    assert_eq!(fmt("desc - -> "), "DESC - ->;\n");
     assert_eq!(fmt("desc : = "), "DESC: =;\n");
+    assert_eq!(fmt("desc : := "), "DESC: :=;\n");
+    assert_eq!(fmt("desc : :: "), "DESC: ::;\n");
+    assert_eq!(fmt("drop : => "), "DROP: =>;\n");
     assert_eq!(fmt("desc | > "), "DESC | >;\n");
 }
 
