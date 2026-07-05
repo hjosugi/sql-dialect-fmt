@@ -1131,8 +1131,8 @@ impl Lowerer {
                 }
                 match token.kind() {
                     L_PAREN => saw_parens = true,
+                    // The closing delimiter is re-synthesized after the lowered item list below.
                     R_PAREN => {}
-                    _ if !saw_parens => head.push(self.token(token)),
                     _ => head.push(self.token(token)),
                 }
             } else if let Some(node) = child.as_node() {
