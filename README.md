@@ -26,9 +26,12 @@ cargo install --path crates/sql-dialect-fmt-cli
 sql-dialect-fmt query.sql                 # 整形して stdout へ
 sql-dialect-fmt --write *.sql             # ファイルをその場で整形
 sql-dialect-fmt --check src/**/*.sql      # 未整形なら非ゼロ終了（CI 向け）
+sql-dialect-fmt --check --diff query.sql  # 未整形箇所を unified diff で表示
 cat query.sql | sql-dialect-fmt           # stdin → stdout
+cat query.sql | sql-dialect-fmt -         # `-` でも stdin を明示
+sql-dialect-fmt --stdin-filepath src/query.sql < query.sql  # stdin に設定探索用パスを付与
 
-# オプション: --dialect snowflake|databricks / --line-width N（既定100） / --indent-width N（既定4） / --no-uppercase
+# オプション: --dialect snowflake|databricks / --line-width N（既定100、1以上） / --indent-width N（既定4、1以上） / --no-uppercase
 ```
 
 

@@ -57,6 +57,14 @@ fn stdin_to_stdout_formats() {
 }
 
 #[test]
+fn dash_reads_stdin_to_stdout() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, _err) = run(tmp.path(), &["-"], Some("select 1"));
+    assert_eq!(code, 0);
+    assert_eq!(out, "SELECT 1;\n");
+}
+
+#[test]
 fn stdin_to_stdout_formats_databricks_when_requested() {
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(
@@ -67,6 +75,23 @@ fn stdin_to_stdout_formats_databricks_when_requested() {
     assert_eq!(code, 0);
     assert_eq!(out, "SELECT transform(items, x -> x + 1)\nFROM events;\n");
     assert!(!err.contains("parse error"), "stderr: {err}");
+}
+
+#[test]
+fn stdin_filepath_discovers_config_from_that_path() {
+    let tmp = TempDir::new().unwrap();
+    write(
+        tmp.path(),
+        "project/sql-dialect-fmt.toml",
+        "uppercase_keywords = false\n",
+    );
+    let (code, out, _err) = run(
+        tmp.path(),
+        &["--stdin-filepath", "project/src/query.sql"],
+        Some("select 1"),
+    );
+    assert_eq!(code, 0);
+    assert_eq!(out, "select 1;\n");
 }
 
 #[test]
@@ -146,6 +171,48 @@ fn check_fails_for_unformatted_file() {
     assert!(err.contains("is not formatted"), "stderr: {err}");
     // --check must not modify the file.
     assert_eq!(fs::read_to_string(&f).unwrap(), "select 1");
+}
+
+#[test]
+fn check_diff_prints_unified_diff_for_unformatted_file() {
+    let tmp = TempDir::new().unwrap();
+    let f = write(tmp.path(), "bad.sql", "select 1");
+    let (code, out, err) = run(
+        tmp.path(),
+        &["--check", "--diff", f.to_str().unwrap()],
+        None,
+    );
+    assert_eq!(code, 1);
+    assert!(out.contains("--- "), "stdout: {out}");
+    assert!(out.contains("+++ "), "stdout: {out}");
+    assert!(out.contains("@@ -"), "stdout: {out}");
+    assert!(out.contains("-select 1"), "stdout: {out}");
+    assert!(out.contains("+SELECT 1;"), "stdout: {out}");
+    assert!(err.contains("is not formatted"), "stderr: {err}");
+    assert_eq!(fs::read_to_string(&f).unwrap(), "select 1");
+}
+
+#[test]
+fn check_diff_works_for_stdin_with_filepath() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, err) = run(
+        tmp.path(),
+        &[
+            "--check",
+            "--diff",
+            "--stdin-filepath",
+            "src/query.sql",
+            "-",
+        ],
+        Some("select 1"),
+    );
+    assert_eq!(code, 1);
+    assert!(out.contains("--- src/query.sql"), "stdout: {out}");
+    assert!(out.contains("+SELECT 1;"), "stdout: {out}");
+    assert!(
+        err.contains("src/query.sql is not formatted"),
+        "stderr: {err}"
+    );
 }
 
 #[test]
@@ -261,6 +328,18 @@ fn invalid_config_is_reported_with_exit_2() {
 }
 
 #[test]
+fn zero_width_config_is_reported_with_exit_2() {
+    let tmp = TempDir::new().unwrap();
+    write(tmp.path(), "sql-dialect-fmt.toml", "line_width = 0\n");
+    let (code, _out, err) = run(tmp.path(), &[], Some("select 1"));
+    assert_eq!(code, 2);
+    assert!(
+        err.contains("line_width must be greater than 0"),
+        "stderr: {err}"
+    );
+}
+
+#[test]
 fn parse_errors_surface_to_stderr() {
     let tmp = TempDir::new().unwrap();
     // A clearly malformed statement that the parser flags as an error.
@@ -298,6 +377,17 @@ fn conflicting_modes_is_usage_error_exit_2() {
     let (code, _out, err) = run(tmp.path(), &["--write", "--check"], Some("select 1"));
     assert_eq!(code, 2);
     assert!(err.contains("mutually exclusive"), "stderr: {err}");
+}
+
+#[test]
+fn zero_width_cli_flag_is_usage_error_exit_2() {
+    let tmp = TempDir::new().unwrap();
+    let (code, _out, err) = run(tmp.path(), &["--line-width", "0"], Some("select 1"));
+    assert_eq!(code, 2);
+    assert!(
+        err.contains("--line-width expects a positive integer"),
+        "stderr: {err}"
+    );
 }
 
 #[test]
