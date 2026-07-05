@@ -4,6 +4,16 @@ tree-sitter-snowflake/node_modules/
 tree-sitter-snowflake/package-lock.json
 **/*.rs.bk
 
+# Python bytecode/cache artifacts
+__pycache__/
+*.py[cod]
+
+# Local scratch space
+.tmp/
+
+# Editor-local workspace settings
+.vscode/settings.json
+
 # Personal learning notes — kept local, not committed
 /GUIDE.md
 
