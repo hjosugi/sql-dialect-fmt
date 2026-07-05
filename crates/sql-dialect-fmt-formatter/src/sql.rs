@@ -172,6 +172,16 @@ impl Lowerer {
         self.line_comment_pending = false;
     }
 
+    fn take_line_comment_break(&mut self) -> Doc {
+        if !self.line_comment_pending {
+            return empty();
+        }
+        self.prev = None;
+        self.prev_unary = false;
+        self.line_comment_pending = false;
+        hard_line()
+    }
+
     /// Resume spacing as if the previous significant token were `kind` (used after structurally
     /// emitting a `)` so the following token spaces correctly).
     fn resume_after(&mut self, kind: SyntaxKind) {
@@ -218,12 +228,7 @@ impl Lowerer {
         let trailing = self.comments.take_trailing(token);
 
         let mut parts = Vec::new();
-        if self.line_comment_pending {
-            parts.push(hard_line());
-            self.prev = None;
-            self.prev_unary = false;
-            self.line_comment_pending = false;
-        }
+        parts.push(self.take_line_comment_break());
         let has_leading = !leading.is_empty();
         if has_leading && self.prev.is_some() {
             parts.push(hard_line());
@@ -985,7 +990,8 @@ impl Lowerer {
     /// a single (groupable) line by walking their tokens; parenthesized comma lists and `IN (...)`
     /// are lowered structurally so they can wrap and honor a magic trailing comma.
     fn lower_node(&mut self, node: &SyntaxNode) -> Doc {
-        match node.kind() {
+        let pending_break = self.take_line_comment_break();
+        let body = match node.kind() {
             // Parenthesized comma lists, lowered structurally (wrap + magic trailing comma).
             ARG_LIST | VALUES_ROW | COLUMN_LIST | LAMBDA_PARAMS => self.lower_paren_list(node),
             ARRAY_LITERAL => self.lower_delimited_list(node, L_BRACKET, R_BRACKET, "[", "]"),
@@ -1030,7 +1036,8 @@ impl Lowerer {
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
             SET_CLAUSE | VALUES_CLAUSE => self.lower_keyword_item_list(node),
             _ => self.lower_children(node),
-        }
+        };
+        concat(vec![pending_break, body])
     }
 
     /// Lower a COPY `COPY_OPTION` or object-DDL `OBJECT_PROPERTY` node, up-casing the recognized

@@ -1102,6 +1102,13 @@ fn statement_end_comments_format_idempotently() {
 }
 
 #[test]
+fn line_comment_before_structured_child_formats_idempotently() {
+    let once = fmt("'abc' //* b */$$\n(a)$$ $$$$$$ ");
+    assert_eq!(once, "'abc' //* b */$$\n(a);\n\n$$ $$;\n\n$$$$;\n");
+    assert_eq!(fmt(&once), once);
+}
+
+#[test]
 fn statement_end_directives_stay_on_the_code_line() {
     let noqa = fmt("select a -- noqa: LT01");
     assert_eq!(noqa, "SELECT a; -- noqa: LT01\n");

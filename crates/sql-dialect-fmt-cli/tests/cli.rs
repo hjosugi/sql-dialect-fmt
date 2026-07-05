@@ -5,7 +5,7 @@
 //! (parse errors surfaced to stderr, distinct exit codes, no crashes on bad input).
 
 use std::fs;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -25,9 +25,9 @@ fn run(cwd: &Path, args: &[&str], stdin: Option<&str>) -> (i32, String, String) 
     {
         let mut child_stdin = child.stdin.take().expect("stdin");
         if let Some(input) = stdin {
-            child_stdin
-                .write_all(input.as_bytes())
-                .expect("write stdin");
+            if let Err(err) = child_stdin.write_all(input.as_bytes()) {
+                assert_eq!(err.kind(), ErrorKind::BrokenPipe, "write stdin: {err}");
+            }
         }
         // Dropping closes stdin so the child sees EOF.
     }
