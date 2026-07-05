@@ -18,18 +18,18 @@ biome_js_parser = "=0.5.7"
 biome_js_syntax = "=0.5.7"
 # Biome 0.5.x internal crates are not semver-compatible across patch releases.
 # Keep the formatter/parser/syntax graph on one exact patch level.
-biome_console = "=0.5.7"
-biome_deserialize = "=0.5.7"
-biome_diagnostics = "=0.5.7"
+biome_console = "=0.5.8"
+biome_deserialize = "=0.6.0"
+biome_diagnostics = "=0.5.8"
 biome_js_factory = "=0.5.7"
 biome_json_factory = "=0.5.7"
 biome_json_parser = "=0.5.7"
 biome_json_syntax = "=0.5.7"
-biome_parser = "=0.5.7"
-biome_rowan = "=0.5.7"
-biome_text_edit = "=0.5.7"
-biome_text_size = "=0.5.7"
-biome_unicode_table = "=0.5.7"
+biome_parser = "=0.5.8"
+biome_rowan = "=0.5.8"
+biome_text_edit = "=0.5.8"
+biome_text_size = "=0.5.8"
+biome_unicode_table = "=0.5.9"
 ruff_formatter = "=0.0.3"
 ruff_python_formatter = "=0.0.3"
 sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0", features = ["rowan"] }
@@ -38,7 +38,7 @@ sql-dialect-fmt-parser = { path = "../sql-dialect-fmt-parser", version = "1.0.0"
 unicode-width = "0.2.2"
 
 [dev-dependencies]
-criterion = { version = "0.5", default-features = false }
+criterion = { version = "0.8", default-features = false }
 insta = "1.48.0"
 sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
 sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
