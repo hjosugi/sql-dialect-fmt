@@ -228,18 +228,19 @@ fn large_in_list_diagnostics(
             }
 
             if let Some(end) = close_list_at {
-                let active = list.take().expect("closing active IN list");
-                let item_count = if active.saw_top_level_item {
-                    active.commas + 1
-                } else {
-                    0
-                };
-                if !active.possible_subquery && item_count > LARGE_IN_LIST_THRESHOLD {
-                    diagnostics.push(lint_warning(
-                        index,
-                        active.start..end,
-                        "large IN list; prefer a temp table, CTE, or semi-join when practical",
-                    ));
+                if let Some(active) = list.take() {
+                    let item_count = if active.saw_top_level_item {
+                        active.commas + 1
+                    } else {
+                        0
+                    };
+                    if !active.possible_subquery && item_count > LARGE_IN_LIST_THRESHOLD {
+                        diagnostics.push(lint_warning(
+                            index,
+                            active.start..end,
+                            "large IN list; prefer a temp table, CTE, or semi-join when practical",
+                        ));
+                    }
                 }
             }
             continue;

@@ -652,13 +652,18 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
             }
             other if other.starts_with("--") && other.contains('=') => {
                 // `--line-width=80` style.
-                let (flag, value) = other.split_once('=').expect("contains '='");
-                match flag {
-                    "--line-width" => overrides.line_width = Some(parse_usize(flag, value)?),
-                    "--indent-width" => overrides.indent_width = Some(parse_usize(flag, value)?),
-                    "--dialect" => overrides.dialect = Some(parse_dialect_flag(value)?),
-                    "--stdin-filepath" => stdin_filepath = Some(parse_path_flag(flag, value)?),
-                    _ => return Err(format!("unknown option {flag}\n\n{}", usage())),
+                if let Some((flag, value)) = other.split_once('=') {
+                    match flag {
+                        "--line-width" => overrides.line_width = Some(parse_usize(flag, value)?),
+                        "--indent-width" => {
+                            overrides.indent_width = Some(parse_usize(flag, value)?)
+                        }
+                        "--dialect" => overrides.dialect = Some(parse_dialect_flag(value)?),
+                        "--stdin-filepath" => stdin_filepath = Some(parse_path_flag(flag, value)?),
+                        _ => return Err(format!("unknown option {flag}\n\n{}", usage())),
+                    }
+                } else {
+                    return Err(format!("unknown option {other}\n\n{}", usage()));
                 }
             }
             other if other.starts_with('-') && other != "-" => {
