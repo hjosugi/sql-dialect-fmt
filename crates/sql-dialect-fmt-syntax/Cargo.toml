@@ -15,7 +15,7 @@ description = "Syntax kinds and lossless-tree (rowan) language definition for sq
 # rowan provides the green/red lossless syntax tree (the same library rust-analyzer uses).
 # It is optional so that SyntaxKind + the lexer build and test with zero network/deps;
 # the parser crate will enable this feature.
-rowan = { version = "0.15", optional = true }
+rowan = { version = "0.16", optional = true }
 
 [features]
 default = []

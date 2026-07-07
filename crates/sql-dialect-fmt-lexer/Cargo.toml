@@ -16,7 +16,7 @@ sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0"
 sql-dialect-fmt-text = { path = "../sql-dialect-fmt-text", version = "1.0.0" }
 
 [dev-dependencies]
-criterion = { version = "0.5", default-features = false }
+criterion = { version = "0.8", default-features = false }
 # Let integration tests call into the syntax crate directly (e.g. keyword_kind).
 sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0" }
 sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }

@@ -15,10 +15,10 @@ description = "Error-resilient, event-based recursive-descent parser building a 
 sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0", features = ["rowan"] }
 sql-dialect-fmt-lexer = { path = "../sql-dialect-fmt-lexer", version = "1.0.0" }
 sql-dialect-fmt-text = { path = "../sql-dialect-fmt-text", version = "1.0.0" }
-rowan = "0.15"
+rowan = "0.16"
 
 [dev-dependencies]
-criterion = { version = "0.5", default-features = false }
+criterion = { version = "0.8", default-features = false }
 sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
 sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
 proptest = "1"
