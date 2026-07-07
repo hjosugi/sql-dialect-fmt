@@ -11,7 +11,6 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Hand-written, lossless, error-resilient lexer for Snowflake SQL (sql-dialect-fmt toolchain)."
-
 [dependencies]
 sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0" }
 sql-dialect-fmt-text = { path = "../sql-dialect-fmt-text", version = "1.0.0" }

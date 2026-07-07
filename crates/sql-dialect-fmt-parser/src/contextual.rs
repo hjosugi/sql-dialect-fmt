@@ -94,6 +94,42 @@ contextual_keywords! {
     Transaction => "transaction",
     /// `BEGIN WORK` — the SQL-standard spelling of a transaction start.
     Work => "work",
+    /// `INTERVAL '1 day'` / `INTERVAL 1 DAY` expression literal.
+    Interval => "interval",
+    /// Interval unit word.
+    Year => "year",
+    /// Interval unit word.
+    Years => "years",
+    /// Interval unit word.
+    Month => "month",
+    /// Interval unit word.
+    Months => "months",
+    /// Interval unit word.
+    Week => "week",
+    /// Interval unit word.
+    Weeks => "weeks",
+    /// Interval unit word.
+    Day => "day",
+    /// Interval unit word.
+    Days => "days",
+    /// Interval unit word.
+    Hour => "hour",
+    /// Interval unit word.
+    Minute => "minute",
+    /// Interval unit word.
+    Minutes => "minutes",
+    /// Interval unit word.
+    Second => "second",
+    /// Interval unit word.
+    Seconds => "seconds",
+    /// Interval unit word.
+    Millisecond => "millisecond",
+    /// Interval unit word.
+    Milliseconds => "milliseconds",
+    /// Interval unit word.
+    Microsecond => "microsecond",
+    /// Interval unit word.
+    Microseconds => "microseconds",
     /// `FOR i IN REVERSE <start> TO <end>` — counts down.
     Reverse => "reverse",
     /// `<name> [<type>] DEFAULT <expr>` — a declaration's default value (also a DDL column default).

@@ -65,7 +65,11 @@ fn standalone_dot_followed_by_number_does_not_merge_into_float() {
 fn adjacent_operator_tokens_do_not_merge() {
     assert_eq!(fmt("desc - > "), "DESC - >;\n");
     assert_eq!(fmt("desc - - "), "DESC - -;\n");
+    assert_eq!(fmt("desc - -> "), "DESC - ->;\n");
     assert_eq!(fmt("desc : = "), "DESC: =;\n");
+    assert_eq!(fmt("desc : := "), "DESC: :=;\n");
+    assert_eq!(fmt("desc : :: "), "DESC: ::;\n");
+    assert_eq!(fmt("drop : => "), "DROP: =>;\n");
     assert_eq!(fmt("desc | > "), "DESC | >;\n");
 }
 
@@ -188,6 +192,18 @@ fn function_arguments_honor_a_magic_trailing_comma() {
 #[test]
 fn function_arguments_stay_inline_without_a_trailing_comma() {
     assert_eq!(fmt("select f(a, b) from t"), "SELECT f(a, b)\nFROM t;\n");
+}
+
+#[test]
+fn formats_expression_literals_and_bind_markers() {
+    assert_eq!(
+        fmt("select interval '1' day + interval 2 hours from t where id=? and tenant_id=:tenant_id"),
+        "SELECT INTERVAL '1' DAY + INTERVAL 2 HOURS\nFROM t\nWHERE id = ? AND tenant_id = :tenant_id;\n"
+    );
+    assert_eq!(
+        fmt("select [1,2,{'nested':true}], {'a':1,'b':[2,3]} from t"),
+        "SELECT [1, 2, {'nested': TRUE}], {'a': 1, 'b': [2, 3]}\nFROM t;\n"
+    );
 }
 
 #[test]
@@ -1082,6 +1098,13 @@ fn multiline_tokens_with_line_trailing_space_are_verbatim() {
 fn statement_end_comments_format_idempotently() {
     let once = fmt("desc t -- c\nx");
     assert_eq!(once, "DESC t -- c\nx;\n");
+    assert_eq!(fmt(&once), once);
+}
+
+#[test]
+fn line_comment_before_structured_child_formats_idempotently() {
+    let once = fmt("'abc' //* b */$$\n(a)$$ $$$$$$ ");
+    assert_eq!(once, "'abc' //* b */$$\n(a);\n\n$$ $$;\n\n$$$$;\n");
     assert_eq!(fmt(&once), once);
 }
 

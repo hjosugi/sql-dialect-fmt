@@ -1,6 +1,5 @@
-Licensed under either of:
+Licensed under:
 
-- Apache License, Version 2.0
-- MIT license
+0BSD
 
-The full license texts live in the repository root as `LICENSE-APACHE` and `LICENSE-MIT`.
+The full license text lives in the repository root as `LICENSE`.

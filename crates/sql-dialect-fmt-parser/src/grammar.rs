@@ -26,6 +26,27 @@ const BP_MUL: (u8, u8) = (13, 14);
 const BP_PREFIX_NOT: u8 = 6; // looser than comparison: `NOT a = b` == `NOT (a = b)`
 const BP_PREFIX_NEG: u8 = 15; // unary +/- bind tighter than `*`
 
+const INTERVAL_UNIT_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Year,
+    ContextualKeyword::Years,
+    ContextualKeyword::Month,
+    ContextualKeyword::Months,
+    ContextualKeyword::Week,
+    ContextualKeyword::Weeks,
+    ContextualKeyword::Day,
+    ContextualKeyword::Days,
+    ContextualKeyword::Hour,
+    ContextualKeyword::Hours,
+    ContextualKeyword::Minute,
+    ContextualKeyword::Minutes,
+    ContextualKeyword::Second,
+    ContextualKeyword::Seconds,
+    ContextualKeyword::Millisecond,
+    ContextualKeyword::Milliseconds,
+    ContextualKeyword::Microsecond,
+    ContextualKeyword::Microseconds,
+];
+
 const CREATE_MODIFIER_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
     ContextualKeyword::Materialized,
     ContextualKeyword::Local,
@@ -2450,6 +2471,10 @@ fn at_expr_start(p: &Parser) -> bool {
         || p.at(FALSE_KW)
         || p.at(NULL_KW)
         || p.at(VARIABLE)
+        || p.at(QUESTION)
+        || p.at(COLON)
+        || p.at(L_BRACKET)
+        || p.at(L_BRACE)
         || p.at(L_PAREN)
         || p.at(MINUS)
         || p.at(PLUS)
@@ -2459,6 +2484,7 @@ fn at_expr_start(p: &Parser) -> bool {
         || p.at(CAST_KW)
         || p.at(TRY_CAST_KW)
         || p.at(FLATTEN_KW)
+        || at_interval_literal_start(p)
         || p.at_name()
         || at_keyword_call_name(p) // a keyword used as a function name: first(x)
 }
@@ -2661,6 +2687,10 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         let m = p.start();
         p.bump_any();
         m.complete(p, LITERAL)
+    } else if p.at(QUESTION) || p.at(COLON) {
+        bind_marker(p)
+    } else if at_interval_literal_start(p) {
+        interval_literal(p)
     } else if p.at(EXISTS_KW) && p.nth_at(1, L_PAREN) {
         let m = p.start();
         p.bump(EXISTS_KW);
@@ -2674,8 +2704,12 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         let m = p.start();
         p.bump(L_PAREN);
         expr(p);
-        p.expect(R_PAREN);
+        expect_closing(p, R_PAREN);
         m.complete(p, PAREN_EXPR)
+    } else if p.at(L_BRACKET) {
+        array_literal(p)
+    } else if p.at(L_BRACE) {
+        object_literal(p)
     } else if p.at(CASE_KW) {
         case_expr(p)
     } else if p.at(CAST_KW) || p.at(TRY_CAST_KW) {
@@ -2699,6 +2733,160 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
         return None;
     };
     Some(cm)
+}
+
+fn bind_marker(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    if p.at(QUESTION) {
+        p.bump(QUESTION);
+    } else {
+        p.bump(COLON);
+        if p.at_name() {
+            name(p);
+        } else {
+            p.error("expected a bind variable name after ':'");
+        }
+    }
+    m.complete(p, BIND_MARKER)
+}
+
+fn interval_literal(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // INTERVAL
+    if p.at(STRING) {
+        p.bump(STRING);
+        interval_unit_range(p);
+    } else if at_interval_component_start(p) {
+        interval_component(p);
+        while at_interval_component_start(p) {
+            interval_component(p);
+        }
+    } else {
+        p.error("expected an interval literal value");
+    }
+    m.complete(p, INTERVAL_LITERAL)
+}
+
+fn at_interval_literal_start(p: &Parser) -> bool {
+    p.nth_contextual(0, ContextualKeyword::Interval)
+        && (p.nth_at(1, STRING)
+            || p.nth_at(1, INT_NUMBER)
+            || p.nth_at(1, FLOAT_NUMBER)
+            || ((p.nth_at(1, PLUS) || p.nth_at(1, MINUS))
+                && (p.nth_at(2, INT_NUMBER) || p.nth_at(2, FLOAT_NUMBER) || p.nth_at(2, STRING))))
+}
+
+fn at_interval_component_start(p: &Parser) -> bool {
+    p.at(INT_NUMBER)
+        || p.at(FLOAT_NUMBER)
+        || p.at(STRING)
+        || ((p.at(PLUS) || p.at(MINUS))
+            && (p.nth_at(1, INT_NUMBER) || p.nth_at(1, FLOAT_NUMBER) || p.nth_at(1, STRING)))
+}
+
+fn interval_component(p: &mut Parser) {
+    if !p.eat(PLUS) {
+        p.eat(MINUS);
+    }
+    if p.at(INT_NUMBER) || p.at(FLOAT_NUMBER) || p.at(STRING) {
+        p.bump_any();
+    } else {
+        p.error("expected an interval literal value");
+        return;
+    }
+    interval_unit_range(p);
+}
+
+fn interval_unit_range(p: &mut Parser) {
+    if at_interval_unit(p) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        if p.nth_contextual(0, ContextualKeyword::To) {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+            if at_interval_unit(p) {
+                p.bump_as(CONTEXTUAL_KEYWORD);
+            } else {
+                p.error("expected an interval unit after TO");
+            }
+        }
+    }
+}
+
+fn at_interval_unit(p: &Parser) -> bool {
+    p.nth_any_contextual(0, INTERVAL_UNIT_CONTEXTUAL_WORDS)
+}
+
+fn array_literal(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(L_BRACKET);
+    if !p.at(R_BRACKET) {
+        expr(p);
+        while p.eat(COMMA) {
+            if p.at(R_BRACKET) {
+                break;
+            }
+            expr(p);
+        }
+    }
+    expect_closing(p, R_BRACKET);
+    m.complete(p, ARRAY_LITERAL)
+}
+
+fn object_literal(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(L_BRACE);
+    if !p.at(R_BRACE) {
+        object_field(p);
+        while p.eat(COMMA) {
+            if p.at(R_BRACE) {
+                break;
+            }
+            object_field(p);
+        }
+    }
+    expect_closing(p, R_BRACE);
+    m.complete(p, OBJECT_LITERAL)
+}
+
+fn expect_closing(p: &mut Parser, kind: SyntaxKind) {
+    if p.eat(kind) {
+        return;
+    }
+    let msg = format!("expected {}", kind.describe());
+    if p.at_eof() || p.at(SEMICOLON) || p.at(R_PAREN) || p.at(R_BRACKET) || p.at(R_BRACE) {
+        p.error(msg);
+    } else {
+        p.err_and_bump(msg);
+    }
+}
+
+fn object_field(p: &mut Parser) {
+    let m = p.start();
+    object_key(p);
+    p.expect(COLON);
+    if at_expr_start(p) {
+        expr(p);
+    } else {
+        p.error("expected an object literal value");
+    }
+    m.complete(p, OBJECT_FIELD);
+}
+
+fn object_key(p: &mut Parser) {
+    if p.at(STRING)
+        || p.at(INT_NUMBER)
+        || p.at(FLOAT_NUMBER)
+        || p.at(TRUE_KW)
+        || p.at(FALSE_KW)
+        || p.at(NULL_KW)
+    {
+        let m = p.start();
+        p.bump_any();
+        m.complete(p, LITERAL);
+    } else if p.at_name() {
+        name_ref(p);
+    } else {
+        p.error("expected an object literal key");
+    }
 }
 
 fn at_parenthesized_lambda_params(p: &Parser) -> bool {
