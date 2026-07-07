@@ -82,6 +82,11 @@ ast_nodes! {
     CallExpr, CALL_EXPR;
     IndexExpr, INDEX_EXPR;
     CastExpr, CAST_EXPR;
+    BindMarker, BIND_MARKER;
+    IntervalLiteral, INTERVAL_LITERAL;
+    ArrayLiteral, ARRAY_LITERAL;
+    ObjectLiteral, OBJECT_LITERAL;
+    ObjectField, OBJECT_FIELD;
     WithQuery, WITH_QUERY;
     WithClause, WITH_CLAUSE;
     Cte, CTE;

@@ -205,9 +205,8 @@ mod gen {
 /// "Well formed" = the input both **parses** and **lexes** with no errors.
 ///
 /// The strong formatter invariants are conditioned on this. The parse-clean half excludes input the
-/// grammar cannot model (where `format` is identity and the assertions are vacuous). The lex-clean
-/// half excludes unterminated-token input that triggers a known idempotency bug — see the
-/// `TODO(unterminated-token-idempotency)` note at the top of this file.
+/// grammar cannot model, and the lex-clean half excludes malformed tokens. Those inputs are still
+/// covered by the total invariants, where `format` should return a stable identity fallback.
 fn well_formed(input: &str) -> bool {
     parse(input).errors().is_empty() && tokenize(input).errors.is_empty()
 }

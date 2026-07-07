@@ -12,7 +12,7 @@ use lsp_types::{
     SemanticTokenType, TextEdit,
 };
 use sql_dialect_fmt_formatter::{format, FormatOptions};
-use sql_dialect_fmt_highlight::{semantic, HighlightKind};
+use sql_dialect_fmt_highlight::{semantic, HighlightKind, HighlightToken};
 use sql_dialect_fmt_text::{LineIndex, Utf16Position};
 
 /// The semantic-token type legend, mirrored from the single source of truth in
@@ -89,11 +89,12 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
         ..Default::default()
     };
 
-    let lex_errors = sql_dialect_fmt_highlight::highlight(text).errors;
+    let highlighted = sql_dialect_fmt_highlight::highlight(text);
     let parse = sql_dialect_fmt_parser::parse(text);
-    let mut diagnostics: Vec<_> = lex_errors
-        .into_iter()
-        .map(|err| make(to_range(err.range()), err.message))
+    let mut diagnostics: Vec<_> = highlighted
+        .errors
+        .iter()
+        .map(|err| make(to_range(err.range()), err.message.clone()))
         .chain(
             parse
                 .errors()
@@ -101,17 +102,16 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
                 .map(|err| make(to_range(err.range()), err.message.clone())),
         )
         .collect();
-    diagnostics.extend(embedded_language_diagnostics(text, &index));
-    diagnostics.extend(lint_diagnostics(text, &index));
+    diagnostics.extend(embedded_language_diagnostics(&highlighted.tokens, &index));
+    diagnostics.extend(lint_diagnostics(&highlighted.tokens, &index));
     diagnostics
 }
 
-fn lint_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagnostic> {
-    let tokens = sql_dialect_fmt_highlight::highlight(text).tokens;
+fn lint_diagnostics(tokens: &[HighlightToken<'_>], index: &LineIndex<'_>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    diagnostics.extend(select_wildcard_diagnostics(&tokens, index));
-    diagnostics.extend(large_in_list_diagnostics(&tokens, index));
+    diagnostics.extend(select_wildcard_diagnostics(tokens, index));
+    diagnostics.extend(large_in_list_diagnostics(tokens, index));
 
     diagnostics
 }
@@ -130,7 +130,7 @@ fn lint_warning(index: &LineIndex<'_>, range: std::ops::Range<usize>, message: &
 }
 
 fn select_wildcard_diagnostics(
-    tokens: &[sql_dialect_fmt_highlight::HighlightToken<'_>],
+    tokens: &[HighlightToken<'_>],
     index: &LineIndex<'_>,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
@@ -185,7 +185,7 @@ fn is_wildcard_prefix(text: &str) -> bool {
 }
 
 fn large_in_list_diagnostics(
-    tokens: &[sql_dialect_fmt_highlight::HighlightToken<'_>],
+    tokens: &[HighlightToken<'_>],
     index: &LineIndex<'_>,
 ) -> Vec<Diagnostic> {
     const LARGE_IN_LIST_THRESHOLD: usize = 100;
@@ -228,18 +228,19 @@ fn large_in_list_diagnostics(
             }
 
             if let Some(end) = close_list_at {
-                let active = list.take().expect("closing active IN list");
-                let item_count = if active.saw_top_level_item {
-                    active.commas + 1
-                } else {
-                    0
-                };
-                if !active.possible_subquery && item_count > LARGE_IN_LIST_THRESHOLD {
-                    diagnostics.push(lint_warning(
-                        index,
-                        active.start..end,
-                        "large IN list; prefer a temp table, CTE, or semi-join when practical",
-                    ));
+                if let Some(active) = list.take() {
+                    let item_count = if active.saw_top_level_item {
+                        active.commas + 1
+                    } else {
+                        0
+                    };
+                    if !active.possible_subquery && item_count > LARGE_IN_LIST_THRESHOLD {
+                        diagnostics.push(lint_warning(
+                            index,
+                            active.start..end,
+                            "large IN list; prefer a temp table, CTE, or semi-join when practical",
+                        ));
+                    }
                 }
             }
             continue;
@@ -270,13 +271,16 @@ fn is_significant(kind: HighlightKind) -> bool {
     !matches!(kind, HighlightKind::Whitespace | HighlightKind::Comment)
 }
 
-fn embedded_language_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagnostic> {
+fn embedded_language_diagnostics(
+    tokens: &[HighlightToken<'_>],
+    index: &LineIndex<'_>,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut expect_language_name = false;
     let mut language_name: Option<(&str, std::ops::Range<usize>)> = None;
     let mut saw_as_after_language = false;
 
-    for token in sql_dialect_fmt_highlight::highlight(text).tokens {
+    for token in tokens {
         match token.kind {
             HighlightKind::Whitespace | HighlightKind::Comment => {}
             HighlightKind::Punctuation if token.text == ";" => {
@@ -311,7 +315,7 @@ fn embedded_language_diagnostics(text: &str, index: &LineIndex<'_>) -> Vec<Diagn
             HighlightKind::Keyword | HighlightKind::Identifier | HighlightKind::Type
                 if expect_language_name =>
             {
-                language_name = Some((token.text, token.range));
+                language_name = Some((token.text, token.range.clone()));
                 expect_language_name = false;
             }
             HighlightKind::Keyword

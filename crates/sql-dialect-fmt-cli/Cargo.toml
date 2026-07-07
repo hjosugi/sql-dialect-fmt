@@ -11,8 +11,9 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "sql-dialect-fmt: an opinionated SQL dialect formatter (command-line)."
-
 [dependencies]
+globset = "0.4"
+ignore = "0.4"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 sql-dialect-fmt-encoding = { path = "../sql-dialect-fmt-encoding", version = "1.0.0" }

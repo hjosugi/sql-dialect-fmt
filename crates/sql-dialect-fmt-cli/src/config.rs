@@ -1,10 +1,11 @@
 //! `sql-dialect-fmt.toml` configuration files.
 //!
-//! A config file maps directly onto the formatter's [`FormatOptions`]. Every key is optional, so a
-//! file may set only the knobs it cares about. Discovery walks up the directory tree from a start
-//! point (an input file's parent, or the current working directory) and uses the **nearest**
-//! `sql-dialect-fmt.toml` — the first one found on the way up — mirroring how `rustfmt`, `prettier`, and
-//! friends scope project configuration. Explicit CLI flags always win over whatever the file says.
+//! A config file maps onto the formatter's [`FormatOptions`] plus CLI-only file discovery knobs.
+//! Every key is optional, so a file may set only the knobs it cares about. Discovery walks up the
+//! directory tree from a start point (an input file's parent, or the current working directory) and
+//! uses the **nearest** `sql-dialect-fmt.toml` — the first one found on the way up — mirroring how
+//! `rustfmt`, `prettier`, and friends scope project configuration. Explicit CLI flags always win
+//! over formatter options from the file.
 
 use std::path::{Path, PathBuf};
 
@@ -17,7 +18,7 @@ pub const CONFIG_FILE_NAME: &str = "sql-dialect-fmt.toml";
 
 /// A parsed `sql-dialect-fmt.toml`. Every field is optional; absent fields fall back to the formatter
 /// defaults (or to a CLI flag, which is layered on top afterwards).
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Config {
     /// Target line width the printer keeps within where it can.
@@ -29,6 +30,9 @@ pub struct Config {
     /// SQL dialect to parse and format.
     #[serde(default, deserialize_with = "deserialize_dialect")]
     pub dialect: Option<Dialect>,
+    /// Glob patterns skipped during recursive directory discovery.
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 pub fn parse_dialect(value: &str) -> Result<Dialect, String> {
@@ -145,13 +149,14 @@ mod tests {
     #[test]
     fn parses_all_keys() {
         let cfg = Config::parse(
-            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\ndialect = \"databricks\"\n",
+            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\ndialect = \"databricks\"\nexclude = [\"target/**\"]\n",
         )
         .expect("valid");
         assert_eq!(cfg.line_width, Some(80));
         assert_eq!(cfg.indent_width, Some(2));
         assert_eq!(cfg.uppercase_keywords, Some(false));
         assert_eq!(cfg.dialect, Some(Dialect::Databricks));
+        assert_eq!(cfg.exclude, vec!["target/**"]);
     }
 
     #[test]
@@ -166,6 +171,7 @@ mod tests {
         assert_eq!(cfg.line_width, None);
         assert_eq!(cfg.uppercase_keywords, None);
         assert_eq!(cfg.dialect, None);
+        assert!(cfg.exclude.is_empty());
     }
 
     #[test]

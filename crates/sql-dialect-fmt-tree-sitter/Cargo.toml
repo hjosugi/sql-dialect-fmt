@@ -10,7 +10,6 @@ description = "Rust bindings for the bundled tree-sitter-snowflake grammar."
 # ../../tree-sitter-snowflake (outside this crate dir), so the generated `cargo package`
 # tarball cannot find parser.c and `cargo publish` verification fails to build.
 publish = false
-
 [dependencies]
 tree-sitter = "0.26.9"
 tree-sitter-language = "0.1.7"

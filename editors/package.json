@@ -4,7 +4,7 @@
   "description": "Snowflake SQL language support backed by sql-dialect-fmt's TextMate grammar.",
   "version": "1.0.0",
   "publisher": "sql-dialect-fmt",
-  "license": "MIT OR Apache-2.0",
+  "license": "0BSD",
   "repository": {
     "type": "git",
     "url": "https://github.com/hjosugi/sql-dialect-fmt.git",

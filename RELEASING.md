@@ -165,8 +165,7 @@ Published to crates.io (in dependency order):
 
 ## Notes
 
-- License is `MIT OR Apache-2.0`; both `LICENSE-MIT` and `LICENSE-APACHE` live at the
-  repo root.
+- License is `0BSD`; the license text lives in `LICENSE` at the repo root.
 - Crate metadata (`description`, `keywords`, `categories`, `readme`, `repository`,
   `homepage`, `license`) is inherited from `[workspace.package]` where possible; the
   per-crate `description` is the only required field set locally.
