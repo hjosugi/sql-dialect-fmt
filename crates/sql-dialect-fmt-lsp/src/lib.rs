@@ -2,7 +2,7 @@
 //!
 //! This module is deliberately transport-free (it never touches stdio or an `lsp-server`
 //! connection), so every feature is a pure `&str -> data` function that is unit-testable. The
-//! binary ([`crate::main`]) is the thin adapter that wires these into a language server.
+//! binary crate is the thin adapter that wires these into a language server.
 //!
 //! Positions follow the LSP convention: zero-based lines and **UTF-16** column offsets.
 

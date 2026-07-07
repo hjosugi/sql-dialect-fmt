@@ -3,9 +3,9 @@
 //! Two layers:
 //! * [`doc`] — a grammar-agnostic pretty-printing engine (a `Doc` IR + width-aware printer) in the
 //!   Wadler → Prettier → biome/ruff lineage. Depends on nothing SQL-specific.
-//! * [`sql`] — the Snowflake SQL rules that lower the parser's lossless CST into `Doc`s.
+//! * `sql` — the Snowflake SQL rules that lower the parser's lossless CST into `Doc`s.
 //!
-//! [`format`] ties them together: parse → lower → print. Like the parser, it never panics; input
+//! [`format()`] ties them together: parse → lower → print. Like the parser, it never panics; input
 //! it cannot model structurally is preserved verbatim, so formatting is always content-preserving.
 //!
 //! ```

@@ -7,7 +7,7 @@
 
 use std::{cell::RefCell, mem, ptr, slice, str};
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+use sql_dialect_fmt_formatter::{format, Dialect, FormatOptions};
 
 thread_local! {
     static LAST_RESULT: RefCell<Option<Box<[u8]>>> = const { RefCell::new(None) };
@@ -56,6 +56,29 @@ pub unsafe extern "C" fn sql_dialect_fmt_format(
     indent_width: u32,
     uppercase_keywords: u32,
 ) -> u32 {
+    sql_dialect_fmt_format_with_dialect(ptr, len, line_width, indent_width, uppercase_keywords, 0)
+}
+
+/// Format the UTF-8 SQL source stored at `ptr..ptr + len` using an explicit dialect.
+///
+/// `dialect` values:
+/// - `0`: Snowflake
+/// - `1`: Databricks
+///
+/// Unknown values fall back to Snowflake for forwards-compatible callers.
+///
+/// # Safety
+///
+/// `ptr` must point to `len` initialized bytes in Wasm memory for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn sql_dialect_fmt_format_with_dialect(
+    ptr: u32,
+    len: u32,
+    line_width: u32,
+    indent_width: u32,
+    uppercase_keywords: u32,
+    dialect: u32,
+) -> u32 {
     clear_last_result();
 
     let bytes = slice::from_raw_parts(ptr as *const u8, len as usize);
@@ -66,10 +89,18 @@ pub unsafe extern "C" fn sql_dialect_fmt_format(
     let options = FormatOptions::default()
         .with_line_width(line_width.max(1) as usize)
         .with_indent_width(indent_width.clamp(1, 16) as usize)
-        .with_uppercase_keywords(uppercase_keywords != 0);
+        .with_uppercase_keywords(uppercase_keywords != 0)
+        .with_dialect(dialect_from_u32(dialect));
 
     store_last_result(format(source, &options).into_bytes().into_boxed_slice());
     0
+}
+
+fn dialect_from_u32(dialect: u32) -> Dialect {
+    match dialect {
+        1 => Dialect::Databricks,
+        _ => Dialect::Snowflake,
+    }
 }
 
 /// Pointer to the most recent formatted result.

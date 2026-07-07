@@ -1,10 +1,11 @@
 //! A small, self-contained pretty-printing engine in the Wadler → Prettier → rome/biome → ruff
 //! lineage. The grammar-agnostic core is a `Doc` intermediate representation plus a width-aware
-//! [`print`]er; SQL-specific rules live in [`crate::sql`] and only ever build `Doc`s.
+//! [`print()`]er; SQL-specific rules live in the formatter's SQL lowering module and only ever
+//! build `Doc`s.
 //!
 //! The model has three moving parts:
-//! * **Builders** ([`text`], [`concat`], [`group`], [`indent`], [`line`], [`soft_line`],
-//!   [`hard_line`], [`space`], [`join`]) construct the IR.
+//! * **Builders** ([`text()`], [`concat()`], [`group()`], [`indent()`], [`line()`],
+//!   [`soft_line()`], [`hard_line()`], [`space()`], [`join()`]) construct the IR.
 //! * **Groups** are the unit of layout choice: a group is printed *flat* (its soft lines become
 //!   spaces or nothing) when it fits within the remaining width, otherwise it *breaks* (its soft
 //!   lines become newlines + indentation).
@@ -28,7 +29,7 @@ pub enum Doc {
     /// (via [`text`]) so the fit/break measurement never re-scans the string.
     Text(Cow<'static, str>, usize),
     /// A verbatim slice of source that may contain newlines, reproduced byte-for-byte (modulo the
-    /// printer's per-line right trim in [`finalize`]). This is the vehicle for verbatim fallback
+    /// printer's per-line right trim in the final output pass). This is the vehicle for verbatim fallback
     /// regions without smuggling embedded `\n`s through [`Doc::Text`], which would corrupt column
     /// tracking. Each contained newline re-bases the column to the current indentation.
     ///
@@ -60,7 +61,7 @@ pub enum Doc {
     /// Picks one of two layouts by the enclosing group's mode: `broken` when that group breaks,
     /// `flat` when it stays flat (Prettier's `ifBreak`). Built through [`if_group_breaks`].
     ///
-    /// The broken arm is not consulted by [`has_forced_break`], so an `if_group_breaks` whose broken
+    /// The broken arm is not consulted when detecting forced breaks, so an `if_group_breaks` whose broken
     /// arm contains a hard line does not force its own group to break.
     IfBreak { broken: Box<Doc>, flat: Box<Doc> },
     /// Increases the indentation level applied to line breaks inside it.
@@ -69,7 +70,7 @@ pub enum Doc {
     /// trailing line comments, which must not have code emitted after them on the same line.
     LineSuffix(Box<Doc>),
     /// A zero-width marker that forces every enclosing group to break, without itself emitting a
-    /// newline. Pairs with [`LineSuffix`] so a trailing `--` comment actually ends its line.
+    /// newline. Pairs with line suffixes so a trailing `--` comment actually ends its line.
     BreakParent,
 }
 

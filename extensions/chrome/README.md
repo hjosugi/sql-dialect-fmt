@@ -1,7 +1,7 @@
-# sql-dialect-fmt for Snowsight
+# sql-dialect-fmt for SQL editors
 
-Chrome extension that formats the active Snowsight SQL editor with the repository's Rust
-formatter compiled to WebAssembly.
+Chrome extension that formats the active Snowsight or Databricks SQL editor with the repository's
+Rust formatter compiled to WebAssembly.
 
 ## Build
 
@@ -29,7 +29,7 @@ To build the release zip (and the VS Code VSIX at the same time), run:
 
 ## Use
 
-Open Snowsight, focus a worksheet editor, then use one of:
+Open Snowsight or a Databricks SQL editor, focus the editor, then use one of:
 
 - the floating `sql-dialect-fmt` button
 - the extension action button
@@ -37,3 +37,6 @@ Open Snowsight, focus a worksheet editor, then use one of:
 
 If a SQL range is selected, only that range is formatted. Otherwise the whole active editor is
 formatted.
+
+Open the extension options page to choose Snowflake or Databricks mode and adjust line width,
+indent width, and keyword casing.

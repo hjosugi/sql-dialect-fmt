@@ -32,19 +32,22 @@ jobs:
           CONFIGURED_CORPUS_URL: ${{ vars.SQL_DIALECT_FMT_EXTERNAL_CORPUS_URL }}
           DISPATCH_CORPUS_LIMIT: ${{ github.event.inputs.corpus_limit }}
           CONFIGURED_CORPUS_LIMIT: ${{ vars.SQL_DIALECT_FMT_EXTERNAL_CORPUS_LIMIT }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          url="${DISPATCH_CORPUS_URL:-${CONFIGURED_CORPUS_URL:-}}"
-          limit="${DISPATCH_CORPUS_LIMIT:-${CONFIGURED_CORPUS_LIMIT:-}}"
-
           args=()
-          if [ -n "$url" ]; then
-            args+=(--url "$url")
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            url="${DISPATCH_CORPUS_URL:-${CONFIGURED_CORPUS_URL:-}}"
+            limit="${DISPATCH_CORPUS_LIMIT:-${CONFIGURED_CORPUS_LIMIT:-}}"
+            if [ -n "$url" ]; then
+              args+=(--url "$url")
+            else
+              args+=(--sample)
+            fi
+            if [ -n "$limit" ]; then
+              args+=(--limit "$limit")
+            fi
           else
             args+=(--sample)
-          fi
-
-          if [ -n "$limit" ]; then
-            args+=(--limit "$limit")
           fi
 
           ./scripts/run-external-corpus.sh "${args[@]}"

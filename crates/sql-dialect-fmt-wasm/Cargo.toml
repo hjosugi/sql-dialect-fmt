@@ -15,4 +15,4 @@ description = "Raw WebAssembly bindings for sql-dialect-fmt, intended for browse
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-sql-dialect-fmt-formatter = { path = "../sql-dialect-fmt-formatter", version = "1.0.0" }
+sql-dialect-fmt-formatter.workspace = true

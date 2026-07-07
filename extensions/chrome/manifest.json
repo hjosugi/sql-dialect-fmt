@@ -1,14 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "sql-dialect-fmt for Snowsight",
-  "version": "1.0.0",
-  "description": "Format Snowflake SQL in Snowsight with sql-dialect-fmt.",
+  "name": "sql-dialect-fmt for SQL editors",
+  "version": "1.1.0",
+  "description": "Format Snowflake and Databricks SQL in browser editors with sql-dialect-fmt.",
   "minimum_chrome_version": "102",
-  "permissions": ["activeTab"],
+  "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://app.snowflake.com/*",
     "https://*.snowflake.com/*",
-    "https://*.snowflakecomputing.com/*"
+    "https://*.snowflakecomputing.com/*",
+    "https://*.databricks.com/*",
+    "https://*.azuredatabricks.net/*",
+    "https://*.gcp.databricks.com/*"
   ],
   "background": {
     "service_worker": "src/background.js"
@@ -16,12 +19,16 @@
   "action": {
     "default_title": "Format with sql-dialect-fmt"
   },
+  "options_page": "options.html",
   "content_scripts": [
     {
       "matches": [
         "https://app.snowflake.com/*",
         "https://*.snowflake.com/*",
-        "https://*.snowflakecomputing.com/*"
+        "https://*.snowflakecomputing.com/*",
+        "https://*.databricks.com/*",
+        "https://*.azuredatabricks.net/*",
+        "https://*.gcp.databricks.com/*"
       ],
       "js": ["src/content.js"],
       "css": ["src/content.css"],
@@ -34,7 +41,10 @@
       "matches": [
         "https://app.snowflake.com/*",
         "https://*.snowflake.com/*",
-        "https://*.snowflakecomputing.com/*"
+        "https://*.snowflakecomputing.com/*",
+        "https://*.databricks.com/*",
+        "https://*.azuredatabricks.net/*",
+        "https://*.gcp.databricks.com/*"
       ]
     }
   ],
@@ -47,7 +57,7 @@
         "default": "Alt+Shift+F",
         "mac": "Alt+Shift+F"
       },
-      "description": "Format the active Snowsight editor"
+      "description": "Format the active SQL editor"
     }
   }
 }

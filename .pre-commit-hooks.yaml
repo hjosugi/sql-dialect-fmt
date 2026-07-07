@@ -1,0 +1,15 @@
+- id: sql-dialect-fmt
+  name: sql-dialect-fmt
+  description: Format SQL files in place with sql-dialect-fmt.
+  entry: sql-dialect-fmt --write
+  language: rust
+  types_or: [sql]
+  pass_filenames: true
+
+- id: sql-dialect-fmt-check
+  name: sql-dialect-fmt check
+  description: Check SQL formatting with sql-dialect-fmt.
+  entry: sql-dialect-fmt --check
+  language: rust
+  types_or: [sql]
+  pass_filenames: true

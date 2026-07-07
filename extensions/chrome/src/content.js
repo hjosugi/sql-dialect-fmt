@@ -3,11 +3,13 @@ const PAGE_SOURCE = "sql-dialect-fmt:page";
 const DEFAULT_OPTIONS = {
   lineWidth: 100,
   indentWidth: 4,
-  uppercaseKeywords: true
+  uppercaseKeywords: true,
+  dialect: "snowflake"
 };
 
 let requestSequence = 0;
 let running = false;
+let cachedOptions = null;
 
 injectBridge();
 installToolbar();
@@ -47,10 +49,11 @@ async function runFormatter() {
       return;
     }
 
+    const options = await loadOptions();
     const response = await chrome.runtime.sendMessage({
       type: "sql-dialect-fmt:format",
       source: target.text,
-      options: DEFAULT_OPTIONS
+      options
     });
 
     if (!response?.ok) {
@@ -71,6 +74,35 @@ async function runFormatter() {
   }
 }
 
+async function loadOptions() {
+  if (cachedOptions) {
+    return cachedOptions;
+  }
+  try {
+    const stored = await chrome.storage.sync.get(DEFAULT_OPTIONS);
+    cachedOptions = normalizeOptions(stored);
+  } catch (_error) {
+    cachedOptions = DEFAULT_OPTIONS;
+  }
+  return cachedOptions;
+}
+
+chrome.storage?.onChanged?.addListener((changes, areaName) => {
+  if (areaName === "sync" && Object.keys(changes).some((key) => key in DEFAULT_OPTIONS)) {
+    cachedOptions = null;
+  }
+});
+
+function normalizeOptions(options) {
+  const dialect = options.dialect === "databricks" ? "databricks" : "snowflake";
+  return {
+    lineWidth: normalizeInteger(options.lineWidth, DEFAULT_OPTIONS.lineWidth),
+    indentWidth: normalizeInteger(options.indentWidth, DEFAULT_OPTIONS.indentWidth),
+    uppercaseKeywords: options.uppercaseKeywords !== false,
+    dialect
+  };
+}
+
 function requestEditorRead() {
   return pageRequest("read");
 }
@@ -84,7 +116,7 @@ function pageRequest(kind, payload = {}) {
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => {
       cleanup();
-      resolve({ ok: false, error: "Timed out while talking to the Snowsight editor." });
+      resolve({ ok: false, error: "Timed out while talking to the SQL editor." });
     }, 4000);
 
     function onMessage(event) {
@@ -129,7 +161,7 @@ function installToolbar() {
   button.type = "button";
   button.className = "sql-dialect-fmt-button";
   button.textContent = "sql-dialect-fmt";
-  button.title = "Format active Snowsight editor with sql-dialect-fmt (Alt+Shift+F)";
+  button.title = "Format the active SQL editor with sql-dialect-fmt (Alt+Shift+F)";
   button.addEventListener("click", runFormatter);
 
   toolbar.append(button);
@@ -161,4 +193,12 @@ function showToast(message) {
   toast.textContent = message;
   toolbar.prepend(toast);
   window.setTimeout(() => toast.remove(), 3600);
+}
+
+function normalizeInteger(value, fallback) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) {
+    return fallback;
+  }
+  return number;
 }

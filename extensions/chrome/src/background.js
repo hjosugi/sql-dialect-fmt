@@ -37,12 +37,15 @@ async function formatSql(source, options = {}) {
 
   try {
     new Uint8Array(api.memory.buffer, inputPtr, input.length).set(input);
-    const status = api.sql_dialect_fmt_format(
+    const format = api.sql_dialect_fmt_format_with_dialect || api.sql_dialect_fmt_format;
+    const dialect = options.dialect === "databricks" ? 1 : 0;
+    const status = format(
       inputPtr,
       input.length,
       normalizeInteger(options.lineWidth, 100),
       normalizeInteger(options.indentWidth, 4),
-      options.uppercaseKeywords === false ? 0 : 1
+      options.uppercaseKeywords === false ? 0 : 1,
+      dialect
     );
 
     if (status !== 0) {

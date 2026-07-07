@@ -2,85 +2,123 @@
 
 [![CI](https://github.com/hjosugi/sql-dialect-fmt/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/sql-dialect-fmt/actions/workflows/ci.yml)
 
-Snowflake SQL と Databricks SQL のフォーマッタ＋シンタックスハイライタ（Rust 製）。`gofmt` / Prettier / Biome 流の opinionated・ほぼ設定なしの整形を目指します。
+English | [日本語](README.ja.md)
 
-整形は **無破壊・べき等** を機械的に保証します（パースできない入力は無変更で素通し、整形しても有意トークンとコメントは保存、`format(format(x)) == format(x)`）。
+`sql-dialect-fmt` is an opinionated Rust formatter and editor toolchain for Snowflake SQL and
+Databricks SQL. It follows the `gofmt` / Prettier / Biome style: few options, stable output, and
+formatting that is safe to run in CI.
 
-## インストール
+Formatting is mechanically **lossless and idempotent**. Inputs that cannot be parsed pass through
+unchanged, significant tokens and comments are preserved, and `format(format(x)) == format(x)`.
+
+## Install
 
 ```sh
-# crates.io から
-cargo install sql-dialect-fmt --version 1.0.0 --locked
+# From crates.io
+cargo install sql-dialect-fmt --version 1.1.0 --locked
 
-# このリポジトリから直接（`sql-dialect-fmt` バイナリが入る）
+# Directly from this repository
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
 
-# ローカルチェックアウトから
+# From a local checkout
 cargo install --path crates/sql-dialect-fmt-cli
-# または: cargo build --release -p sql-dialect-fmt  →  target/release/sql-dialect-fmt
+
+# Binary install, when using release assets with cargo-binstall
+cargo binstall sql-dialect-fmt
 ```
 
-## 使い方
+CI can use the bundled composite action or the GHCR image.
+
+```yaml
+- uses: hjosugi/sql-dialect-fmt@v1
+  with:
+    args: "sql/**/*.sql"
+```
 
 ```sh
-sql-dialect-fmt query.sql                 # 整形して stdout へ
-sql-dialect-fmt --write *.sql             # ファイルをその場で整形
-sql-dialect-fmt --check src/**/*.sql      # 未整形なら非ゼロ終了（CI 向け）
-sql-dialect-fmt --check --diff query.sql  # 未整形箇所を unified diff で表示
-cat query.sql | sql-dialect-fmt           # stdin → stdout
-cat query.sql | sql-dialect-fmt -         # `-` でも stdin を明示
-sql-dialect-fmt --stdin-filepath src/query.sql < query.sql  # stdin に設定探索用パスを付与
-
-# オプション: --dialect snowflake|databricks / --line-width N（既定100、1以上） / --indent-width N（既定4、1以上） / --no-uppercase
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.1.0 --check .
 ```
 
+## Usage
 
-## Snowsight / Chrome 拡張
+```sh
+sql-dialect-fmt query.sql                 # format to stdout
+sql-dialect-fmt --write *.sql             # rewrite files in place
+sql-dialect-fmt --check src/**/*.sql      # non-zero when files are not formatted
+sql-dialect-fmt --check --diff query.sql  # show a unified diff for unformatted input
+cat query.sql | sql-dialect-fmt           # stdin to stdout
+cat query.sql | sql-dialect-fmt -         # explicitly read stdin with `-`
+sql-dialect-fmt --stdin-filepath src/query.sql < query.sql  # use a path for config discovery
 
-Snowsight 上で使う Chrome 拡張を `extensions/chrome` に置いています。Rust formatter を
-WebAssembly にして同梱するので、ローカルサーバは不要です。
+# Options: --dialect snowflake|databricks / --line-width N / --indent-width N / --no-uppercase
+```
+
+pre-commit users can enable the official hooks:
+
+```yaml
+repos:
+  - repo: https://github.com/hjosugi/sql-dialect-fmt
+    rev: v1.1.0
+    hooks:
+      - id: sql-dialect-fmt
+```
+
+Use `sql-dialect-fmt-check` instead when a hook should only verify formatting.
+
+## Browser Extension
+
+The Chrome extension in `extensions/chrome` formats SQL in Snowsight and Databricks browser
+editors. It bundles the Rust formatter as WebAssembly, so no local server is needed.
 
 ```sh
 ./scripts/build-chrome-extension.sh
 ```
 
-その後、Chrome の `chrome://extensions` で Developer mode を有効にし、`extensions/chrome`
-を Load unpacked してください。Snowsight の worksheet editor にフォーカスして、右下の
-`sql-dialect-fmt` ボタン、拡張アイコン、または `Alt+Shift+F` で整形できます。
+Then open `chrome://extensions`, enable Developer mode, and load `extensions/chrome` unpacked.
+Focus a SQL editor and run the formatter from the floating button, the extension action, or
+`Alt+Shift+F`. The options page controls dialect, line width, indent width, and keyword casing.
 
-Release 用の Chrome zip と VS Code VSIX はまとめて作れます。
+Release packages for the Chrome extension and VS Code extension are built together:
 
 ```sh
 ./scripts/package-extensions.sh
 ```
 
-## 開発
+## Development
 
 ```sh
 cargo test --workspace
-cargo clippy --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo fmt --all --check
 ```
 
-## 状態
+## Status
 
-Snowflake は SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。Databricks は LATERAL VIEW、Delta DDL option、VERSION/TIMESTAMP AS OF、higher-order function lambda、backtick identifier を dialect mode でサポート。LSP/semantic tokens/hover、Tree-sitter grammar、CLI、Snowsight 用 Chrome/WASM 拡張も入っています。看板機能は **magic trailing comma**。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
+Snowflake support covers SELECT, DML (`INSERT`/`UPDATE`/`DELETE`/`MERGE`), `COPY`, major DDL and
+object DDL, Semantic View, and `CREATE PROCEDURE`/`CREATE FUNCTION` bodies in SQL, JavaScript,
+Python, Java, and Scala. Databricks mode covers LATERAL VIEW, Delta DDL options,
+`VERSION`/`TIMESTAMP AS OF`, higher-order-function lambdas, and backtick identifiers.
 
-## クレート構成
+The workspace also includes an LSP server, semantic tokens, hover text, a Tree-sitter grammar, a
+CLI, VS Code packaging, and the Chrome/WASM extension. The headline formatter feature is
+**magic trailing comma**. See [ROADMAP.md](ROADMAP.md) for the detailed coverage map.
 
-| crate | 役割 |
+## Crates
+
+| crate | role |
 | --- | --- |
-| `sql-dialect-fmt-syntax` | `SyntaxKind`・キーワード認識・`rowan` 言語定義 |
-| `sql-dialect-fmt-lexer` | 手書きロスレス Lexer |
-| `sql-dialect-fmt-parser` | エラー回復で無停止のロスレス CST パーサ |
-| `sql-dialect-fmt-formatter` | 汎用 Doc IR エンジン ＋ SQL 整形規則 |
-| `sql-dialect-fmt-highlight` | トークン分類（シンタックスハイライト） |
-| `sql-dialect-fmt-hover` | 型・手続き・タスクの hover テキスト |
-| `sql-dialect-fmt-tree-sitter` | 同梱 Tree-sitter grammar の Rust バインディング |
-| `sql-dialect-fmt-lsp` | Language Server（formatting / semanticTokens / 診断、stdio） |
-| `sql-dialect-fmt-wasm` | Snowsight/Chrome 拡張向けの WebAssembly bridge |
-| `sql-dialect-fmt` | CLI エントリポイント（crate path は `crates/sql-dialect-fmt-cli`） |
+| `sql-dialect-fmt-syntax` | `SyntaxKind`, keyword recognition, and `rowan` language definition |
+| `sql-dialect-fmt-lexer` | hand-written lossless lexer |
+| `sql-dialect-fmt-parser` | resilient lossless CST parser |
+| `sql-dialect-fmt-formatter` | generic Doc IR engine plus SQL formatting rules |
+| `sql-dialect-fmt-highlight` | syntax highlight token classification |
+| `sql-dialect-fmt-hover` | hover text for types, routines, and tasks |
+| `sql-dialect-fmt-tree-sitter` | Rust bindings for the bundled Tree-sitter grammar |
+| `sql-dialect-fmt-lsp` | Language Server over stdio |
+| `sql-dialect-fmt-wasm` | raw WebAssembly bridge for browser extensions |
+| `sql-dialect-fmt` | CLI binary crate (`crates/sql-dialect-fmt-cli`) |
 
-## ライセンス
+## License
 
 0BSD. You can use, copy, modify, and distribute this project for almost any purpose.

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${1:-$(awk -F'"' '/^version =/ { print $2; exit }' "$ROOT_DIR/Cargo.toml")}"
+VERSION="${1:-$("$ROOT_DIR/scripts/workspace-version.sh")}"
 DIST_DIR="$ROOT_DIR/target/dist"
 
 mkdir -p "$DIST_DIR"
@@ -17,6 +17,7 @@ rustup target add wasm32-unknown-unknown >/dev/null
   cd "$ROOT_DIR/extensions/chrome"
   zip -qr "$DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip" \
     manifest.json \
+    options.html \
     README.md \
     src \
     vendor/sql_dialect_fmt_wasm.wasm

@@ -12,11 +12,11 @@ keywords.workspace = true
 categories.workspace = true
 description = "Lexical syntax highlighting primitives for Snowflake SQL."
 [dependencies]
-sql-dialect-fmt-lexer = { path = "../sql-dialect-fmt-lexer", version = "1.0.0" }
-sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0" }
-sql-dialect-fmt-text = { path = "../sql-dialect-fmt-text", version = "1.0.0" }
+sql-dialect-fmt-lexer.workspace = true
+sql-dialect-fmt-syntax.workspace = true
+sql-dialect-fmt-text.workspace = true
 
 [dev-dependencies]
-sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
-sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
+sql-dialect-fmt-test-fixtures.workspace = true
+sql-dialect-fmt-test-support.workspace = true
 serde_json = "1"

@@ -4,7 +4,8 @@ Last checked against official store docs: 2026-06-28.
 
 This is the no-decision path for the remaining one-time store setup. After this setup, future
 `v*.*.*` tag pushes can publish the VS Code Marketplace package and Chrome Web Store package
-automatically through `.github/workflows/extensions.yml`.
+automatically through `.github/workflows/release.yml`. `.github/workflows/extensions.yml`
+remains available for manual package and publish runs.
 
 ## Link Deck
 
@@ -16,7 +17,8 @@ done in a browser.
 | --- | --- |
 | GitHub repo | [hjosugi/sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt) |
 | GitHub CLI | [Install gh](https://cli.github.com/) |
-| Extension package workflow | [Extension Packages workflow](https://github.com/hjosugi/sql-dialect-fmt/actions/workflows/extensions.yml) |
+| Release workflow | [Release workflow](https://github.com/hjosugi/sql-dialect-fmt/actions/workflows/release.yml) |
+| Manual extension package workflow | [Extension Packages workflow](https://github.com/hjosugi/sql-dialect-fmt/actions/workflows/extensions.yml) |
 | GitHub Actions variables | [Repository variables](https://github.com/hjosugi/sql-dialect-fmt/settings/variables/actions) |
 | GitHub Actions secrets | [Repository secrets](https://github.com/hjosugi/sql-dialect-fmt/settings/secrets/actions) |
 | Privacy policy URL to paste into stores | [docs/PRIVACY.md](https://github.com/hjosugi/sql-dialect-fmt/blob/main/docs/PRIVACY.md) |
@@ -68,7 +70,7 @@ Use these exact values unless the store says the ID is unavailable:
 | VS Code publisher ID | `sql-dialect-fmt` |
 | VS Code extension name | `snowflake-sql-sql-dialect-fmt` |
 | VS Code display name | `Snowflake SQL (sql-dialect-fmt)` |
-| Chrome extension name | `sql-dialect-fmt for Snowsight` |
+| Chrome extension name | `sql-dialect-fmt for SQL editors` |
 | Privacy policy URL | `https://github.com/hjosugi/sql-dialect-fmt/blob/main/docs/PRIVACY.md` |
 
 If `sql-dialect-fmt` is not available as the VS Code publisher ID, stop and update
@@ -136,15 +138,15 @@ Use this text in the Chrome dashboard.
 Short description:
 
 ```text
-Format Snowflake SQL directly in Snowsight with sql-dialect-fmt.
+Format Snowflake and Databricks SQL directly in browser editors with sql-dialect-fmt.
 ```
 
 Detailed description:
 
 ```text
-sql-dialect-fmt for Snowsight formats SQL in the active Snowflake Snowsight worksheet.
+sql-dialect-fmt formats SQL in the active Snowflake Snowsight worksheet or Databricks SQL editor.
 
-Run it from the floating editor button, the extension action button, or Alt+Shift+F. If a SQL range is selected, only that range is formatted. Otherwise the extension formats the whole active worksheet editor.
+Run it from the floating editor button, the extension action button, or Alt+Shift+F. If a SQL range is selected, only that range is formatted. Otherwise the extension formats the whole active SQL editor. The options page lets users choose Snowflake or Databricks mode and set line width, indent width, and keyword casing.
 
 Formatting runs locally in the browser with the bundled WebAssembly build of sql-dialect-fmt. The extension does not send worksheet contents to an external service.
 ```
@@ -152,7 +154,7 @@ Formatting runs locally in the browser with the bundled WebAssembly build of sql
 Single purpose:
 
 ```text
-Format SQL in the active Snowflake Snowsight worksheet using the bundled sql-dialect-fmt WebAssembly formatter.
+Format SQL in the active Snowflake Snowsight worksheet or Databricks SQL editor using the bundled sql-dialect-fmt WebAssembly formatter.
 ```
 
 Category: `Developer Tools`
@@ -170,7 +172,7 @@ Permission justifications:
 ```text
 activeTab: Used so the extension action and keyboard shortcut can run only after the user invokes the formatter in the active tab.
 
-Host permissions for Snowflake/Snowsight domains: Required to detect the active Snowsight worksheet editor and replace the selected SQL, or the whole worksheet SQL, with formatted SQL.
+Host permissions for Snowflake/Snowsight and Databricks domains: Required to detect the active SQL editor and replace the selected SQL, or the whole editor contents, with formatted SQL.
 ```
 
 Privacy answers, assuming the extension code is unchanged:

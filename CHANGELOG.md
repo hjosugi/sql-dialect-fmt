@@ -9,6 +9,38 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-08
+
+### Added
+
+- Added CLI `--diff`, `--stdin-filepath`, and directory exclude handling for safer CI usage.
+- Added a Chrome extension options page backed by `chrome.storage.sync` for dialect, line width,
+  indent width, and keyword casing.
+- Added Databricks browser host coverage for the Chrome extension.
+- Added an explicit WASM dialect API and wired the Chrome extension to pass Snowflake/Databricks
+  mode through to the formatter.
+- Added pre-commit hooks, a composite GitHub Action, cargo-binstall metadata, and a Docker/GHCR
+  release path for CI-oriented distribution.
+- Added CI gates for rustdoc warnings and formatter benchmark smoke runs.
+- Added MSRV, wasm, dependency-audit, and coverage workflow coverage.
+
+### Changed
+
+- Improved CLI file processing by reusing decoded input for diagnostics and formatting, and by
+  caching config resolution per directory during parallel runs.
+- Kept the Chrome extension's Monaco editor tracking alive for delayed editor loads.
+- Centralized internal crate dependency versions in `[workspace.dependencies]`.
+- Made tag-push extension packaging/publishing part of the Release workflow, leaving the extension
+  workflow for manual package/publish runs.
+- Split corpus CI behavior so PR/push uses the committed sample and scheduled/manual runs may use
+  the configured external corpus URL.
+- Switched the project license metadata to `0BSD`.
+
+### Fixed
+
+- Fixed several formatter/parser edge cases from post-1.0 work, including malformed delimiters,
+  adjacent operator boundaries, directive-comment source reuse, and formatter width measurement.
+
 ## [1.0.0] - 2026-06-27
 
 This is the first release line of **sql-dialect-fmt**, a Rust toolchain for formatting and
@@ -64,5 +96,6 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v0.1.0...v1.0.0

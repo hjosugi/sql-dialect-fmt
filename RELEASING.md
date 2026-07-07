@@ -12,15 +12,16 @@ Published to crates.io (in dependency order):
 | order | crate | depends on |
 | --- | --- | --- |
 | 1 | `sql-dialect-fmt-syntax` | — |
-| 2 | `sql-dialect-fmt-lexer` | syntax |
-| 3 | `sql-dialect-fmt-parser` | syntax, lexer |
-| 4 | `sql-dialect-fmt-formatter` | syntax, parser |
-| 5 | `sql-dialect-fmt-highlight` | syntax, lexer |
-| 6 | `sql-dialect-fmt-hover` | syntax, lexer |
-| 7 | `sql-dialect-fmt-encoding` | — |
-| 8 | `sql-dialect-fmt` | encoding, formatter |
-| 9 | `sql-dialect-fmt-lsp` | formatter, highlight, hover, parser |
-| 10 | `sql-dialect-fmt-wasm` | formatter |
+| 2 | `sql-dialect-fmt-text` | — |
+| 3 | `sql-dialect-fmt-lexer` | syntax, text |
+| 4 | `sql-dialect-fmt-parser` | syntax, lexer, text |
+| 5 | `sql-dialect-fmt-formatter` | syntax, lexer, parser |
+| 6 | `sql-dialect-fmt-highlight` | syntax, lexer, text |
+| 7 | `sql-dialect-fmt-hover` | syntax, lexer |
+| 8 | `sql-dialect-fmt-encoding` | — |
+| 9 | `sql-dialect-fmt` | encoding, formatter, parser, text |
+| 10 | `sql-dialect-fmt-lsp` | formatter, highlight, hover, parser, text |
+| 11 | `sql-dialect-fmt-wasm` | formatter |
 
 **Not published** (`publish = false`):
 
@@ -34,10 +35,8 @@ Published to crates.io (in dependency order):
 ## Release procedure
 
 1. **Bump the workspace version.** Edit `version` under `[workspace.package]` in the
-   root `Cargo.toml`. Because every crate uses `version.workspace = true`, and every
-   internal path dependency pins `version = "X.Y.Z"` to match, update those pins to
-   the new version as well (search for the previous version string across all
-   `*/Cargo.toml`).
+   root `Cargo.toml`. Internal crate dependency versions are centralized in
+   `[workspace.dependencies]`; update those entries to the same version in the same edit.
 
 2. **Update the changelog.** Move the `## [Unreleased]` notes in `CHANGELOG.md` into a
    new `## [X.Y.Z] - YYYY-MM-DD` section and refresh the compare links.
@@ -47,6 +46,8 @@ Published to crates.io (in dependency order):
    ```sh
    cargo test --workspace
    cargo clippy --workspace --all-targets -- -D warnings
+   RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+   cargo bench -p sql-dialect-fmt-formatter --bench format -- --test
    cargo fmt --all --check
    scripts/run-external-corpus.sh --sample
    scripts/conformance-report.py --path crates/sql-dialect-fmt-formatter/tests/corpus_sample \
@@ -62,20 +63,18 @@ Published to crates.io (in dependency order):
    This builds the Snowsight Chrome extension zip and the VS Code VSIX under `target/dist/`.
    The GitHub Release workflow uploads those alongside the CLI tarball and checksum.
 
-5. **Dry-run packaging** of each publishable crate, in dependency order:
+5. **Dry-run packaging** of dependency-free publishable crates:
 
    ```sh
    cargo publish --dry-run -p sql-dialect-fmt-syntax
-   cargo publish --dry-run -p sql-dialect-fmt-lexer
-   cargo publish --dry-run -p sql-dialect-fmt-parser
-   cargo publish --dry-run -p sql-dialect-fmt-formatter
-   cargo publish --dry-run -p sql-dialect-fmt-highlight
-   cargo publish --dry-run -p sql-dialect-fmt-hover
+   cargo publish --dry-run -p sql-dialect-fmt-text
    cargo publish --dry-run -p sql-dialect-fmt-encoding
-   cargo publish --dry-run -p sql-dialect-fmt
-   cargo publish --dry-run -p sql-dialect-fmt-lsp
-   cargo publish --dry-run -p sql-dialect-fmt-wasm
    ```
+
+   For a new workspace version, dependent crate dry-runs cannot resolve internal `X.Y.Z`
+   dependencies until those predecessor crates are actually published and indexed. The ordered
+   publish helper below relies on `cargo publish` verification for dependent crates after each
+   predecessor appears in the index.
 
    (`cargo package -p <crate>` produces the tarball without the dry-run upload check.)
 
@@ -88,31 +87,24 @@ Published to crates.io (in dependency order):
    ```
 
 7. **Publish in dependency order.** Each `cargo publish` must complete and the new
-   version must be indexed before publishing a dependent crate:
+   version must be indexed before publishing a dependent crate. The helper publishes the
+   canonical order and waits for each just-published crate to resolve through Cargo before moving
+   on:
 
    ```sh
-   cargo publish -p sql-dialect-fmt-syntax
-   cargo publish -p sql-dialect-fmt-lexer
-   cargo publish -p sql-dialect-fmt-parser
-   cargo publish -p sql-dialect-fmt-formatter
-   cargo publish -p sql-dialect-fmt-highlight
-   cargo publish -p sql-dialect-fmt-hover
-   cargo publish -p sql-dialect-fmt-encoding
-   cargo publish -p sql-dialect-fmt
-   cargo publish -p sql-dialect-fmt-lsp
-   cargo publish -p sql-dialect-fmt-wasm
+   scripts/publish-crates.sh
    ```
 
-   The canonical order is **syntax → lexer → parser → formatter → highlight → hover →
+   The canonical order is **syntax → text → lexer → parser → formatter → highlight → hover →
    cli / lsp / wasm** (with `encoding` published any time before `cli`, and `wasm`
    any time after `formatter`).
 
 8. **Store publishing** is automated after one-time store setup. Follow
    [docs/STORE_PUBLISHING.md](docs/STORE_PUBLISHING.md) for the exact no-decision setup runbook.
 
-   The `Extension Packages` workflow always packages the Chrome zip and VSIX on `v*.*.*` tags.
-   It can also publish to the stores automatically on tag push once the repository variables below
-   are enabled.
+   The `Release` workflow packages the Chrome zip and VSIX on `v*.*.*` tags and can publish to
+   the stores automatically on tag push once the repository variables below are enabled. The
+   `Extension Packages` workflow remains available for manual package/publish runs.
 
    One-time VS Code Marketplace setup:
 

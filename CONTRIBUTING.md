@@ -16,6 +16,8 @@ Run the core checks:
 cargo fmt --all --check
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+cargo bench -p sql-dialect-fmt-formatter --bench format -- --test
 ```
 
 Run Tree-sitter checks:
@@ -29,6 +31,13 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 `cargo test --workspace` must stay self-contained. Stable SQL fixtures belong in
 `crates/sql-dialect-fmt-test-fixtures`; generated or large local corpora should stay
 outside the repository and can be passed to the CLI with `--fixtures`.
+
+Optional pre-commit setup:
+
+```sh
+pre-commit install
+pre-commit run --all-files
+```
 
 ## Project Shape
 
@@ -64,5 +73,6 @@ For the longer map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - [ ] `cargo fmt --all --check`
 - [ ] `cargo test --workspace`
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
+- [ ] `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`
 - [ ] Tree-sitter grammar regenerated and tested, if `tree-sitter-snowflake/` changed
 - [ ] Docs updated, if behavior or public API changed

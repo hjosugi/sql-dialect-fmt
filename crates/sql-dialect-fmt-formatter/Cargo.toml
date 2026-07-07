@@ -32,16 +32,16 @@ biome_text_size = "=0.5.7"
 biome_unicode_table = "=0.5.7"
 ruff_formatter = "=0.0.3"
 ruff_python_formatter = "=0.0.3"
-sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0", features = ["rowan"] }
-sql-dialect-fmt-lexer = { path = "../sql-dialect-fmt-lexer", version = "1.0.0" }
-sql-dialect-fmt-parser = { path = "../sql-dialect-fmt-parser", version = "1.0.0" }
+sql-dialect-fmt-syntax = { workspace = true, features = ["rowan"] }
+sql-dialect-fmt-lexer.workspace = true
+sql-dialect-fmt-parser.workspace = true
 unicode-width = "0.2.2"
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
 insta = "1.48.0"
-sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
-sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
+sql-dialect-fmt-test-fixtures.workspace = true
+sql-dialect-fmt-test-support.workspace = true
 proptest = "1"
 
 [[bench]]

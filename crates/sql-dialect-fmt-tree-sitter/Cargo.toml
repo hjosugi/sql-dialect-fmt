@@ -15,7 +15,7 @@ tree-sitter = "0.26.9"
 tree-sitter-language = "0.1.7"
 
 [dev-dependencies]
-sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures", version = "1.0.0" }
+sql-dialect-fmt-test-fixtures.workspace = true
 
 [build-dependencies]
 cc = "1.2"

@@ -5,7 +5,7 @@
 //! the tree always round-trips byte-for-byte (the basis for formatting and highlighting).
 //!
 //! ## Pipeline
-//! `tokenize` → [`input::Input`] → [`parser::Parser`] (emits events) → [`builder::build_tree`].
+//! `tokenize` -> `Input` -> `Parser` event stream -> `build_tree`.
 //!
 //! ## Modules
 //! * `event` / `input` / `parser` / `grammar` / `builder` — the parsing pipeline.

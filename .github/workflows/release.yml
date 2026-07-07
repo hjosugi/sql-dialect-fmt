@@ -7,12 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version tag to create (e.g. v1.0.0)"
+        description: "Release version tag to create (e.g. v1.1.0)"
         required: true
-        default: v1.0.0
+        default: v1.1.0
 
 permissions:
   contents: write
+  id-token: write
+  packages: write
 
 jobs:
   release:
@@ -31,20 +33,40 @@ jobs:
           cache-dependency-path: editors/package.json
       - name: Resolve version
         id: version
-        run: echo "version=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_OUTPUT"
+        run: |
+          version="${{ github.event.inputs.version || github.ref_name }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "package_version=${version#v}" >> "$GITHUB_OUTPUT"
       - name: Check version consistency
         run: python3 scripts/check-version-consistency.py "${{ steps.version.outputs.version }}"
       - name: Build release binary
-        run: cargo build --release -p sql-dialect-fmt --bin sql-dialect-fmt
+        run: cargo build --release --locked -p sql-dialect-fmt --bin sql-dialect-fmt
       - name: Package binary
         run: |
           asset="sql-dialect-fmt-${{ steps.version.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz"
           tar -czf "$asset" -C target/release sql-dialect-fmt
           sha256sum "$asset" > "$asset.sha256"
       - name: Package editor extensions
+        run: ./scripts/package-extensions.sh "${{ steps.version.outputs.package_version }}"
+      - name: Resolve extension publish plan
+        id: publish
+        env:
+          AUTO_ALL: ${{ vars.EXTENSIONS_AUTO_PUBLISH || 'false' }}
+          AUTO_VSCODE: ${{ vars.VSCODE_MARKETPLACE_AUTO_PUBLISH || 'false' }}
+          AUTO_CHROME: ${{ vars.CHROME_WEBSTORE_AUTO_PUBLISH || 'false' }}
         run: |
-          version="${{ steps.version.outputs.version }}"
-          ./scripts/package-extensions.sh "${version#v}"
+          vscode=false
+          chrome=false
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if [ "$AUTO_ALL" = "true" ] || [ "$AUTO_VSCODE" = "true" ]; then
+              vscode=true
+            fi
+            if [ "$AUTO_ALL" = "true" ] || [ "$AUTO_CHROME" = "true" ]; then
+              chrome=true
+            fi
+          fi
+          echo "vscode=$vscode" >> "$GITHUB_OUTPUT"
+          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,3 +97,114 @@ jobs:
               "target/dist/sql-dialect-fmt-$v-chrome.zip" \
               "target/dist/sql-dialect-fmt-$v.vsix"
           fi
+      - name: Azure login for VS Code Marketplace
+        if: ${{ steps.publish.outputs.vscode == 'true' && vars.VSCE_AUTH_MODE == 'azure' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          allow-no-subscriptions: true
+      - name: Publish VS Code Marketplace
+        if: ${{ steps.publish.outputs.vscode == 'true' }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSCE_AUTH_MODE: ${{ vars.VSCE_AUTH_MODE || 'pat' }}
+        run: ./scripts/publish-vscode-marketplace.sh "target/dist/sql-dialect-fmt-${{ steps.version.outputs.version }}.vsix"
+      - name: Publish Chrome Web Store
+        if: ${{ steps.publish.outputs.chrome == 'true' }}
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID || vars.CHROME_PUBLISHER_ID }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID || vars.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          CHROME_SKIP_UPLOAD: ${{ vars.CHROME_SKIP_UPLOAD || 'false' }}
+        run: ./scripts/publish-chrome-webstore.sh "target/dist/sql-dialect-fmt-${{ steps.version.outputs.version }}-chrome.zip"
+
+  docker:
+    name: Docker image
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  release-binaries:
+    name: Release binary (${{ matrix.target }})
+    needs: release
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event_name == 'push' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            target: x86_64-apple-darwin
+            setup_cross: false
+          - os: macos-14
+            target: aarch64-apple-darwin
+            setup_cross: false
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            setup_cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            setup_cross: true
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            setup_cross: false
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install cross-compilation tools
+        if: ${{ matrix.setup_cross }}
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: sql-dialect-fmt
+          package: sql-dialect-fmt
+          target: ${{ matrix.target }}
+          archive: sql-dialect-fmt-$tag-$target
+          tar: unix
+          zip: windows
+          checksum: sha256
+
+  publish-crates:
+    name: Publish crates.io
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && vars.CRATES_IO_AUTO_PUBLISH == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: ./scripts/publish-crates.sh

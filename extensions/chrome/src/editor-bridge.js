@@ -30,7 +30,7 @@
     try {
       const target = findActiveTarget();
       if (!target) {
-        respond(requestId, { ok: false, error: "Focus a Snowsight SQL editor, then run sql-dialect-fmt again." });
+        respond(requestId, { ok: false, error: "Focus a SQL editor, then run sql-dialect-fmt again." });
         return;
       }
 
@@ -67,7 +67,7 @@
   }
 
   function installMonacoTracker() {
-    const timer = window.setInterval(() => {
+    window.setInterval(() => {
       const monaco = window.monaco;
       if (!monaco?.editor?.create || monaco.editor.create.__snowFmtWrapped) {
         trackExistingMonacoEditors();
@@ -82,10 +82,7 @@
       };
       monaco.editor.create.__snowFmtWrapped = true;
       trackExistingMonacoEditors();
-      window.clearInterval(timer);
-    }, 500);
-
-    window.setTimeout(() => window.clearInterval(timer), 30000);
+    }, 1000);
   }
 
   function trackExistingMonacoEditors() {

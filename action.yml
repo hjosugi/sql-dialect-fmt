@@ -1,0 +1,71 @@
+name: sql-dialect-fmt
+description: Download sql-dialect-fmt and run formatting checks.
+author: sql-dialect-fmt contributors
+
+inputs:
+  version:
+    description: Release tag to install, such as v1.1.0. Defaults to the latest release.
+    required: false
+    default: latest
+  args:
+    description: Arguments passed to sql-dialect-fmt after --check.
+    required: false
+    default: .
+  github-token:
+    description: GitHub token used for authenticated release downloads.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install sql-dialect-fmt
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+
+        repo="hjosugi/sql-dialect-fmt"
+        version="$INPUT_VERSION"
+        if [ "$version" = "latest" ]; then
+          auth=()
+          if [ -n "${GH_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer $GH_TOKEN")
+          fi
+          version="$(curl -fsSL "${auth[@]}" "https://api.github.com/repos/$repo/releases/latest" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
+        fi
+
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
+          Linux-X64) target="x86_64-unknown-linux-gnu"; ext="tar.gz" ;;
+          Linux-ARM64) target="aarch64-unknown-linux-gnu"; ext="tar.gz" ;;
+          macOS-X64) target="x86_64-apple-darwin"; ext="tar.gz" ;;
+          macOS-ARM64) target="aarch64-apple-darwin"; ext="tar.gz" ;;
+          Windows-X64) target="x86_64-pc-windows-msvc"; ext="zip" ;;
+          *) echo "::error::unsupported runner ${RUNNER_OS}-${RUNNER_ARCH}"; exit 1 ;;
+        esac
+
+        asset="sql-dialect-fmt-${version}-${target}.${ext}"
+        url="https://github.com/$repo/releases/download/$version/$asset"
+        install_dir="$RUNNER_TEMP/sql-dialect-fmt"
+        mkdir -p "$install_dir"
+        curl -fsSL -o "$RUNNER_TEMP/$asset" "$url"
+
+        if [ "$ext" = "zip" ]; then
+          unzip -q "$RUNNER_TEMP/$asset" -d "$install_dir"
+        else
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$install_dir"
+        fi
+
+        exe=""
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          exe=".exe"
+        fi
+        echo "$install_dir" >> "$GITHUB_PATH"
+        "$install_dir/sql-dialect-fmt$exe" --version
+
+    - name: Check SQL formatting
+      shell: bash
+      run: sql-dialect-fmt --check ${{ inputs.args }}

@@ -1,0 +1,4 @@
+target
+.git
+tree-sitter-snowflake/node_modules
+scripts/__pycache__

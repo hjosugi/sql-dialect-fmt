@@ -1,9 +1,6 @@
 name: Extension Packages
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
@@ -52,7 +49,7 @@ jobs:
           elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="$(awk -F'"' '/^version =/ { print $2; exit }' Cargo.toml)"
+            version="$(./scripts/workspace-version.sh)"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Check version consistency

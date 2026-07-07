@@ -23,8 +23,8 @@ lsp-server = "0.8"
 lsp-types = "0.97"
 serde = "1"
 serde_json = "1"
-sql-dialect-fmt-formatter = { path = "../sql-dialect-fmt-formatter", version = "1.0.0" }
-sql-dialect-fmt-highlight = { path = "../sql-dialect-fmt-highlight", version = "1.0.0" }
-sql-dialect-fmt-hover = { path = "../sql-dialect-fmt-hover", version = "1.0.0" }
-sql-dialect-fmt-parser = { path = "../sql-dialect-fmt-parser", version = "1.0.0" }
-sql-dialect-fmt-text = { path = "../sql-dialect-fmt-text", version = "1.0.0" }
+sql-dialect-fmt-formatter.workspace = true
+sql-dialect-fmt-highlight.workspace = true
+sql-dialect-fmt-hover.workspace = true
+sql-dialect-fmt-parser.workspace = true
+sql-dialect-fmt-text.workspace = true

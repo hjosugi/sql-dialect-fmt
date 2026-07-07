@@ -12,5 +12,5 @@ keywords.workspace = true
 categories.workspace = true
 description = "LSP/editor-ready hover information for Snowflake SQL types, procedures, and tasks."
 [dependencies]
-sql-dialect-fmt-lexer = { path = "../sql-dialect-fmt-lexer", version = "1.0.0" }
-sql-dialect-fmt-syntax = { path = "../sql-dialect-fmt-syntax", version = "1.0.0" }
+sql-dialect-fmt-lexer.workspace = true
+sql-dialect-fmt-syntax.workspace = true

@@ -19,15 +19,18 @@
 
 mod config;
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Mutex;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
+use sql_dialect_fmt_encoding::DecodedText;
 use sql_dialect_fmt_formatter::FormatOptions;
 use sql_dialect_fmt_parser::Dialect;
 use sql_dialect_fmt_text::LineIndex;
@@ -128,10 +131,12 @@ fn run<I: IntoIterator<Item = OsString>>(raw: I) -> Result<ExitCode, String> {
 ///
 /// Layers: defaults → nearest `sql-dialect-fmt.toml` (unless `--no-config`) → CLI overrides.
 fn options_for(args: &Args, path: Option<&Path>) -> Result<FormatOptions, String> {
+    options_for_start(args, path.unwrap_or_else(|| Path::new(".")))
+}
+
+fn options_for_start(args: &Args, start: &Path) -> Result<FormatOptions, String> {
     let mut options = FormatOptions::default();
     if !args.no_config {
-        // For stdin, anchor discovery at the current directory.
-        let start = path.unwrap_or_else(|| Path::new("."));
         if let Some(config_path) = config::discover(start) {
             Config::load(&config_path)?.apply_to(&mut options);
         }
@@ -151,6 +156,35 @@ fn validate_options(options: &FormatOptions) -> Result<(), String> {
     Ok(())
 }
 
+struct OptionsResolver<'a> {
+    args: &'a Args,
+    by_dir: Mutex<HashMap<PathBuf, Result<FormatOptions, String>>>,
+}
+
+impl<'a> OptionsResolver<'a> {
+    fn new(args: &'a Args) -> Self {
+        Self {
+            args,
+            by_dir: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn for_file(&self, file: &Path) -> Result<FormatOptions, String> {
+        let dir = file
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let mut cache = self.by_dir.lock().expect("config cache poisoned");
+        if let Some(cached) = cache.get(&dir) {
+            return cached.clone();
+        }
+        let resolved = options_for_start(self.args, &dir);
+        cache.insert(dir, resolved.clone());
+        resolved
+    }
+}
+
 /// No path arguments: format stdin to stdout (or `--check` it).
 fn run_stdin(args: &Args) -> Result<ExitCode, String> {
     let stdin_path = args.stdin_filepath.as_deref();
@@ -161,8 +195,13 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
         .map_err(|err| format!("failed to read stdin: {err}"))?;
 
     // Surface parse problems on stderr, but keep going (the formatter passes content through).
-    report_parse_errors(&source, stdin_path, options.dialect);
-    let formatted = format_bytes(&source, &options);
+    let decoded = DecodedText::decode(&source);
+    let parse_errors =
+        collect_parse_error_messages_from_decoded(&decoded, stdin_path, options.dialect);
+    for error in &parse_errors {
+        eprintln!("{error}");
+    }
+    let formatted = format_decoded(&decoded, &options);
 
     if args.check {
         if formatted != source {
@@ -209,9 +248,10 @@ struct FileOutcome {
 
 fn run_paths(args: &Args) -> Result<ExitCode, String> {
     let files = collect_files(args)?;
+    let options = OptionsResolver::new(args);
     let outcomes = files
         .par_iter()
-        .map(|file| process_file(args, file))
+        .map(|file| process_file(args, &options, file))
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut summary = Summary::default();
@@ -284,12 +324,18 @@ fn run_paths(args: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn process_file(args: &Args, file: &Path) -> Result<FileOutcome, String> {
-    let options = options_for(args, Some(file))?;
+fn process_file(
+    args: &Args,
+    options: &OptionsResolver<'_>,
+    file: &Path,
+) -> Result<FileOutcome, String> {
+    let options = options.for_file(file)?;
     let source =
         fs::read(file).map_err(|err| format!("failed to read {}: {err}", file.display()))?;
-    let parse_errors = collect_parse_error_messages(&source, Some(file), options.dialect);
-    let formatted = format_bytes(&source, &options);
+    let decoded = DecodedText::decode(&source);
+    let parse_errors =
+        collect_parse_error_messages_from_decoded(&decoded, Some(file), options.dialect);
+    let formatted = format_decoded(&decoded, &options);
     let changed = formatted != source;
     let mut written = false;
 
@@ -450,25 +496,11 @@ fn stdin_display_name(args: &Args) -> String {
         .unwrap_or_else(|| "stdin".to_string())
 }
 
-/// Parse `source` and print any diagnostics to stderr. Returns `true` if there were errors.
-///
-/// This does **not** abort processing: the formatter still round-trips the content losslessly.
-/// It exists purely so malformed input is *visible* instead of silently passing through. Opaque
-/// (non-text) bytes are skipped — there is nothing to parse.
-fn report_parse_errors(source: &[u8], file: Option<&Path>, dialect: Dialect) -> bool {
-    let messages = collect_parse_error_messages(source, file, dialect);
-    for message in &messages {
-        eprintln!("{message}");
-    }
-    !messages.is_empty()
-}
-
-fn collect_parse_error_messages(
-    source: &[u8],
+fn collect_parse_error_messages_from_decoded(
+    decoded: &DecodedText,
     file: Option<&Path>,
     dialect: Dialect,
 ) -> Vec<String> {
-    let decoded = sql_dialect_fmt_encoding::DecodedText::decode(source);
     let Some(text) = decoded.as_str() else {
         return Vec::new();
     };
@@ -496,8 +528,14 @@ fn collect_parse_error_messages(
 }
 
 /// Format `bytes` while preserving its encoding (BOM/UTF-16) and passing through any non-text bytes.
+#[cfg(test)]
 fn format_bytes(bytes: &[u8], options: &FormatOptions) -> Vec<u8> {
-    sql_dialect_fmt_encoding::DecodedText::decode(bytes)
+    let decoded = DecodedText::decode(bytes);
+    format_decoded(&decoded, options)
+}
+
+fn format_decoded(decoded: &DecodedText, options: &FormatOptions) -> Vec<u8> {
+    decoded
         .map_text(|text| sql_dialect_fmt_formatter::format(text, options))
         .encode()
 }
