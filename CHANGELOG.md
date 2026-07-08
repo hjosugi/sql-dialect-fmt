@@ -9,6 +9,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-07-08
+
+### Fixed
+
+- Limited the GHCR release image to `linux/amd64` so Docker publishing completes without the slow
+  QEMU arm64 source build.
+
 ## [1.2.2] - 2026-07-08
 
 ### Fixed
@@ -120,7 +127,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.1.0...v1.2.0
