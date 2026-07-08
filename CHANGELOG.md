@@ -9,6 +9,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-08
+
+### Fixed
+
+- Enabled GitHub Pages from the docs workflow on non-PR runs so the mdBook site can be
+  provisioned and deployed by CI.
+
 ## [1.2.0] - 2026-07-08
 
 ### Added
@@ -106,7 +113,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v0.1.0...v1.0.0

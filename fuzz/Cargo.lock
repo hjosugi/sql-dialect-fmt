@@ -1850,7 +1850,7 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "sql-dialect-fmt-formatter"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "biome_console",
  "biome_deserialize",
@@ -1889,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-lexer"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-text",
@@ -1897,7 +1897,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-parser"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "rowan",
  "sql-dialect-fmt-lexer",
@@ -1907,14 +1907,14 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-syntax"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "rowan",
 ]
 
 [[package]]
 name = "sql-dialect-fmt-text"
-version = "1.2.0"
+version = "1.2.1"
 
 [[package]]
 name = "static_assertions"
