@@ -1,0 +1,122 @@
+.playground-shell {
+  display: grid;
+  gap: 16px;
+  margin: 20px 0 28px;
+}
+
+.playground-toolbar {
+  align-items: end;
+  background: #f6f8fa;
+  border: 1px solid #d8dee4;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+}
+
+.playground-toolbar label {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.playground-toolbar label > span,
+.playground-editor > label {
+  color: #57606a;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.playground-toolbar select,
+.playground-toolbar input[type="number"] {
+  min-height: 34px;
+  border: 1px solid #afb8c1;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.playground-toolbar input[type="number"] {
+  width: 92px;
+}
+
+.playground-checkbox {
+  align-items: center;
+  display: flex !important;
+  flex-direction: row;
+  gap: 8px !important;
+  min-height: 34px;
+}
+
+.playground-toolbar button {
+  min-height: 34px;
+  border: 1px solid #0969da;
+  border-radius: 6px;
+  background: #0969da;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 5px 12px;
+}
+
+.playground-toolbar button:disabled {
+  background: #8c959f;
+  border-color: #8c959f;
+  cursor: wait;
+}
+
+.playground-toolbar button#playground-copy {
+  background: #1f883d;
+  border-color: #1f883d;
+}
+
+.playground-status {
+  align-self: center;
+  color: #57606a;
+  min-height: 22px;
+}
+
+.playground-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.playground-editor {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+
+.playground-editor textarea {
+  min-height: 430px;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  padding: 12px;
+  resize: vertical;
+  tab-size: 4;
+}
+
+.playground-editor textarea:focus,
+.playground-toolbar select:focus,
+.playground-toolbar input:focus,
+.playground-toolbar button:focus {
+  outline: 3px solid rgba(9, 105, 218, 0.25);
+  outline-offset: 1px;
+}
+
+@media (max-width: 900px) {
+  .playground-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .playground-editor textarea {
+    min-height: 320px;
+  }
+}

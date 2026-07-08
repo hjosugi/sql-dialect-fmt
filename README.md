@@ -15,7 +15,7 @@ unchanged, significant tokens and comments are preserved, and `format(format(x))
 
 ```sh
 # From crates.io
-cargo install sql-dialect-fmt --version 1.1.0 --locked
+cargo install sql-dialect-fmt --version 1.2.0 --locked
 
 # Directly from this repository
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
@@ -25,6 +25,10 @@ cargo install --path crates/sql-dialect-fmt-cli
 
 # Binary install, when using release assets with cargo-binstall
 cargo binstall sql-dialect-fmt
+
+# Homebrew, using this repository as a tap
+brew tap hjosugi/sql-dialect-fmt https://github.com/hjosugi/sql-dialect-fmt
+brew install sql-dialect-fmt
 ```
 
 CI can use the bundled composite action or the GHCR image.
@@ -36,8 +40,11 @@ CI can use the bundled composite action or the GHCR image.
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.1.0 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.2.0 --check .
 ```
+
+Try the browser playground from the docs site:
+<https://hjosugi.github.io/sql-dialect-fmt/playground.html>
 
 ## Usage
 
@@ -58,7 +65,7 @@ pre-commit users can enable the official hooks:
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: sql-dialect-fmt
 ```

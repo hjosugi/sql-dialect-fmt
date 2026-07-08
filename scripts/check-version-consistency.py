@@ -33,12 +33,23 @@ def normalize_expected(raw: str) -> str:
     return version
 
 
+def load_homebrew_formula_version(path: pathlib.Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r'tag:\s*"v([^"]+)"', text)
+    if not match:
+        raise ValueError(f"{path.relative_to(ROOT)} must pin a v-prefixed git tag")
+    return normalize_expected(match.group(1))
+
+
 def main() -> int:
     versions = {
         "Cargo.toml": load_cargo_version(),
         "editors/package.json": load_json_version(ROOT / "editors" / "package.json"),
         "extensions/chrome/manifest.json": load_json_version(
             ROOT / "extensions" / "chrome" / "manifest.json"
+        ),
+        "Formula/sql-dialect-fmt.rb": load_homebrew_formula_version(
+            ROOT / "Formula" / "sql-dialect-fmt.rb"
         ),
     }
 

@@ -9,6 +9,16 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-08
+
+### Added
+
+- Added cargo-fuzz targets for lexer round-trip, parser losslessness, and formatter idempotency,
+  with a scheduled/manual workflow that uploads crash artifacts.
+- Added an mdBook documentation site with a browser WASM playground and GitHub Pages deployment
+  workflow.
+- Added a Homebrew formula so this repository can be used directly as a tap.
+
 ## [1.1.0] - 2026-07-08
 
 ### Added
@@ -96,6 +106,7 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v0.1.0...v1.0.0

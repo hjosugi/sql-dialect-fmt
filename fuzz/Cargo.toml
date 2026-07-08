@@ -1,0 +1,36 @@
+[package]
+name = "sql-dialect-fmt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+sql-dialect-fmt-formatter = { path = "../crates/sql-dialect-fmt-formatter" }
+sql-dialect-fmt-lexer = { path = "../crates/sql-dialect-fmt-lexer" }
+sql-dialect-fmt-parser = { path = "../crates/sql-dialect-fmt-parser" }
+sql-dialect-fmt-syntax = { path = "../crates/sql-dialect-fmt-syntax" }
+
+[[bin]]
+name = "lexer_roundtrip"
+path = "fuzz_targets/lexer_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_lossless"
+path = "fuzz_targets/parser_lossless.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "formatter_idempotent"
+path = "fuzz_targets/formatter_idempotent.rs"
+test = false
+doc = false
+bench = false

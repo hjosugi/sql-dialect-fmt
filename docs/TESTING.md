@@ -19,6 +19,26 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate
 npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 ```
 
+## Fuzzing
+
+Coverage-guided fuzzing lives in the excluded `fuzz/` crate so normal workspace
+checks stay fast and self-contained. The scheduled `Fuzz` workflow runs the same
+targets weekly and uploads `fuzz/artifacts/` plus the generated corpus for any
+failing target.
+
+```sh
+cargo install cargo-fuzz --locked
+cargo +nightly fuzz run lexer_roundtrip
+cargo +nightly fuzz run parser_lossless
+cargo +nightly fuzz run formatter_idempotent
+```
+
+For a bounded local smoke run:
+
+```sh
+cargo +nightly fuzz run parser_lossless -- -max_total_time=60
+```
+
 ## What to Test Where
 
 Shared helpers:

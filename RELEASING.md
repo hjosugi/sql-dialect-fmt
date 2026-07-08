@@ -36,7 +36,8 @@ Published to crates.io (in dependency order):
 
 1. **Bump the workspace version.** Edit `version` under `[workspace.package]` in the
    root `Cargo.toml`. Internal crate dependency versions are centralized in
-   `[workspace.dependencies]`; update those entries to the same version in the same edit.
+   `[workspace.dependencies]`; update those entries to the same version in the same edit. Also
+   update the Chrome/VS Code package versions and the tag in `Formula/sql-dialect-fmt.rb`.
 
 2. **Update the changelog.** Move the `## [Unreleased]` notes in `CHANGELOG.md` into a
    new `## [X.Y.Z] - YYYY-MM-DD` section and refresh the compare links.

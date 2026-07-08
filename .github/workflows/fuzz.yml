@@ -1,0 +1,53 @@
+name: Fuzz
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Seconds to run each fuzz target"
+        required: false
+        default: "60"
+  schedule:
+    - cron: "43 4 * * 0"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-fuzz:
+    name: cargo-fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - lexer_roundtrip
+          - parser_lossless
+          - formatter_idempotent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-${{ matrix.target }}
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Run fuzz target
+        env:
+          DISPATCH_SECONDS: ${{ github.event.inputs.seconds }}
+        run: |
+          seconds="${DISPATCH_SECONDS:-60}"
+          cargo fuzz run "${{ matrix.target }}" -- -max_total_time="$seconds" -rss_limit_mb=4096
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cargo-fuzz-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/${{ matrix.target }}
+            fuzz/corpus/${{ matrix.target }}
+          if-no-files-found: ignore
+          retention-days: 14

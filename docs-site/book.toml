@@ -1,0 +1,15 @@
+[book]
+title = "sql-dialect-fmt"
+authors = ["sql-dialect-fmt contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../target/docs-site"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/hjosugi/sql-dialect-fmt"
+edit-url-template = "https://github.com/hjosugi/sql-dialect-fmt/edit/main/docs-site/{path}"
+additional-css = ["theme/playground.css"]
+additional-js = ["theme/playground.js"]

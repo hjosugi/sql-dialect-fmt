@@ -24,5 +24,10 @@ __pycache__/
 # Generated Chrome extension WebAssembly bundle
 /extensions/chrome/vendor/*.wasm
 
+# Local cargo-fuzz output; crash artifacts are uploaded by CI instead.
+/fuzz/artifacts/
+/fuzz/corpus/
+/fuzz/target/
+
 # Claude Code session & worktrees
 .claude/
