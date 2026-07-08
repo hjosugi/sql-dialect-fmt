@@ -1,7 +1,7 @@
 class SqlDialectFmt < Formula
   desc "Opinionated SQL dialect formatter for Snowflake and Databricks SQL"
   homepage "https://github.com/hjosugi/sql-dialect-fmt"
-  url "https://github.com/hjosugi/sql-dialect-fmt.git", tag: "v1.2.1"
+  url "https://github.com/hjosugi/sql-dialect-fmt.git", tag: "v1.2.2"
   license "0BSD"
   head "https://github.com/hjosugi/sql-dialect-fmt.git", branch: "main"
 
