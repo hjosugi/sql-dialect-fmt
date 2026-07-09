@@ -42,6 +42,8 @@ const CASES: &[&str] = &[
     "SELECT CAST(a AS int) FROM t",
     "SELECT CAST(a AS decimal(10, 2)) FROM t",
     "SELECT a FROM t WHERE a IN (SELECT b FROM u)",
+    "SELECT a <=> b FROM t",
+    "SELECT r'raw\\n', x'0A0B' FROM t",
     "SELECT a FROM (SELECT a FROM u) sub",
     "INSERT INTO t (a, b) VALUES (1, 2)",
     "UPDATE t SET a = 1 WHERE b = 2",
@@ -49,6 +51,8 @@ const CASES: &[&str] = &[
     "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.x = s.x",
     "SELECT * FROM t PIVOT (sum(x) FOR k IN ('a', 'b'))",
     "SELECT * FROM t TABLESAMPLE (10 percent)",
+    "SELECT * FROM t DISTRIBUTE BY bucket_id SORT BY event_ts DESC",
+    "SELECT * FROM t CLUSTER BY bucket_id, event_ts",
     // ---- databricks: backtick identifiers ----
     "SELECT `a` FROM t",
     "SELECT `a b` FROM t",
@@ -99,6 +103,9 @@ const CASES: &[&str] = &[
     "UNCACHE TABLE IF EXISTS t",
     "REFRESH TABLE t",
     "DESCRIBE HISTORY t",
+    "RESTORE TABLE t TO VERSION AS OF 5",
+    "ANALYZE TABLE t COMPUTE STATISTICS",
+    "MSCK REPAIR TABLE t",
     "MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE THEN DELETE",
     "MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED THEN INSERT *",
 ];
@@ -180,6 +187,22 @@ fn qualify_is_structured_under_databricks() {
     assert!(has_node(
         "SELECT a FROM t QUALIFY row_number() OVER (ORDER BY b) = 1",
         SyntaxKind::QUALIFY_CLAUSE
+    ));
+}
+
+#[test]
+fn query_distribution_clauses_are_structured_under_databricks() {
+    assert!(has_node(
+        "SELECT * FROM t DISTRIBUTE BY bucket_id SORT BY event_ts DESC",
+        SyntaxKind::DISTRIBUTE_BY_CLAUSE
+    ));
+    assert!(has_node(
+        "SELECT * FROM t DISTRIBUTE BY bucket_id SORT BY event_ts DESC",
+        SyntaxKind::SORT_BY_CLAUSE
+    ));
+    assert!(has_node(
+        "SELECT * FROM t CLUSTER BY bucket_id, event_ts",
+        SyntaxKind::CLUSTER_BY_CLAUSE
     ));
 }
 
@@ -365,6 +388,9 @@ fn delta_commands_now_parse_clean_under_databricks_and_round_trip_under_snowflak
         "INSERT OVERWRITE TABLE t SELECT * FROM s",
         "MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE THEN DELETE",
         "DESCRIBE HISTORY t",
+        "RESTORE TABLE t TO VERSION AS OF 5",
+        "ANALYZE TABLE t COMPUTE STATISTICS",
+        "MSCK REPAIR TABLE t",
     ] {
         let databricks = parse_with_dialect(sql, Dialect::Databricks);
         assert!(

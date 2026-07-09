@@ -30,6 +30,19 @@ impl Utf16Position {
     }
 }
 
+/// A zero-based LSP-style position whose character offset is measured in UTF-8 bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Utf8Position {
+    pub line: u32,
+    pub character: u32,
+}
+
+impl Utf8Position {
+    pub const fn new(line: u32, character: u32) -> Self {
+        Self { line, character }
+    }
+}
+
 /// Maps byte offsets into a source string to line/column coordinates.
 pub struct LineIndex<'a> {
     text: &'a str,
@@ -73,9 +86,22 @@ impl<'a> LineIndex<'a> {
         Utf16Position::new(line as u32, character)
     }
 
+    /// Return the zero-based line and UTF-8 byte column for `offset`.
+    pub fn utf8_position(&self, offset: usize) -> Utf8Position {
+        let offset = self.clamp_offset(offset);
+        let line = self.line_for_offset(offset);
+        let line_start = self.line_starts[line];
+        Utf8Position::new(line as u32, (offset - line_start) as u32)
+    }
+
     /// The UTF-16 position one past the last character.
     pub fn end_utf16_position(&self) -> Utf16Position {
         self.utf16_position(self.text.len())
+    }
+
+    /// The UTF-8 position one past the last byte.
+    pub fn end_utf8_position(&self) -> Utf8Position {
+        self.utf8_position(self.text.len())
     }
 
     /// The byte offset for a zero-based line and UTF-16 column.
@@ -98,6 +124,15 @@ impl<'a> LineIndex<'a> {
             offset += ch.len_utf8();
         }
         offset
+    }
+
+    /// The byte offset for a zero-based line and UTF-8 byte column.
+    pub fn offset_for_utf8_position(&self, position: Utf8Position) -> usize {
+        let line = position.line as usize;
+        let Some(&line_start) = self.line_starts.get(line) else {
+            return self.text.len();
+        };
+        self.clamp_offset(line_start.saturating_add(position.character as usize))
     }
 
     fn line_for_offset(&self, offset: usize) -> usize {
@@ -152,6 +187,22 @@ mod tests {
     }
 
     #[test]
+    fn maps_offsets_to_utf8_positions() {
+        let text = "SELECT '長芋'\nFROM t";
+        let index = LineIndex::new(text);
+        assert_eq!(index.utf8_position(0), Utf8Position::new(0, 0));
+        assert_eq!(
+            index.utf8_position(text.find("FROM").unwrap()),
+            Utf8Position::new(1, 0)
+        );
+        let newline = text.find('\n').unwrap();
+        assert_eq!(
+            index.utf8_position(newline),
+            Utf8Position::new(0, newline as u32)
+        );
+    }
+
+    #[test]
     fn maps_utf16_positions_back_to_offsets() {
         let text = "SELECT a\nFROM 芋;\nSELECT 😀;\n";
         let index = LineIndex::new(text);
@@ -164,6 +215,23 @@ mod tests {
         ] {
             assert_eq!(
                 index.offset_for_utf16_position(index.utf16_position(offset)),
+                offset
+            );
+        }
+    }
+
+    #[test]
+    fn maps_utf8_positions_back_to_offsets() {
+        let text = "SELECT '長芋'\nFROM t";
+        let index = LineIndex::new(text);
+        for offset in [
+            0usize,
+            7,
+            text.find("FROM").unwrap(),
+            text.find('\n').unwrap(),
+        ] {
+            assert_eq!(
+                index.offset_for_utf8_position(index.utf8_position(offset)),
                 offset
             );
         }

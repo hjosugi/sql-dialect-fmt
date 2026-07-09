@@ -96,3 +96,49 @@ fn snowflake_backtick_behavior_is_unchanged() {
         "Snowflake should still flag a backtick as an error"
     );
 }
+
+#[test]
+fn databricks_null_safe_equality_is_one_operator() {
+    let lexed = tokenize_for_dialect("a <=> b", Dialect::Databricks);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    assert_eq!(
+        non_trivia_for("a <=> b", Dialect::Databricks),
+        vec![(IDENT, "a"), (NULL_SAFE_EQ, "<=>"), (IDENT, "b")]
+    );
+
+    assert!(
+        non_trivia_for("a <=> b", Dialect::Snowflake)
+            .iter()
+            .all(|(kind, _)| *kind != NULL_SAFE_EQ),
+        "Snowflake must not tokenize <=> as a Databricks null-safe-equality operator"
+    );
+}
+
+#[test]
+fn databricks_prefixed_strings_are_single_string_tokens() {
+    let lexed = tokenize_for_dialect("r'raw\\n' x'0A0B'", Dialect::Databricks);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    assert_eq!(
+        non_trivia_for("r'raw\\n' x'0A0B'", Dialect::Databricks),
+        vec![(STRING, "r'raw\\n'"), (STRING, "x'0A0B'")]
+    );
+}
+
+#[test]
+fn double_slash_comments_remain_snowflake_only() {
+    let snowflake = tokenize_for_dialect("// comment\nselect 1", Dialect::Snowflake);
+    assert!(
+        snowflake
+            .tokens
+            .iter()
+            .any(|token| token.kind == COMMENT && token.text == "// comment"),
+        "Snowflake should produce a COMMENT token for // line comments"
+    );
+
+    assert!(
+        non_trivia_for("// comment\nselect 1", Dialect::Databricks)
+            .iter()
+            .all(|(kind, _)| *kind != COMMENT),
+        "Databricks must not treat // as a line comment"
+    );
+}

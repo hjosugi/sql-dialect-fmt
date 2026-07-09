@@ -54,6 +54,8 @@ const CASES: &[&str] = &[
     "select a as x, b as y from t",
     "select t.* from t",
     "select * from t where a > 1 and b < 2 or c = 3",
+    "select a <=> b from t",
+    "select r'raw\\n', x'0A0B' from t",
     "select count(*) from t",
     "select count(distinct a) from t",
     "select a from t order by a desc nulls last",
@@ -109,6 +111,8 @@ const CASES: &[&str] = &[
     // ---- shared: PIVOT / TABLESAMPLE ----
     "select * from t pivot (sum(x) for k in ('a', 'b'))",
     "select * from t tablesample (10 percent)",
+    "select * from t distribute by bucket_id sort by event_ts desc",
+    "select * from t cluster by bucket_id, event_ts",
     // ---- databricks: backtick identifiers ----
     "select `a` from t",
     "select `a b` from t",

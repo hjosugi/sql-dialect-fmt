@@ -147,7 +147,9 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.line_comment();
                     self.push(SyntaxKind::COMMENT, start);
                 }
-                b'/' if self.peek_at(1) == b'/' => {
+                b'/' if self.options.dialect.supports_double_slash_comments()
+                    && self.peek_at(1) == b'/' =>
+                {
                     self.line_comment();
                     self.push(SyntaxKind::COMMENT, start);
                 }
@@ -157,7 +159,23 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.push(SyntaxKind::BLOCK_COMMENT, start);
                 }
                 b'\'' => {
-                    self.string_body(start);
+                    self.string_body(start, true);
+                    self.push(SyntaxKind::STRING, start);
+                }
+                b'r' | b'R'
+                    if self.options.dialect.supports_prefixed_strings()
+                        && self.peek_at(1) == b'\'' =>
+                {
+                    self.pos += 1; // raw-string prefix
+                    self.string_body(start, false);
+                    self.push(SyntaxKind::STRING, start);
+                }
+                b'x' | b'X'
+                    if self.options.dialect.supports_prefixed_strings()
+                        && self.peek_at(1) == b'\'' =>
+                {
+                    self.pos += 1; // hex-string prefix
+                    self.string_body(start, false);
                     self.push(SyntaxKind::STRING, start);
                 }
                 b'"' => {
@@ -223,7 +241,7 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
 
     /// Consume a single-quoted string. Handles `''` (doubled quote) and `\` escapes
     /// (Snowflake interprets backslash escape sequences in string literals by default).
-    fn string_body(&mut self, start: usize) {
+    fn string_body(&mut self, start: usize, backslash_escapes: bool) {
         self.pos += 1; // opening '
         loop {
             if self.at_end() {
@@ -231,7 +249,7 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 break;
             }
             match self.bump() {
-                b'\\' => {
+                b'\\' if backslash_escapes => {
                     // Escape: consume the next byte if present (e.g. \' or \\).
                     if !self.at_end() {
                         self.pos += 1;
@@ -414,7 +432,13 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 }
             }
             b'<' => {
-                if self.peek() == b'=' {
+                if self.options.dialect.supports_null_safe_eq()
+                    && self.peek() == b'='
+                    && self.peek_at(1) == b'>'
+                {
+                    self.pos += 2;
+                    SyntaxKind::NULL_SAFE_EQ
+                } else if self.peek() == b'=' {
                     self.pos += 1;
                     SyntaxKind::LTE
                 } else if self.peek() == b'>' {

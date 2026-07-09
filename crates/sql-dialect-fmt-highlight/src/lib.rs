@@ -10,8 +10,8 @@ use sql_dialect_fmt_syntax::{keyword_kind, SyntaxKind};
 pub mod semantic;
 pub use semantic::{
     delta_encode, detect_injections, line_tokens, resolve_tokens, semantic_token, semantic_tokens,
-    semantic_tokens_lsp, InjectedLanguage, Injection, LineToken, ResolvedToken,
-    SemanticTokenModifiers, SemanticTokenType, SemanticTokens,
+    semantic_tokens_lsp, semantic_tokens_lsp_utf8, InjectedLanguage, Injection, LineToken,
+    ResolvedToken, SemanticTokenModifiers, SemanticTokenType, SemanticTokens,
 };
 
 /// The result of [`highlight`]: a lossless token stream plus any lexer errors. `#[non_exhaustive]`

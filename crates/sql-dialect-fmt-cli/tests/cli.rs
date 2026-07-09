@@ -78,6 +78,19 @@ fn stdin_to_stdout_formats_databricks_when_requested() {
 }
 
 #[test]
+fn stdin_to_stdout_honors_keyword_case_and_line_ending() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, err) = run(
+        tmp.path(),
+        &["--keyword-case", "lower", "--line-ending", "crlf"],
+        Some("select a from t"),
+    );
+    assert_eq!(code, 0);
+    assert_eq!(out, "select a\r\nfrom t;\r\n");
+    assert!(!err.contains("parse error"), "stderr: {err}");
+}
+
+#[test]
 fn stdin_filepath_discovers_config_from_that_path() {
     let tmp = TempDir::new().unwrap();
     write(

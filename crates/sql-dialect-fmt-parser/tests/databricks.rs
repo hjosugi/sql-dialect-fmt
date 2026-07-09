@@ -44,6 +44,26 @@ fn table_time_travel_is_structured() {
 }
 
 #[test]
+fn query_distribution_clauses_are_structured() {
+    assert!(has_node(
+        "SELECT * FROM events DISTRIBUTE BY bucket_id",
+        SyntaxKind::DISTRIBUTE_BY_CLAUSE
+    ));
+    assert!(has_node(
+        "SELECT * FROM events SORT BY event_ts DESC",
+        SyntaxKind::SORT_BY_CLAUSE
+    ));
+    assert!(has_node(
+        "SELECT * FROM events CLUSTER BY bucket_id, event_ts",
+        SyntaxKind::CLUSTER_BY_CLAUSE
+    ));
+    assert!(has_node(
+        "SELECT * FROM events DISTRIBUTE BY bucket_id SORT BY event_ts DESC",
+        SyntaxKind::DISTRIBUTE_BY_CLAUSE
+    ));
+}
+
+#[test]
 fn higher_order_function_lambdas_are_structured() {
     assert!(has_node(
         "SELECT transform(items, x -> x + 1) FROM events",
@@ -92,6 +112,12 @@ fn backtick_quoted_identifiers_are_databricks_only() {
         !snowflake.errors.is_empty(),
         "Snowflake mode should reject backtick-quoted identifiers"
     );
+}
+
+#[test]
+fn databricks_lexer_gap_tokens_parse_cleanly() {
+    parse_databricks("SELECT a <=> b FROM t");
+    parse_databricks("SELECT r'raw\\n', x'0A0B' FROM t");
 }
 
 #[test]

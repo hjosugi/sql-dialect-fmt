@@ -48,6 +48,26 @@ fn formats_databricks_table_time_travel() {
 }
 
 #[test]
+fn formats_databricks_query_distribution_clauses() {
+    assert_databricks_format(
+        "select * from events distribute by bucket_id sort by event_ts desc",
+        "SELECT *\nFROM events\nDISTRIBUTE BY bucket_id\nSORT BY event_ts DESC;\n",
+    );
+    assert_databricks_format(
+        "select * from events cluster by bucket_id, event_ts",
+        "SELECT *\nFROM events\nCLUSTER BY bucket_id, event_ts;\n",
+    );
+}
+
+#[test]
+fn formats_databricks_lexer_gap_constructs() {
+    assert_databricks_format(
+        "select a <=> b, r'raw\\n', x'0A0B' from t",
+        "SELECT a <=> b, r'raw\\n', x'0A0B'\nFROM t;\n",
+    );
+}
+
+#[test]
 fn formats_higher_order_function_lambdas() {
     assert_databricks_format(
         "select transform(items, x -> x + 1) from events",
@@ -74,6 +94,16 @@ fn formats_sql_scripting_blocks() {
         "begin atomic\ndeclare total_amount decimal(10, 2);\nif total_amount is null then\nselect 0;\nend if;\nend",
         "BEGIN ATOMIC\n    DECLARE total_amount DECIMAL(10, 2);\n    IF total_amount IS NULL THEN\n        SELECT 0;\n    END IF;\nEND;\n",
     );
+}
+
+#[test]
+fn formats_embedded_sql_body_with_databricks_dialect() {
+    let src =
+        "create procedure p() returns string language sql as 'begin select a <=> b from t; end'";
+    let expected = "CREATE PROCEDURE p () RETURNS string LANGUAGE SQL AS '\nBEGIN\n    SELECT a <=> b FROM t;\nEND;\n';\n";
+    let out = fmt(src);
+    assert_eq!(out, expected);
+    assert_eq!(fmt(&out), out);
 }
 
 #[test]

@@ -13,7 +13,16 @@ use lsp_types::{
 };
 use sql_dialect_fmt_formatter::{format, FormatOptions};
 use sql_dialect_fmt_highlight::{semantic, HighlightKind, HighlightToken};
-use sql_dialect_fmt_text::{LineIndex, Utf16Position};
+use sql_dialect_fmt_text::{LineIndex, Utf16Position, Utf8Position};
+
+/// LSP position encoding negotiated with the client.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PositionEncoding {
+    /// UTF-16 code units, the LSP default.
+    Utf16,
+    /// UTF-8 byte offsets.
+    Utf8,
+}
 
 /// The semantic-token type legend, mirrored from the single source of truth in
 /// `sql-dialect-fmt-highlight` ([`semantic::SemanticTokenType::LEGEND`]). A token's `token_type` field is
@@ -37,30 +46,62 @@ pub fn token_modifiers() -> Vec<SemanticTokenModifier> {
         .collect()
 }
 
-fn lsp_position(index: &LineIndex<'_>, offset: usize) -> Position {
-    let position = index.utf16_position(offset);
-    Position::new(position.line, position.character)
+fn lsp_position(index: &LineIndex<'_>, offset: usize, encoding: PositionEncoding) -> Position {
+    match encoding {
+        PositionEncoding::Utf16 => {
+            let position = index.utf16_position(offset);
+            Position::new(position.line, position.character)
+        }
+        PositionEncoding::Utf8 => {
+            let position = index.utf8_position(offset);
+            Position::new(position.line, position.character)
+        }
+    }
 }
 
-fn lsp_end_position(index: &LineIndex<'_>) -> Position {
-    let position = index.end_utf16_position();
-    Position::new(position.line, position.character)
+fn lsp_end_position(index: &LineIndex<'_>, encoding: PositionEncoding) -> Position {
+    match encoding {
+        PositionEncoding::Utf16 => {
+            let position = index.end_utf16_position();
+            Position::new(position.line, position.character)
+        }
+        PositionEncoding::Utf8 => {
+            let position = index.end_utf8_position();
+            Position::new(position.line, position.character)
+        }
+    }
 }
 
-fn lsp_offset(index: &LineIndex<'_>, position: Position) -> usize {
-    index.offset_for_utf16_position(Utf16Position::new(position.line, position.character))
+fn lsp_offset(index: &LineIndex<'_>, position: Position, encoding: PositionEncoding) -> usize {
+    match encoding {
+        PositionEncoding::Utf16 => {
+            index.offset_for_utf16_position(Utf16Position::new(position.line, position.character))
+        }
+        PositionEncoding::Utf8 => {
+            index.offset_for_utf8_position(Utf8Position::new(position.line, position.character))
+        }
+    }
 }
 
 /// The edits to apply for `textDocument/formatting`: a single whole-document replacement, or an
 /// empty list when the input is already formatted (so the editor records no change).
 pub fn format_edits(text: &str, options: &FormatOptions) -> Vec<TextEdit> {
+    format_edits_with_encoding(text, options, PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`format_edits`].
+pub fn format_edits_with_encoding(
+    text: &str,
+    options: &FormatOptions,
+    encoding: PositionEncoding,
+) -> Vec<TextEdit> {
     let formatted = format(text, options);
     if formatted == text {
         return Vec::new();
     }
     let index = LineIndex::new(text);
     vec![TextEdit {
-        range: Range::new(Position::new(0, 0), lsp_end_position(&index)),
+        range: Range::new(Position::new(0, 0), lsp_end_position(&index, encoding)),
         new_text: formatted,
     }]
 }
@@ -74,11 +115,25 @@ pub fn format_edits(text: &str, options: &FormatOptions) -> Vec<TextEdit> {
 /// Each diagnostic's range covers the whole offending token (via its byte `range()`), not a single
 /// character, so editors underline the real span.
 pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
+    diagnostics_with_options(text, &FormatOptions::default(), PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`diagnostics`].
+pub fn diagnostics_with_encoding(text: &str, encoding: PositionEncoding) -> Vec<Diagnostic> {
+    diagnostics_with_options(text, &FormatOptions::default(), encoding)
+}
+
+/// Options- and encoding-aware variant of [`diagnostics`].
+pub fn diagnostics_with_options(
+    text: &str,
+    options: &FormatOptions,
+    encoding: PositionEncoding,
+) -> Vec<Diagnostic> {
     let index = LineIndex::new(text);
     let to_range = |span: std::ops::Range<usize>| {
         Range::new(
-            lsp_position(&index, span.start),
-            lsp_position(&index, span.end),
+            lsp_position(&index, span.start, encoding),
+            lsp_position(&index, span.end, encoding),
         )
     };
     let make = |range: Range, message: String| Diagnostic {
@@ -89,10 +144,11 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
         ..Default::default()
     };
 
+    let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(text, options.dialect);
+    let lex_errors = lexed.errors.clone();
+    let parse = sql_dialect_fmt_parser::parse_lexed(text, options.dialect, lexed);
     let highlighted = sql_dialect_fmt_highlight::highlight(text);
-    let parse = sql_dialect_fmt_parser::parse(text);
-    let mut diagnostics: Vec<_> = highlighted
-        .errors
+    let mut diagnostics: Vec<_> = lex_errors
         .iter()
         .map(|err| make(to_range(err.range()), err.message.clone()))
         .chain(
@@ -102,25 +158,42 @@ pub fn diagnostics(text: &str) -> Vec<Diagnostic> {
                 .map(|err| make(to_range(err.range()), err.message.clone())),
         )
         .collect();
-    diagnostics.extend(embedded_language_diagnostics(&highlighted.tokens, &index));
-    diagnostics.extend(lint_diagnostics(&highlighted.tokens, &index));
+    diagnostics.extend(embedded_language_diagnostics_with_encoding(
+        &highlighted.tokens,
+        &index,
+        encoding,
+    ));
+    diagnostics.extend(lint_diagnostics_with_encoding(
+        &highlighted.tokens,
+        &index,
+        encoding,
+    ));
     diagnostics
 }
 
-fn lint_diagnostics(tokens: &[HighlightToken<'_>], index: &LineIndex<'_>) -> Vec<Diagnostic> {
+fn lint_diagnostics_with_encoding(
+    tokens: &[HighlightToken<'_>],
+    index: &LineIndex<'_>,
+    encoding: PositionEncoding,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    diagnostics.extend(select_wildcard_diagnostics(tokens, index));
-    diagnostics.extend(large_in_list_diagnostics(tokens, index));
+    diagnostics.extend(select_wildcard_diagnostics(tokens, index, encoding));
+    diagnostics.extend(large_in_list_diagnostics(tokens, index, encoding));
 
     diagnostics
 }
 
-fn lint_warning(index: &LineIndex<'_>, range: std::ops::Range<usize>, message: &str) -> Diagnostic {
+fn lint_warning(
+    index: &LineIndex<'_>,
+    range: std::ops::Range<usize>,
+    message: &str,
+    encoding: PositionEncoding,
+) -> Diagnostic {
     Diagnostic {
         range: Range::new(
-            lsp_position(index, range.start),
-            lsp_position(index, range.end),
+            lsp_position(index, range.start, encoding),
+            lsp_position(index, range.end, encoding),
         ),
         severity: Some(DiagnosticSeverity::WARNING),
         source: Some("sql-dialect-fmt".to_string()),
@@ -132,6 +205,7 @@ fn lint_warning(index: &LineIndex<'_>, range: std::ops::Range<usize>, message: &
 fn select_wildcard_diagnostics(
     tokens: &[HighlightToken<'_>],
     index: &LineIndex<'_>,
+    encoding: PositionEncoding,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut in_select_list = false;
@@ -165,6 +239,7 @@ fn select_wildcard_diagnostics(
                             index,
                             token.range.clone(),
                             "avoid SELECT * in shared SQL; list columns explicitly",
+                            encoding,
                         ));
                     }
                 }
@@ -187,6 +262,7 @@ fn is_wildcard_prefix(text: &str) -> bool {
 fn large_in_list_diagnostics(
     tokens: &[HighlightToken<'_>],
     index: &LineIndex<'_>,
+    encoding: PositionEncoding,
 ) -> Vec<Diagnostic> {
     const LARGE_IN_LIST_THRESHOLD: usize = 100;
 
@@ -239,6 +315,7 @@ fn large_in_list_diagnostics(
                             index,
                             active.start..end,
                             "large IN list; prefer a temp table, CTE, or semi-join when practical",
+                            encoding,
                         ));
                     }
                 }
@@ -271,9 +348,10 @@ fn is_significant(kind: HighlightKind) -> bool {
     !matches!(kind, HighlightKind::Whitespace | HighlightKind::Comment)
 }
 
-fn embedded_language_diagnostics(
+fn embedded_language_diagnostics_with_encoding(
     tokens: &[HighlightToken<'_>],
     index: &LineIndex<'_>,
+    encoding: PositionEncoding,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut expect_language_name = false;
@@ -293,7 +371,10 @@ fn embedded_language_diagnostics(
                     if let Some((word, range)) = language_name.take() {
                         if !is_supported_embedded_language(word) {
                             diagnostics.push(Diagnostic {
-                                range: Range::new(lsp_position(index, range.start), lsp_position(index, range.end)),
+                                range: Range::new(
+                                    lsp_position(index, range.start, encoding),
+                                    lsp_position(index, range.end, encoding),
+                                ),
                                 severity: Some(DiagnosticSeverity::WARNING),
                                 source: Some("sql-dialect-fmt".to_string()),
                                 message: format!(
@@ -341,8 +422,17 @@ fn is_supported_embedded_language(word: &str) -> bool {
 /// Hover information for `textDocument/hover`: the keyword/type/symbol description at `position`,
 /// rendered as Markdown with an optional docs link, scoped to the hovered token's range.
 pub fn hover(text: &str, position: Position) -> Option<Hover> {
+    hover_with_encoding(text, position, PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`hover`].
+pub fn hover_with_encoding(
+    text: &str,
+    position: Position,
+    encoding: PositionEncoding,
+) -> Option<Hover> {
     let index = LineIndex::new(text);
-    let info = sql_dialect_fmt_hover::hover_at(text, lsp_offset(&index, position))?;
+    let info = sql_dialect_fmt_hover::hover_at(text, lsp_offset(&index, position, encoding))?;
     let mut value = format!("**{}**\n\n{}", info.title, info.body);
     if let Some(url) = info.docs_url {
         value.push_str(&format!("\n\n[Snowflake docs]({url})"));
@@ -353,8 +443,8 @@ pub fn hover(text: &str, position: Position) -> Option<Hover> {
             value,
         }),
         range: Some(Range::new(
-            lsp_position(&index, info.range.start),
-            lsp_position(&index, info.range.end),
+            lsp_position(&index, info.range.start, encoding),
+            lsp_position(&index, info.range.end, encoding),
         )),
     })
 }
@@ -374,8 +464,18 @@ pub fn folding_ranges(text: &str) -> Vec<FoldingRange> {
                 .filter(|t| !t.kind().is_trivia());
             let first = tokens.next()?;
             let last = tokens.last().unwrap_or_else(|| first.clone());
-            let start = lsp_position(&index, first.text_range().start().into()).line;
-            let end = lsp_position(&index, last.text_range().end().into()).line;
+            let start = lsp_position(
+                &index,
+                first.text_range().start().into(),
+                PositionEncoding::Utf16,
+            )
+            .line;
+            let end = lsp_position(
+                &index,
+                last.text_range().end().into(),
+                PositionEncoding::Utf16,
+            )
+            .line;
             (end > start).then_some(FoldingRange {
                 start_line: start,
                 end_line: end,
@@ -392,12 +492,22 @@ pub fn folding_ranges(text: &str) -> Vec<FoldingRange> {
 /// covers; a `None` range is a whole-document replacement (the editor sent the full text). The
 /// range is treated as ordered and clamped to the document, so a malformed event can't panic.
 pub fn apply_change(text: &str, range: Option<Range>, new_text: &str) -> String {
+    apply_change_with_encoding(text, range, new_text, PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`apply_change`].
+pub fn apply_change_with_encoding(
+    text: &str,
+    range: Option<Range>,
+    new_text: &str,
+    encoding: PositionEncoding,
+) -> String {
     let Some(range) = range else {
         return new_text.to_string();
     };
     let index = LineIndex::new(text);
-    let a = lsp_offset(&index, range.start);
-    let b = lsp_offset(&index, range.end);
+    let a = lsp_offset(&index, range.start, encoding);
+    let b = lsp_offset(&index, range.end, encoding);
     let (start, end) = (a.min(b), a.max(b));
     let mut out = String::with_capacity(text.len() - (end - start) + new_text.len());
     out.push_str(&text[..start]);
@@ -416,8 +526,16 @@ pub fn apply_change(text: &str, range: Option<Range>, new_text: &str) -> String 
 /// quintuple into an `lsp_types::SemanticToken`, **preserving** the modifier bitset (rather than
 /// hardcoding 0) so `defaultLibrary` / `documentation` modifiers reach the editor.
 pub fn semantic_tokens(text: &str) -> Vec<SemanticToken> {
-    semantic::semantic_tokens_lsp(text)
-        .into_iter()
+    semantic_tokens_with_encoding(text, PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`semantic_tokens`].
+pub fn semantic_tokens_with_encoding(text: &str, encoding: PositionEncoding) -> Vec<SemanticToken> {
+    let raw = match encoding {
+        PositionEncoding::Utf16 => semantic::semantic_tokens_lsp(text),
+        PositionEncoding::Utf8 => sql_dialect_fmt_highlight::semantic_tokens_lsp_utf8(text),
+    };
+    raw.into_iter()
         .map(
             |[delta_line, delta_start, length, token_type, token_modifiers_bitset]| SemanticToken {
                 delta_line,
@@ -438,12 +556,35 @@ mod tests {
     fn line_index_maps_offsets_to_utf16_positions() {
         let text = "SELECT a\nFROM 芋;\n"; // 芋 is one UTF-16 unit but 3 bytes
         let index = LineIndex::new(text);
-        assert_eq!(lsp_position(&index, 0), Position::new(0, 0));
-        assert_eq!(lsp_position(&index, 7), Position::new(0, 7)); // the `a`
+        assert_eq!(
+            lsp_position(&index, 0, PositionEncoding::Utf16),
+            Position::new(0, 0)
+        );
+        assert_eq!(
+            lsp_position(&index, 7, PositionEncoding::Utf16),
+            Position::new(0, 7)
+        ); // the `a`
         let from = text.find("FROM").unwrap();
-        assert_eq!(lsp_position(&index, from), Position::new(1, 0));
+        assert_eq!(
+            lsp_position(&index, from, PositionEncoding::Utf16),
+            Position::new(1, 0)
+        );
         let semicolon = text.find(';').unwrap();
-        assert_eq!(lsp_position(&index, semicolon), Position::new(1, 6)); // FROM<sp>芋 = 6 utf16 units
+        assert_eq!(
+            lsp_position(&index, semicolon, PositionEncoding::Utf16),
+            Position::new(1, 6)
+        ); // FROM<sp>芋 = 6 utf16 units
+    }
+
+    #[test]
+    fn line_index_maps_offsets_to_utf8_positions() {
+        let text = "SELECT a\nFROM 芋;\n";
+        let index = LineIndex::new(text);
+        let semicolon = text.find(';').unwrap();
+        assert_eq!(
+            lsp_position(&index, semicolon, PositionEncoding::Utf8),
+            Position::new(1, 8)
+        ); // FROM<sp>芋 = 8 utf8 bytes
     }
 
     #[test]
@@ -606,7 +747,14 @@ mod tests {
             text.find("FROM").unwrap(),
             text.find(';').unwrap(),
         ] {
-            assert_eq!(lsp_offset(&index, lsp_position(&index, offset)), offset);
+            assert_eq!(
+                lsp_offset(
+                    &index,
+                    lsp_position(&index, offset, PositionEncoding::Utf16),
+                    PositionEncoding::Utf16
+                ),
+                offset
+            );
         }
     }
 
@@ -629,6 +777,22 @@ mod tests {
         let text = "hello\nworld\n";
         let range = Range::new(Position::new(1, 0), Position::new(1, 5));
         assert_eq!(apply_change(text, Some(range), "snow"), "hello\nsnow\n");
+    }
+
+    #[test]
+    fn apply_change_splices_utf8_encoded_ranges() {
+        let text = "SELECT '長芋'\nFROM t\n";
+        let start = Position::new(0, "SELECT '長".len() as u32);
+        let end = Position::new(0, "SELECT '長芋".len() as u32);
+        assert_eq!(
+            apply_change_with_encoding(
+                text,
+                Some(Range::new(start, end)),
+                "山芋",
+                PositionEncoding::Utf8
+            ),
+            "SELECT '長山芋'\nFROM t\n"
+        );
     }
 
     #[test]

@@ -846,6 +846,9 @@ fn stage_ref(p: &mut Parser) {
 /// Consume one atom of a stage path (a name, number, or `~`/`%`), returning whether one was eaten.
 /// Anything else (paren, comma, `=`, EOF, a clause keyword) ends the path.
 fn eat_stage_atom(p: &mut Parser) -> bool {
+    if at_stage_ref_boundary(p) {
+        return false;
+    }
     if p.at(IDENT)
         || p.at(QUOTED_IDENT)
         || p.at(INT_NUMBER)
@@ -860,6 +863,28 @@ fn eat_stage_atom(p: &mut Parser) -> bool {
     }
 }
 
+fn at_stage_ref_boundary(p: &Parser) -> bool {
+    let keyword_boundary = p.at(FROM_KW)
+        || p.at(WHERE_KW)
+        || p.at(GROUP_KW)
+        || p.at(HAVING_KW)
+        || p.at(QUALIFY_KW)
+        || p.at(WINDOW_KW)
+        || p.at(ORDER_KW)
+        || p.at(LIMIT_KW)
+        || p.at(OFFSET_KW)
+        || p.at(FETCH_KW)
+        || p.at(JOIN_KW)
+        || p.at(INNER_KW)
+        || p.at(LEFT_KW)
+        || p.at(RIGHT_KW)
+        || p.at(FULL_KW)
+        || p.at(CROSS_KW)
+        || p.at(NATURAL_KW)
+        || at_copy_option_start(p);
+    keyword_boundary && !p.nth_at(1, SLASH) && !p.nth_at(1, DOT)
+}
+
 /// A COPY target/source: a parenthesized query, or a location captured as a verbatim token run up
 /// to `FROM`, the first option, or the statement end.
 fn copy_operand(p: &mut Parser) {
@@ -868,6 +893,11 @@ fn copy_operand(p: &mut Parser) {
         return;
     }
     let m = p.start();
+    if p.at(AT) {
+        stage_ref(p);
+        m.complete(p, COPY_LOCATION);
+        return;
+    }
     while !p.at(FROM_KW) && !at_stmt_terminator(p) && !at_copy_option_start(p) {
         p.bump_any();
     }
@@ -975,7 +1005,14 @@ fn create_table(p: &mut Parser) {
     if p.at(L_PAREN) {
         column_def_list(p);
     }
-    // `CREATE TABLE <name> CLONE <source> [<time-travel>]` — no column list, no CTAS.
+    // `CREATE TABLE <name> [SHALLOW|DEEP] CLONE <source> [<time-travel>]` — no CTAS.
+    if p.dialect().supports_delta_table_options()
+        && (p.nth_contextual(0, ContextualKeyword::Shallow)
+            || p.nth_contextual(0, ContextualKeyword::Deep))
+        && p.nth_contextual(1, ContextualKeyword::Clone)
+    {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    }
     if p.nth_contextual(0, ContextualKeyword::Clone) {
         p.bump_as(CONTEXTUAL_KEYWORD); // CLONE
         if p.at_name() {
@@ -1554,6 +1591,11 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.at(WINDOW_KW) {
         window_clause(p);
     }
+    while p.dialect().supports_databricks_query_clauses()
+        && at_databricks_query_distribution_clause(p)
+    {
+        databricks_query_distribution_clause(p);
+    }
     if p.at(ORDER_KW) {
         order_by_clause(p);
     }
@@ -1609,6 +1651,8 @@ fn at_clause_end(p: &Parser) -> bool {
         || p.at(HAVING_KW)
         || p.at(QUALIFY_KW)
         || p.at(WINDOW_KW)
+        || (p.dialect().supports_databricks_query_clauses()
+            && at_databricks_query_distribution_clause(p))
         || p.at(ORDER_KW)
         || p.at(LIMIT_KW)
         || p.at(OFFSET_KW)
@@ -2184,6 +2228,8 @@ fn at_alias_blocker(p: &Parser) -> bool {
         || at_time_travel(p)
         || (p.dialect().supports_as_of_travel() && at_databricks_as_of_travel(p))
         || (p.dialect().supports_lateral_view() && at_lateral_view(p))
+        || (p.dialect().supports_databricks_query_clauses()
+            && at_databricks_query_distribution_clause(p))
 }
 
 fn at_join_start(p: &Parser) -> bool {
@@ -2373,6 +2419,36 @@ fn order_by_clause(p: &mut Parser) {
         order_by_item(p);
     }
     m.complete(p, ORDER_BY_CLAUSE);
+}
+
+fn at_databricks_query_distribution_clause(p: &Parser) -> bool {
+    (p.nth_contextual(0, ContextualKeyword::Distribute)
+        || p.nth_contextual(0, ContextualKeyword::Sort)
+        || p.nth_contextual(0, ContextualKeyword::Cluster))
+        && p.nth_at(1, BY_KW)
+}
+
+fn databricks_query_distribution_clause(p: &mut Parser) {
+    let m = p.start();
+    let kind = if p.nth_contextual(0, ContextualKeyword::Distribute) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        DISTRIBUTE_BY_CLAUSE
+    } else if p.nth_contextual(0, ContextualKeyword::Sort) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        SORT_BY_CLAUSE
+    } else {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        CLUSTER_BY_CLAUSE
+    };
+    p.expect(BY_KW);
+    order_by_item(p);
+    while p.eat(COMMA) {
+        if at_clause_end(p) {
+            break;
+        }
+        order_by_item(p);
+    }
+    m.complete(p, kind);
 }
 
 fn order_by_item(p: &mut Parser) {
@@ -3208,6 +3284,7 @@ fn infix_bp(p: &Parser) -> Option<(u8, u8)> {
         BP_AND
     } else if p.at(EQ)
         || p.at(NEQ)
+        || p.at(NULL_SAFE_EQ)
         || p.at(LT)
         || p.at(LTE)
         || p.at(GT)

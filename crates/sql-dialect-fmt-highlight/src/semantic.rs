@@ -454,6 +454,32 @@ pub fn line_tokens(input: &str) -> Vec<LineToken> {
     out
 }
 
+/// Like [`line_tokens`], but columns and token lengths are measured in UTF-8 bytes.
+pub fn line_tokens_utf8(input: &str) -> Vec<LineToken> {
+    let resolved = resolve_tokens(input);
+    let index = LineIndex::new(input);
+    let mut out = Vec::new();
+
+    for token in &resolved {
+        let mut piece_start = token.range.start;
+        for piece in input[token.range.clone()].split('\n') {
+            let length = piece.len() as u32;
+            if length > 0 {
+                let position = index.utf8_position(piece_start);
+                out.push(LineToken {
+                    line: position.line,
+                    start_char: position.character,
+                    length,
+                    token_type: token.token_type.index(),
+                    modifiers: token.modifiers.bits(),
+                });
+            }
+            piece_start += piece.len() + 1; // skip the piece and its trailing '\n'
+        }
+    }
+    out
+}
+
 /// Delta-encode absolute [`LineToken`]s into the LSP wire form: each quintuple is
 /// `(deltaLine, deltaStartChar, length, tokenType, tokenModifiers)`, where deltas are relative to
 /// the previous token (and `deltaStartChar` resets to the absolute column when the line advances).
@@ -484,6 +510,11 @@ pub fn delta_encode(tokens: &[LineToken]) -> Vec<[u32; 5]> {
 /// `textDocument/semanticTokens/full` (modulo the server's wrapper type).
 pub fn semantic_tokens_lsp(input: &str) -> Vec<[u32; 5]> {
     delta_encode(&line_tokens(input))
+}
+
+/// One-shot semantic tokens using UTF-8 columns/lengths.
+pub fn semantic_tokens_lsp_utf8(input: &str) -> Vec<[u32; 5]> {
+    delta_encode(&line_tokens_utf8(input))
 }
 
 #[cfg(test)]

@@ -24,42 +24,43 @@ pub enum SyntaxKind {
     VARIABLE, // $1, $42 (positional)  or  $name (session/binding)
 
     // ---- Punctuation & operators ----
-    L_PAREN,   // (
-    R_PAREN,   // )
-    L_BRACKET, // [
-    R_BRACKET, // ]
-    L_BRACE,   // {   (lexed for lossless recovery; no grammar support yet)
-    R_BRACE,   // }
-    COMMA,     // ,
-    DOT,       // .
-    SEMICOLON, // ;
-    COLON,     // :   (semi-structured path access, named args in some dialects)
-    COLON2,    // ::  (cast)
-    ASSIGN,    // :=  (Snowflake Scripting assignment)
-    EQ,        // =
-    NEQ,       // <> or !=
-    LT,        // <
-    LTE,       // <=
-    GT,        // >
-    GTE,       // >=
-    PLUS,      // +
-    MINUS,     // -
-    STAR,      // *
-    SLASH,     // /
-    PERCENT,   // %
-    CONCAT,    // ||
-    PIPE,      // |
-    PIPE_GT,   // |>  (unsupported but lexed for compatibility and corpus coverage)
-    FLOW_PIPE, // ->> (Snowflake flow / pipe operator)
-    ARROW,     // ->  (lambda)
-    FAT_ARROW, // =>  (named argument)
-    AMP,       // &   (unsupported but lexed for lossless recovery)
-    CARET,     // ^   (unsupported but lexed for lossless recovery)
-    TILDE,     // ~
-    AT,        // @   (stage reference)
-    DOLLAR,    // $   (lone dollar, not a variable or $$ )
-    QUESTION,  // ?   (bind marker token; unsupported by the grammar today)
-    BANG,      // !   (unsupported standalone; only `!=` is accepted as NEQ)
+    L_PAREN,      // (
+    R_PAREN,      // )
+    L_BRACKET,    // [
+    R_BRACKET,    // ]
+    L_BRACE,      // {   (lexed for lossless recovery; no grammar support yet)
+    R_BRACE,      // }
+    COMMA,        // ,
+    DOT,          // .
+    SEMICOLON,    // ;
+    COLON,        // :   (semi-structured path access, named args in some dialects)
+    COLON2,       // ::  (cast)
+    ASSIGN,       // :=  (Snowflake Scripting assignment)
+    EQ,           // =
+    NEQ,          // <> or !=
+    LT,           // <
+    LTE,          // <=
+    NULL_SAFE_EQ, // <=> (Databricks/Spark null-safe equality)
+    GT,           // >
+    GTE,          // >=
+    PLUS,         // +
+    MINUS,        // -
+    STAR,         // *
+    SLASH,        // /
+    PERCENT,      // %
+    CONCAT,       // ||
+    PIPE,         // |
+    PIPE_GT,      // |>  (unsupported but lexed for compatibility and corpus coverage)
+    FLOW_PIPE,    // ->> (Snowflake flow / pipe operator)
+    ARROW,        // ->  (lambda)
+    FAT_ARROW,    // =>  (named argument)
+    AMP,          // &   (unsupported but lexed for lossless recovery)
+    CARET,        // ^   (unsupported but lexed for lossless recovery)
+    TILDE,        // ~
+    AT,           // @   (stage reference)
+    DOLLAR,       // $   (lone dollar, not a variable or $$ )
+    QUESTION,     // ?   (bind marker token; unsupported by the grammar today)
+    BANG,         // !   (unsupported standalone; only `!=` is accepted as NEQ)
 
     // ---- Keywords (case-insensitive; recognized via keyword_kind) ----
     // NOTE: this is an intentionally partial but representative set covering the SELECT
@@ -274,6 +275,9 @@ pub enum SyntaxKind {
     HAVING_CLAUSE,
     QUALIFY_CLAUSE,
     ORDER_BY_CLAUSE,
+    DISTRIBUTE_BY_CLAUSE,
+    SORT_BY_CLAUSE,
+    CLUSTER_BY_CLAUSE,
     ORDER_BY_ITEM,
     LIMIT_CLAUSE,
     OFFSET_CLAUSE,
@@ -390,6 +394,9 @@ pub enum SyntaxKind {
     UNCACHE_STMT,          // `UNCACHE TABLE [IF EXISTS] <t>`
     REFRESH_STMT,          // `REFRESH [TABLE] <t>` / `REFRESH <path>`
     DESCRIBE_HISTORY_STMT, // `DESCRIBE HISTORY <table>` (Delta change history)
+    RESTORE_STMT,          // `RESTORE TABLE <t> TO VERSION/TIMESTAMP AS OF ...`
+    ANALYZE_STMT,          // `ANALYZE TABLE <t> COMPUTE STATISTICS`
+    MSCK_REPAIR_STMT,      // `MSCK REPAIR TABLE <t>`
 
     #[doc(hidden)]
     __LAST,
@@ -477,6 +484,7 @@ impl SyntaxKind {
             NEQ => "'<>'",
             LT => "'<'",
             LTE => "'<='",
+            NULL_SAFE_EQ => "'<=>'",
             GT => "'>'",
             GTE => "'>='",
             PLUS => "'+'",
@@ -621,6 +629,7 @@ mod tests {
             (SyntaxKind::PIPE_GT, "'|>'"),
             (SyntaxKind::L_BRACE, "'{'"),
             (SyntaxKind::QUESTION, "'?'"),
+            (SyntaxKind::NULL_SAFE_EQ, "'<=>'"),
             (SyntaxKind::BANG, "'!'"),
             (SyntaxKind::AMP, "'&'"),
             (SyntaxKind::CARET, "'^'"),

@@ -20,6 +20,7 @@ use crate::doc::{
     break_parent, concat, empty, group, group_expanded, hard_line, indent, join, line, line_suffix,
     soft_line, space, text, Doc,
 };
+use crate::KeywordCase;
 
 mod comments;
 mod options;
@@ -37,8 +38,8 @@ use spacing::{is_value_end, must_separate_to_preserve_tokens, needs_space};
 /// Formatting context.
 #[derive(Clone, Copy)]
 pub(crate) struct Ctx {
-    /// Upper-case SQL keywords (opinionated default on).
-    pub uppercase_keywords: bool,
+    /// Keyword casing policy.
+    pub keyword_case: KeywordCase,
     pub line_width: usize,
     pub indent_width: usize,
     /// The SQL dialect being formatted. Used to parse the source with matching grammar/lexing
@@ -265,10 +266,10 @@ impl Lowerer {
     /// options. Used where layout re-emits a keyword on its own line — e.g. the `AS` before an object
     /// DDL body. Spacing state is left untouched; callers control the surrounding lines.
     fn synth_kw(&self, word: &str) -> Doc {
-        if self.ctx.uppercase_keywords {
-            text(word.to_ascii_uppercase())
-        } else {
-            text(word.to_ascii_lowercase())
+        match self.ctx.keyword_case {
+            KeywordCase::Upper => text(word.to_ascii_uppercase()),
+            KeywordCase::Lower => text(word.to_ascii_lowercase()),
+            KeywordCase::Preserve => text(word.to_ascii_lowercase()),
         }
     }
 
@@ -883,7 +884,8 @@ impl Lowerer {
     fn lower_clause(&mut self, clause: &SyntaxNode) -> Doc {
         match clause.kind() {
             FROM_CLAUSE => self.lower_from(clause),
-            ORDER_BY_CLAUSE | GROUP_BY_CLAUSE => self.lower_keyword_item_list(clause),
+            ORDER_BY_CLAUSE | GROUP_BY_CLAUSE | DISTRIBUTE_BY_CLAUSE | SORT_BY_CLAUSE
+            | CLUSTER_BY_CLAUSE => self.lower_keyword_item_list(clause),
             _ => self.lower_node(clause),
         }
     }
@@ -1064,9 +1066,13 @@ impl Lowerer {
             OPTIMIZE_STMT => self.lower_optimize(node),
             CACHE_STMT => self.lower_cache(node),
             // `VACUUM`, `UNCACHE`, `REFRESH`, and `DESCRIBE HISTORY` are single-line statements.
-            VACUUM_STMT | UNCACHE_STMT | REFRESH_STMT | DESCRIBE_HISTORY_STMT => {
-                self.lower_children(node)
-            }
+            VACUUM_STMT
+            | UNCACHE_STMT
+            | REFRESH_STMT
+            | DESCRIBE_HISTORY_STMT
+            | RESTORE_STMT
+            | ANALYZE_STMT
+            | MSCK_REPAIR_STMT => self.lower_children(node),
             CREATE_STMT => self.lower_create(node),
             ALTER_STMT | USE_STMT | SHOW_STMT | DESCRIBE_STMT | TRUNCATE_STMT
             | TRANSACTION_STMT | UNDROP_STMT | COMMENT_STMT => self.lower_lenient_stmt(node),
@@ -1718,6 +1724,9 @@ fn is_select_clause(kind: SyntaxKind) -> bool {
         kind,
         FROM_CLAUSE
             | WHERE_CLAUSE
+            | DISTRIBUTE_BY_CLAUSE
+            | SORT_BY_CLAUSE
+            | CLUSTER_BY_CLAUSE
             | GROUP_BY_CLAUSE
             | HAVING_CLAUSE
             | QUALIFY_CLAUSE
@@ -1762,8 +1771,12 @@ fn keyword_text_forced(token: &SyntaxToken, ctx: Ctx, force_keyword: bool) -> Do
     // range, but they upper-case just like real keywords.
     let is_keyword =
         force_keyword || token.kind().is_keyword() || token.kind() == CONTEXTUAL_KEYWORD;
-    if ctx.uppercase_keywords && is_keyword {
-        text(token.text().to_ascii_uppercase())
+    if is_keyword {
+        match ctx.keyword_case {
+            KeywordCase::Upper => text(token.text().to_ascii_uppercase()),
+            KeywordCase::Lower => text(token.text().to_ascii_lowercase()),
+            KeywordCase::Preserve => text(token.text().to_string()),
+        }
     } else {
         text(token.text().to_string())
     }

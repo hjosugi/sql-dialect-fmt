@@ -1,6 +1,7 @@
 //! Formatter invariant matrix + goldens for the Databricks/Delta maintenance + cache statements:
-//! `VACUUM`, `OPTIMIZE … ZORDER BY`, `INSERT OVERWRITE`, the `MERGE` extensions, `CACHE`/`UNCACHE`/
-//! `REFRESH`, and `DESCRIBE HISTORY`.
+//! `VACUUM`, `OPTIMIZE … ZORDER BY`, `RESTORE`, `ANALYZE TABLE`, `MSCK REPAIR TABLE`,
+//! `INSERT OVERWRITE`, the `MERGE` extensions, `CACHE`/`UNCACHE`/`REFRESH`, and
+//! `DESCRIBE HISTORY`.
 //!
 //! Every case is asserted under the **Databricks** dialect to:
 //!   1. parse with no errors,
@@ -78,6 +79,13 @@ const CASES: &[&str] = &[
     "describe history t",
     "desc history t",
     "describe history main.default.events",
+    // ---- RESTORE / ANALYZE / MSCK REPAIR ----
+    "restore table t to version as of 5",
+    "restore t to timestamp as of '2024-01-01'",
+    "analyze table t compute statistics",
+    "analyze table t compute statistics for columns a, b",
+    "msck repair table t",
+    "msck repair table main.default.events sync partitions",
 ];
 
 #[test]
@@ -208,6 +216,22 @@ fn golden_cache_uncache_refresh() {
 fn golden_describe_history() {
     assert_eq!(fmt("describe history t"), "DESCRIBE HISTORY t;\n");
     assert_eq!(fmt("desc history t"), "DESC HISTORY t;\n");
+}
+
+#[test]
+fn golden_restore_analyze_msck() {
+    assert_eq!(
+        fmt("restore table t to version as of 5"),
+        "RESTORE TABLE t TO VERSION AS OF 5;\n"
+    );
+    assert_eq!(
+        fmt("analyze table t compute statistics for columns a, b"),
+        "ANALYZE TABLE t COMPUTE STATISTICS FOR COLUMNS a, b;\n"
+    );
+    assert_eq!(
+        fmt("msck repair table main.default.events sync partitions"),
+        "MSCK REPAIR TABLE main.default.events SYNC PARTITIONS;\n"
+    );
 }
 
 // ---- cross-dialect guard: Snowflake never panics and round-trips losslessly ----

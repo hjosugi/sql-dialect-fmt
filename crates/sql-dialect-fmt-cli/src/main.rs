@@ -31,7 +31,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use sql_dialect_fmt_encoding::DecodedText;
-use sql_dialect_fmt_formatter::FormatOptions;
+use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_parser::{Dialect, ParseError};
 use sql_dialect_fmt_text::LineColumn;
 
@@ -88,6 +88,8 @@ struct Overrides {
     line_width: Option<usize>,
     indent_width: Option<usize>,
     uppercase_keywords: Option<bool>,
+    keyword_case: Option<KeywordCase>,
+    line_ending: Option<LineEnding>,
     dialect: Option<Dialect>,
 }
 
@@ -100,7 +102,13 @@ impl Overrides {
             options.indent_width = indent_width;
         }
         if let Some(uppercase_keywords) = self.uppercase_keywords {
-            options.uppercase_keywords = uppercase_keywords;
+            *options = (*options).with_uppercase_keywords(uppercase_keywords);
+        }
+        if let Some(keyword_case) = self.keyword_case {
+            *options = (*options).with_keyword_case(keyword_case);
+        }
+        if let Some(line_ending) = self.line_ending {
+            options.line_ending = line_ending;
         }
         if let Some(dialect) = self.dialect {
             options.dialect = dialect;
@@ -684,6 +692,12 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
             "--no-config" => no_config = true,
             "--no-uppercase" => overrides.uppercase_keywords = Some(false),
             "--uppercase" => overrides.uppercase_keywords = Some(true),
+            "--keyword-case" => {
+                overrides.keyword_case = Some(take_keyword_case(&mut args, "--keyword-case")?)
+            }
+            "--line-ending" => {
+                overrides.line_ending = Some(take_line_ending(&mut args, "--line-ending")?)
+            }
             "--dialect" => overrides.dialect = Some(take_dialect(&mut args, "--dialect")?),
             "--line-width" => overrides.line_width = Some(take_usize(&mut args, "--line-width")?),
             "--indent-width" => {
@@ -708,6 +722,12 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
                             overrides.indent_width = Some(parse_usize(flag, value)?)
                         }
                         "--dialect" => overrides.dialect = Some(parse_dialect_flag(value)?),
+                        "--keyword-case" => {
+                            overrides.keyword_case = Some(parse_keyword_case_flag(value)?)
+                        }
+                        "--line-ending" => {
+                            overrides.line_ending = Some(parse_line_ending_flag(value)?)
+                        }
                         "--stdin-filepath" => stdin_filepath = Some(parse_path_flag(flag, value)?),
                         _ => return Err(format!("unknown option {flag}\n\n{}", usage())),
                     }
@@ -764,6 +784,26 @@ fn take_dialect<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Resul
     parse_dialect_flag(value.to_string_lossy().as_ref())
 }
 
+fn take_keyword_case<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<KeywordCase, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a keyword case"))?;
+    parse_keyword_case_flag(value.to_string_lossy().as_ref())
+}
+
+fn take_line_ending<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<LineEnding, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a line ending"))?;
+    parse_line_ending_flag(value.to_string_lossy().as_ref())
+}
+
 fn take_path<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<PathBuf, String> {
     let value = args
         .next()
@@ -776,6 +816,14 @@ fn take_path<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<P
 
 fn parse_dialect_flag(value: &str) -> Result<Dialect, String> {
     config::parse_dialect(value)
+}
+
+fn parse_keyword_case_flag(value: &str) -> Result<KeywordCase, String> {
+    config::parse_keyword_case(value)
+}
+
+fn parse_line_ending_flag(value: &str) -> Result<LineEnding, String> {
+    config::parse_line_ending(value)
 }
 
 fn parse_usize(flag: &str, value: &str) -> Result<usize, String> {
@@ -819,6 +867,10 @@ OPTIONS:
         --line-width N    Target line width (default 100)
         --indent-width N  Spaces per indent level (default 4)
         --dialect NAME    SQL dialect: snowflake or databricks (default snowflake)
+        --keyword-case NAME
+                           Keyword case: upper, lower, or preserve (default upper)
+        --line-ending NAME
+                           Output line endings: auto, lf, or crlf (default lf)
         --uppercase       Upper-case SQL keywords (the default)
         --no-uppercase    Do not upper-case SQL keywords
         --no-config       Ignore any sql-dialect-fmt.toml; use defaults and flags only
@@ -887,20 +939,34 @@ mod tests {
             "--dialect",
             "databricks",
             "--no-uppercase",
+            "--keyword-case",
+            "lower",
+            "--line-ending",
+            "crlf",
             "a.sql",
         ]);
         assert_eq!(args.overrides.line_width, Some(80));
         assert_eq!(args.overrides.dialect, Some(Dialect::Databricks));
         assert_eq!(args.overrides.uppercase_keywords, Some(false));
+        assert_eq!(args.overrides.keyword_case, Some(KeywordCase::Lower));
+        assert_eq!(args.overrides.line_ending, Some(LineEnding::Crlf));
         assert_eq!(args.paths, vec![PathBuf::from("a.sql")]);
     }
 
     #[test]
     fn parses_eq_style_options() {
-        let args = run_args(&["--line-width=70", "--indent-width=2", "--dialect=snowflake"]);
+        let args = run_args(&[
+            "--line-width=70",
+            "--indent-width=2",
+            "--dialect=snowflake",
+            "--keyword-case=preserve",
+            "--line-ending=auto",
+        ]);
         assert_eq!(args.overrides.line_width, Some(70));
         assert_eq!(args.overrides.indent_width, Some(2));
         assert_eq!(args.overrides.dialect, Some(Dialect::Snowflake));
+        assert_eq!(args.overrides.keyword_case, Some(KeywordCase::Preserve));
+        assert_eq!(args.overrides.line_ending, Some(LineEnding::Auto));
     }
 
     #[test]
@@ -977,6 +1043,12 @@ mod tests {
     fn invalid_dialect_arg_errors() {
         assert!(parse_args(["--dialect", "oracle"].map(Into::into)).is_err());
         assert!(parse_args(["--dialect"].map(Into::into)).is_err());
+    }
+
+    #[test]
+    fn invalid_keyword_case_and_line_ending_args_error() {
+        assert!(parse_args(["--keyword-case", "title"].map(Into::into)).is_err());
+        assert!(parse_args(["--line-ending", "native"].map(Into::into)).is_err());
     }
 
     #[test]

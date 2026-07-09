@@ -102,6 +102,25 @@ fn produces_expected_nodes() {
 }
 
 #[test]
+fn stage_locations_are_structured_inside_copy_locations() {
+    for sql in ["COPY INTO t FROM @s/p", "COPY INTO @s/out/ FROM t"] {
+        let parsed = assert_parse_clean(sql);
+        let has_stage_location = parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::COPY_LOCATION)
+            .any(|node| {
+                node.descendants()
+                    .any(|child| child.kind() == SyntaxKind::STAGE_REF)
+            });
+        assert!(
+            has_stage_location,
+            "expected COPY_LOCATION to contain a STAGE_REF for {sql:?}"
+        );
+    }
+}
+
+#[test]
 fn select_from_stage_parses_as_a_query() {
     // The bug this guards: `SELECT ... FROM @stage` is a first-class table source.
     for sql in [

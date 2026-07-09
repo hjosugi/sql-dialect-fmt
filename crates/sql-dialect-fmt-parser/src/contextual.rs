@@ -228,6 +228,14 @@ contextual_keywords! {
     Cluster => "cluster",
     /// `CREATE TABLE <name> CLONE <source>`.
     Clone => "clone",
+    /// `CREATE TABLE <name> SHALLOW CLONE <source>`.
+    Shallow => "shallow",
+    /// `CREATE TABLE <name> DEEP CLONE <source>`.
+    Deep => "deep",
+    /// Databricks/Spark `DISTRIBUTE BY`.
+    Distribute => "distribute",
+    /// Databricks/Spark `SORT BY`.
+    Sort => "sort",
     /// A `PRIMARY KEY` constraint (also the first word of the two).
     Primary => "primary",
     /// The `KEY` of `PRIMARY KEY` / `FOREIGN KEY`.
@@ -268,6 +276,24 @@ contextual_keywords! {
     Uncache => "uncache",
     /// `REFRESH [TABLE] <t>` / `REFRESH <path>` — invalidate cached entries.
     Refresh => "refresh",
+    /// `RESTORE TABLE <t> ...` — Delta restore statement.
+    Restore => "restore",
+    /// `ANALYZE TABLE <t> COMPUTE STATISTICS` — Spark statistics statement.
+    Analyze => "analyze",
+    /// `ANALYZE TABLE <t> COMPUTE STATISTICS` — compute word.
+    Compute => "compute",
+    /// `ANALYZE TABLE <t> COMPUTE STATISTICS` — statistics word.
+    Statistics => "statistics",
+    /// `ANALYZE TABLE <t> COMPUTE STATISTICS FOR COLUMNS ...` — columns word.
+    Columns => "columns",
+    /// `MSCK REPAIR TABLE <t>` — first word.
+    Msck => "msck",
+    /// `MSCK REPAIR TABLE <t>` — second word.
+    Repair => "repair",
+    /// `MSCK REPAIR TABLE <t> SYNC PARTITIONS` — sync word.
+    Sync => "sync",
+    /// `MSCK REPAIR TABLE <t> SYNC PARTITIONS` — partitions word.
+    Partitions => "partitions",
     /// `DESCRIBE HISTORY <table>` — Delta change-history statement (the `HISTORY` word).
     History => "history",
     /// `MERGE ... WHEN NOT MATCHED BY SOURCE ...` — the `SOURCE` qualifier word.

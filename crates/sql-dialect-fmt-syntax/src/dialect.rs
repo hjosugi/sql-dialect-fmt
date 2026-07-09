@@ -47,6 +47,13 @@ impl Dialect {
         matches!(self, Dialect::Snowflake)
     }
 
+    /// `// ...` line comments. Snowflake accepts them; Databricks/Spark uses `/` as an operator
+    /// and must not have a doubled slash consume the rest of the physical line.
+    #[must_use]
+    pub fn supports_double_slash_comments(self) -> bool {
+        matches!(self, Dialect::Snowflake)
+    }
+
     /// `CREATE SEMANTIC VIEW ...` semantic-layer DDL. Snowflake only.
     #[must_use]
     pub fn supports_semantic_view(self) -> bool {
@@ -73,6 +80,19 @@ impl Dialect {
         matches!(self, Dialect::Databricks)
     }
 
+    /// Databricks/Spark prefixed string literals such as raw strings (`r'...'`) and hex binary
+    /// literals (`X'1A'`).
+    #[must_use]
+    pub fn supports_prefixed_strings(self) -> bool {
+        matches!(self, Dialect::Databricks)
+    }
+
+    /// Databricks/Spark null-safe equality operator: `<=>`.
+    #[must_use]
+    pub fn supports_null_safe_eq(self) -> bool {
+        matches!(self, Dialect::Databricks)
+    }
+
     /// `LATERAL VIEW explode(...)` table-generating clause. Databricks only.
     #[must_use]
     pub fn supports_lateral_view(self) -> bool {
@@ -96,6 +116,12 @@ impl Dialect {
     /// `AT` / `BEFORE`).
     #[must_use]
     pub fn supports_as_of_travel(self) -> bool {
+        matches!(self, Dialect::Databricks)
+    }
+
+    /// Databricks/Spark query distribution clauses: `DISTRIBUTE BY`, `SORT BY`, and `CLUSTER BY`.
+    #[must_use]
+    pub fn supports_databricks_query_clauses(self) -> bool {
         matches!(self, Dialect::Databricks)
     }
 
@@ -126,14 +152,18 @@ mod tests {
         assert!(s.supports_dollar_quoting());
         assert!(s.supports_flow_operator());
         assert!(s.supports_copy_into());
+        assert!(s.supports_double_slash_comments());
         assert!(s.supports_semantic_view());
         assert!(s.supports_scripting_blocks());
         assert!(s.supports_stage_refs());
         assert!(!s.supports_backtick_identifiers());
+        assert!(!s.supports_prefixed_strings());
+        assert!(!s.supports_null_safe_eq());
         assert!(!s.supports_lateral_view());
         assert!(!s.supports_delta_table_options());
         assert!(!s.supports_lambda_expr());
         assert!(!s.supports_as_of_travel());
+        assert!(!s.supports_databricks_query_clauses());
         assert!(!s.supports_delta_commands());
     }
 
@@ -143,14 +173,18 @@ mod tests {
         assert!(!d.supports_dollar_quoting());
         assert!(!d.supports_flow_operator());
         assert!(!d.supports_copy_into());
+        assert!(!d.supports_double_slash_comments());
         assert!(!d.supports_semantic_view());
         assert!(d.supports_scripting_blocks());
         assert!(!d.supports_stage_refs());
         assert!(d.supports_backtick_identifiers());
+        assert!(d.supports_prefixed_strings());
+        assert!(d.supports_null_safe_eq());
         assert!(d.supports_lateral_view());
         assert!(d.supports_delta_table_options());
         assert!(d.supports_lambda_expr());
         assert!(d.supports_as_of_travel());
+        assert!(d.supports_databricks_query_clauses());
         assert!(d.supports_delta_commands());
     }
 }

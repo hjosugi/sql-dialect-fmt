@@ -16,25 +16,28 @@ use std::error::Error;
 
 use lsp_server::{Connection, ExtractError, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::{
-    DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification as _,
-    PublishDiagnostics,
+    DidChangeConfiguration, DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument,
+    Notification as _, PublishDiagnostics,
 };
 use lsp_types::request::{
     FoldingRangeRequest, Formatting, HoverRequest, Request as _, SemanticTokensFullRequest,
 };
 use lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DocumentFormattingParams, FoldingRange, FoldingRangeParams, Hover, HoverParams,
-    HoverProviderCapability, OneOf, PublishDiagnosticsParams, SemanticTokens, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensParams, SemanticTokensServerCapabilities,
-    ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
-    WorkDoneProgressOptions,
+    DidChangeConfigurationParams, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange, FoldingRangeParams, Hover,
+    HoverParams, HoverProviderCapability, InitializeParams, OneOf, PositionEncodingKind,
+    PublishDiagnosticsParams, SemanticTokens, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensParams, SemanticTokensServerCapabilities, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
 };
-use sql_dialect_fmt_formatter::FormatOptions;
+use serde::Deserialize;
+use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_lsp::{
-    apply_change, diagnostics, folding_ranges, format_edits, hover, semantic_tokens,
-    token_modifiers, token_types,
+    apply_change_with_encoding, diagnostics_with_options, folding_ranges,
+    format_edits_with_encoding, hover_with_encoding, semantic_tokens_with_encoding,
+    token_modifiers, token_types, PositionEncoding as NegotiatedPositionEncoding,
 };
+use sql_dialect_fmt_parser::Dialect;
 
 #[derive(Debug)]
 struct Document {
@@ -44,19 +47,153 @@ struct Document {
 
 type Docs = HashMap<Uri, Document>;
 
+#[derive(Clone, Debug)]
+struct ServerState {
+    options: FormatOptions,
+    position_encoding: NegotiatedPositionEncoding,
+}
+
+impl ServerState {
+    fn from_initialize(params: &InitializeParams) -> Self {
+        let mut state = Self {
+            options: FormatOptions::default(),
+            position_encoding: position_encoding_from_client(params),
+        };
+        if let Some(settings) = &params.initialization_options {
+            state.apply_settings(settings);
+        }
+        state
+    }
+
+    fn apply_settings(&mut self, settings: &serde_json::Value) {
+        apply_options_value(&mut self.options, settings);
+        for key in ["sqlDialectFmt", "sql-dialect-fmt", "sql_dialect_fmt"] {
+            if let Some(nested) = settings.get(key) {
+                apply_options_value(&mut self.options, nested);
+            }
+        }
+        if let Some(nested) = settings.get("settings") {
+            apply_options_value(&mut self.options, nested);
+            for key in ["sqlDialectFmt", "sql-dialect-fmt", "sql_dialect_fmt"] {
+                if let Some(section) = nested.get(key) {
+                    apply_options_value(&mut self.options, section);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct FormatterSettings {
+    #[serde(alias = "line_width")]
+    line_width: Option<usize>,
+    #[serde(alias = "indent_width")]
+    indent_width: Option<usize>,
+    #[serde(alias = "uppercase_keywords")]
+    uppercase_keywords: Option<bool>,
+    #[serde(alias = "keyword_case")]
+    keyword_case: Option<String>,
+    #[serde(alias = "line_ending")]
+    line_ending: Option<String>,
+    dialect: Option<String>,
+}
+
+fn position_encoding_from_client(params: &InitializeParams) -> NegotiatedPositionEncoding {
+    let Some(encodings) = params
+        .capabilities
+        .general
+        .as_ref()
+        .and_then(|general| general.position_encodings.as_ref())
+    else {
+        return NegotiatedPositionEncoding::Utf16;
+    };
+    if encodings
+        .iter()
+        .any(|encoding| encoding == &PositionEncodingKind::UTF8)
+    {
+        NegotiatedPositionEncoding::Utf8
+    } else {
+        NegotiatedPositionEncoding::Utf16
+    }
+}
+
+fn apply_options_value(options: &mut FormatOptions, value: &serde_json::Value) {
+    let Ok(settings) = serde_json::from_value::<FormatterSettings>(value.clone()) else {
+        return;
+    };
+    if let Some(line_width) = settings.line_width {
+        options.line_width = line_width;
+    }
+    if let Some(indent_width) = settings.indent_width {
+        options.indent_width = indent_width;
+    }
+    if let Some(uppercase_keywords) = settings.uppercase_keywords {
+        *options = (*options).with_uppercase_keywords(uppercase_keywords);
+    }
+    if let Some(keyword_case) = settings
+        .keyword_case
+        .as_deref()
+        .and_then(parse_keyword_case)
+    {
+        *options = (*options).with_keyword_case(keyword_case);
+    }
+    if let Some(line_ending) = settings.line_ending.as_deref().and_then(parse_line_ending) {
+        *options = (*options).with_line_ending(line_ending);
+    }
+    if let Some(dialect) = settings.dialect.as_deref().and_then(parse_dialect) {
+        options.dialect = dialect;
+    }
+}
+
+fn parse_dialect(value: &str) -> Option<Dialect> {
+    match value.to_ascii_lowercase().as_str() {
+        "snowflake" => Some(Dialect::Snowflake),
+        "databricks" => Some(Dialect::Databricks),
+        _ => None,
+    }
+}
+
+fn parse_keyword_case(value: &str) -> Option<KeywordCase> {
+    match value.to_ascii_lowercase().as_str() {
+        "upper" => Some(KeywordCase::Upper),
+        "lower" => Some(KeywordCase::Lower),
+        "preserve" => Some(KeywordCase::Preserve),
+        _ => None,
+    }
+}
+
+fn parse_line_ending(value: &str) -> Option<LineEnding> {
+    match value.to_ascii_lowercase().as_str() {
+        "auto" => Some(LineEnding::Auto),
+        "lf" => Some(LineEnding::Lf),
+        "crlf" => Some(LineEnding::Crlf),
+        _ => None,
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     let (connection, io_threads) = Connection::stdio();
-    let capabilities = serde_json::to_value(server_capabilities())?;
-    connection.initialize(capabilities)?;
+    let (initialize_id, initialize_params) = connection.initialize_start()?;
+    let initialize_params: InitializeParams = serde_json::from_value(initialize_params)?;
+    let mut state = ServerState::from_initialize(&initialize_params);
+    let initialize_result = serde_json::json!({
+        "capabilities": server_capabilities(state.position_encoding),
+    });
+    connection.initialize_finish(initialize_id, initialize_result)?;
     // Take the connection by value so it is dropped when the loop ends, closing the I/O channels —
     // otherwise `io_threads.join()` would block forever waiting for the writer thread to finish.
-    main_loop(connection)?;
+    main_loop(connection, &mut state)?;
     io_threads.join()?;
     Ok(())
 }
 
-fn server_capabilities() -> ServerCapabilities {
+fn server_capabilities(position_encoding: NegotiatedPositionEncoding) -> ServerCapabilities {
     ServerCapabilities {
+        position_encoding: Some(match position_encoding {
+            NegotiatedPositionEncoding::Utf8 => PositionEncodingKind::UTF8,
+            NegotiatedPositionEncoding::Utf16 => PositionEncodingKind::UTF16,
+        }),
         text_document_sync: Some(TextDocumentSyncCapability::Kind(
             TextDocumentSyncKind::INCREMENTAL,
         )),
@@ -78,7 +215,10 @@ fn server_capabilities() -> ServerCapabilities {
     }
 }
 
-fn main_loop(connection: Connection) -> Result<(), Box<dyn Error + Sync + Send>> {
+fn main_loop(
+    connection: Connection,
+    state: &mut ServerState,
+) -> Result<(), Box<dyn Error + Sync + Send>> {
     let mut docs = Docs::new();
     for message in &connection.receiver {
         match message {
@@ -86,11 +226,11 @@ fn main_loop(connection: Connection) -> Result<(), Box<dyn Error + Sync + Send>>
                 if connection.handle_shutdown(&request)? {
                     return Ok(());
                 }
-                let response = handle_request(request, &docs);
+                let response = handle_request(request, &docs, state);
                 connection.sender.send(Message::Response(response))?;
             }
             Message::Notification(notification) => {
-                handle_notification(&connection, notification, &mut docs)?;
+                handle_notification(&connection, notification, &mut docs, state)?;
             }
             Message::Response(_) => {} // we issue no server->client requests
         }
@@ -98,18 +238,18 @@ fn main_loop(connection: Connection) -> Result<(), Box<dyn Error + Sync + Send>>
     Ok(())
 }
 
-fn handle_request(request: Request, docs: &Docs) -> Response {
+fn handle_request(request: Request, docs: &Docs, state: &ServerState) -> Response {
     match request.method.as_str() {
         Formatting::METHOD => match cast::<Formatting>(request) {
-            Ok((id, params)) => ok(id, formatting(params, docs)),
+            Ok((id, params)) => ok(id, formatting(params, docs, state)),
             Err(response) => *response,
         },
         SemanticTokensFullRequest::METHOD => match cast::<SemanticTokensFullRequest>(request) {
-            Ok((id, params)) => ok(id, semantic_tokens_full(params, docs)),
+            Ok((id, params)) => ok(id, semantic_tokens_full(params, docs, state)),
             Err(response) => *response,
         },
         HoverRequest::METHOD => match cast::<HoverRequest>(request) {
-            Ok((id, params)) => ok(id, hover_request(params, docs)),
+            Ok((id, params)) => ok(id, hover_request(params, docs, state)),
             Err(response) => *response,
         },
         FoldingRangeRequest::METHOD => match cast::<FoldingRangeRequest>(request) {
@@ -124,28 +264,37 @@ fn handle_request(request: Request, docs: &Docs) -> Response {
     }
 }
 
-fn formatting(params: DocumentFormattingParams, docs: &Docs) -> Vec<lsp_types::TextEdit> {
+fn formatting(
+    params: DocumentFormattingParams,
+    docs: &Docs,
+    state: &ServerState,
+) -> Vec<lsp_types::TextEdit> {
     let Some(document) = docs.get(&params.text_document.uri) else {
         return Vec::new();
     };
-    // Honor the editor's indent width; keep the other opinionated defaults.
-    let options =
-        FormatOptions::default().with_indent_width((params.options.tab_size as usize).max(1));
-    format_edits(&document.text, &options)
+    let mut options = state.options;
+    if params.options.insert_spaces {
+        options.indent_width = (params.options.tab_size as usize).max(1);
+    }
+    format_edits_with_encoding(&document.text, &options, state.position_encoding)
 }
 
-fn semantic_tokens_full(params: SemanticTokensParams, docs: &Docs) -> Option<SemanticTokens> {
+fn semantic_tokens_full(
+    params: SemanticTokensParams,
+    docs: &Docs,
+    state: &ServerState,
+) -> Option<SemanticTokens> {
     let text = &docs.get(&params.text_document.uri)?.text;
     Some(SemanticTokens {
         result_id: None,
-        data: semantic_tokens(text),
+        data: semantic_tokens_with_encoding(text, state.position_encoding),
     })
 }
 
-fn hover_request(params: HoverParams, docs: &Docs) -> Option<Hover> {
+fn hover_request(params: HoverParams, docs: &Docs, state: &ServerState) -> Option<Hover> {
     let position = params.text_document_position_params;
     let text = &docs.get(&position.text_document.uri)?.text;
-    hover(text, position.position)
+    hover_with_encoding(text, position.position, state.position_encoding)
 }
 
 fn folding_request(params: FoldingRangeParams, docs: &Docs) -> Option<Vec<FoldingRange>> {
@@ -157,8 +306,17 @@ fn handle_notification(
     connection: &Connection,
     notification: Notification,
     docs: &mut Docs,
+    state: &mut ServerState,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     match notification.method.as_str() {
+        DidChangeConfiguration::METHOD => {
+            let params: DidChangeConfigurationParams =
+                notification.extract(DidChangeConfiguration::METHOD)?;
+            state.apply_settings(&params.settings);
+            for uri in docs.keys().cloned().collect::<Vec<_>>() {
+                publish_diagnostics(connection, docs, &uri, state)?;
+            }
+        }
         DidOpenTextDocument::METHOD => {
             let params: DidOpenTextDocumentParams =
                 notification.extract(DidOpenTextDocument::METHOD)?;
@@ -170,7 +328,7 @@ fn handle_notification(
                     version: Some(params.text_document.version),
                 },
             );
-            publish_diagnostics(connection, docs, &uri)?;
+            publish_diagnostics(connection, docs, &uri, state)?;
         }
         DidChangeTextDocument::METHOD => {
             let params: DidChangeTextDocumentParams =
@@ -183,7 +341,12 @@ fn handle_notification(
                 .map(|document| document.text)
                 .unwrap_or_default();
             for change in params.content_changes {
-                text = apply_change(&text, change.range, &change.text);
+                text = apply_change_with_encoding(
+                    &text,
+                    change.range,
+                    &change.text,
+                    state.position_encoding,
+                );
             }
             docs.insert(
                 uri.clone(),
@@ -192,7 +355,7 @@ fn handle_notification(
                     version: Some(params.text_document.version),
                 },
             );
-            publish_diagnostics(connection, docs, &uri)?;
+            publish_diagnostics(connection, docs, &uri, state)?;
         }
         DidCloseTextDocument::METHOD => {
             let params: DidCloseTextDocumentParams =
@@ -210,10 +373,13 @@ fn publish_diagnostics(
     connection: &Connection,
     docs: &Docs,
     uri: &Uri,
+    state: &ServerState,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let diags = docs
         .get(uri)
-        .map(|document| diagnostics(&document.text))
+        .map(|document| {
+            diagnostics_with_options(&document.text, &state.options, state.position_encoding)
+        })
         .unwrap_or_default();
     let version = docs.get(uri).and_then(|document| document.version);
     send_diagnostics(connection, uri.clone(), diags, version)
@@ -274,6 +440,13 @@ mod tests {
         "file:///workspace/query.sql".parse().expect("valid URI")
     }
 
+    fn test_state() -> ServerState {
+        ServerState {
+            options: FormatOptions::default(),
+            position_encoding: NegotiatedPositionEncoding::Utf16,
+        }
+    }
+
     fn recv_diagnostics(client: &Connection) -> PublishDiagnosticsParams {
         let Message::Notification(notification) =
             client.receiver.recv().expect("diagnostics notification")
@@ -288,6 +461,7 @@ mod tests {
     fn did_open_stores_and_publishes_document_version() {
         let (server, client) = Connection::memory();
         let mut docs = Docs::new();
+        let mut state = test_state();
         let uri = test_uri();
         let notification = Notification::new(
             DidOpenTextDocument::METHOD.to_string(),
@@ -301,7 +475,7 @@ mod tests {
             },
         );
 
-        handle_notification(&server, notification, &mut docs).expect("handle didOpen");
+        handle_notification(&server, notification, &mut docs, &mut state).expect("handle didOpen");
 
         assert_eq!(
             docs.get(&uri).and_then(|document| document.version),
@@ -317,6 +491,7 @@ mod tests {
     fn did_change_updates_and_publishes_document_version() {
         let (server, client) = Connection::memory();
         let mut docs = Docs::new();
+        let mut state = test_state();
         let uri = test_uri();
         docs.insert(
             uri.clone(),
@@ -340,7 +515,8 @@ mod tests {
             },
         );
 
-        handle_notification(&server, notification, &mut docs).expect("handle didChange");
+        handle_notification(&server, notification, &mut docs, &mut state)
+            .expect("handle didChange");
 
         let document = docs.get(&uri).expect("document retained");
         assert_eq!(document.text, "select * from t");
@@ -354,6 +530,7 @@ mod tests {
     fn did_close_clears_diagnostics_with_last_document_version() {
         let (server, client) = Connection::memory();
         let mut docs = Docs::new();
+        let mut state = test_state();
         let uri = test_uri();
         docs.insert(
             uri.clone(),
@@ -369,12 +546,53 @@ mod tests {
             },
         );
 
-        handle_notification(&server, notification, &mut docs).expect("handle didClose");
+        handle_notification(&server, notification, &mut docs, &mut state).expect("handle didClose");
 
         assert!(!docs.contains_key(&uri));
         let params = recv_diagnostics(&client);
         assert_eq!(params.uri, uri);
         assert_eq!(params.version, Some(9));
         assert!(params.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn did_change_configuration_updates_dialect_and_republishes_diagnostics() {
+        let (server, client) = Connection::memory();
+        let mut docs = Docs::new();
+        let mut state = test_state();
+        let uri = test_uri();
+        docs.insert(
+            uri.clone(),
+            Document {
+                text: "SELECT a <=> b FROM t;".to_string(),
+                version: Some(4),
+            },
+        );
+        let notification = Notification::new(
+            DidChangeConfiguration::METHOD.to_string(),
+            DidChangeConfigurationParams {
+                settings: serde_json::json!({
+                    "sqlDialectFmt": {
+                        "dialect": "databricks",
+                        "keywordCase": "lower",
+                        "lineEnding": "crlf"
+                    }
+                }),
+            },
+        );
+
+        handle_notification(&server, notification, &mut docs, &mut state)
+            .expect("handle didChangeConfiguration");
+
+        assert_eq!(state.options.dialect, Dialect::Databricks);
+        assert_eq!(state.options.keyword_case, KeywordCase::Lower);
+        assert_eq!(state.options.line_ending, LineEnding::Crlf);
+        let params = recv_diagnostics(&client);
+        assert_eq!(params.uri, uri);
+        assert_eq!(params.version, Some(4));
+        assert!(params
+            .diagnostics
+            .iter()
+            .all(|diagnostic| !diagnostic.message.contains("unexpected character")));
     }
 }

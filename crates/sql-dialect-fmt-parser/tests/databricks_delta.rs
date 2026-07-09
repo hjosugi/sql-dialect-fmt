@@ -1,5 +1,6 @@
 //! Parser coverage for the Databricks/Delta maintenance + cache statements:
-//! `VACUUM`, `OPTIMIZE … ZORDER BY`, `INSERT OVERWRITE`, the `MERGE` extensions
+//! `VACUUM`, `OPTIMIZE … ZORDER BY`, `RESTORE`, `ANALYZE TABLE`, `MSCK REPAIR TABLE`,
+//! `INSERT OVERWRITE`, the `MERGE` extensions
 //! (`WHEN NOT MATCHED [BY TARGET] THEN INSERT *`, `WHEN NOT MATCHED BY SOURCE THEN …`),
 //! `CACHE`/`UNCACHE`/`REFRESH`, and `DESCRIBE HISTORY`.
 //!
@@ -67,6 +68,13 @@ const CASES: &[&str] = &[
     "DESC HISTORY t",
     "DESCRIBE HISTORY main.default.events",
     "DESCRIBE HISTORY '/mnt/data/events'",
+    // ---- RESTORE / ANALYZE / MSCK REPAIR ----
+    "RESTORE TABLE t TO VERSION AS OF 5",
+    "RESTORE t TO TIMESTAMP AS OF '2024-01-01'",
+    "ANALYZE TABLE t COMPUTE STATISTICS",
+    "ANALYZE TABLE t COMPUTE STATISTICS FOR COLUMNS a, b",
+    "MSCK REPAIR TABLE t",
+    "MSCK REPAIR TABLE main.default.events SYNC PARTITIONS",
 ];
 
 fn has_node(sql: &str, kind: SyntaxKind) -> bool {
@@ -187,6 +195,18 @@ fn cache_uncache_refresh_describe_history_are_structured() {
         "DESC HISTORY t",
         SyntaxKind::DESCRIBE_HISTORY_STMT
     ));
+    assert!(has_node(
+        "RESTORE TABLE t TO VERSION AS OF 5",
+        SyntaxKind::RESTORE_STMT
+    ));
+    assert!(has_node(
+        "ANALYZE TABLE t COMPUTE STATISTICS",
+        SyntaxKind::ANALYZE_STMT
+    ));
+    assert!(has_node(
+        "MSCK REPAIR TABLE t",
+        SyntaxKind::MSCK_REPAIR_STMT
+    ));
 }
 
 // ---- cross-dialect guards: these must NOT be recognized under Snowflake ----
@@ -213,6 +233,9 @@ fn delta_commands_are_not_recognized_under_snowflake() {
                     | SyntaxKind::UNCACHE_STMT
                     | SyntaxKind::REFRESH_STMT
                     | SyntaxKind::DESCRIBE_HISTORY_STMT
+                    | SyntaxKind::RESTORE_STMT
+                    | SyntaxKind::ANALYZE_STMT
+                    | SyntaxKind::MSCK_REPAIR_STMT
             )
         });
         assert!(

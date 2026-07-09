@@ -9,6 +9,31 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-09
+
+### Added
+
+- Added formatter keyword casing modes (`upper`, `lower`, `preserve`) and line-ending modes
+  (`lf`, `crlf`, `auto`) across the API, CLI flags, and `sql-dialect-fmt.toml`.
+- Added formatter off/on region directives (`-- sql-dialect-fmt: off/on`, `-- snowfmt: off/on`,
+  and `-- fmt: off/on`) so intentionally hand-written SQL can be preserved verbatim.
+- Added LSP support for `positionEncoding` negotiation, UTF-8 ranges, formatting options, and
+  initialization / `workspace/didChangeConfiguration` settings.
+
+### Changed
+
+- Structured more Databricks SQL, including `<=>`, raw/hex prefixed strings, `DISTRIBUTE BY`,
+  `SORT BY`, `CLUSTER BY`, Delta `RESTORE`, `ANALYZE TABLE`, `MSCK REPAIR TABLE`, and
+  `CREATE TABLE [SHALLOW|DEEP] CLONE`.
+- Structured Snowflake `COPY INTO` stage locations as `STAGE_REF` nodes inside `COPY_LOCATION`
+  without swallowing following `FROM` clauses after trailing stage-path slashes.
+
+### Fixed
+
+- Made embedded SQL routine bodies format with the active dialect instead of falling back to the
+  default Snowflake lexer/parser.
+- Kept Databricks from treating Snowflake-style `//` as a line comment.
+
 ## [1.3.0] - 2026-07-09
 
 ### Added
@@ -153,7 +178,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.1...v1.2.2

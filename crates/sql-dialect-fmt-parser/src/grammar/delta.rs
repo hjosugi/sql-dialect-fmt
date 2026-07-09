@@ -20,13 +20,15 @@ const DELTA_COMMAND_WORDS: &[ContextualKeyword] = &[
     ContextualKeyword::Cache,
     ContextualKeyword::Uncache,
     ContextualKeyword::Refresh,
+    ContextualKeyword::Restore,
+    ContextualKeyword::Analyze,
 ];
 
 /// At the start of a Delta maintenance/cache statement (`VACUUM`/`OPTIMIZE`/`CACHE`/`UNCACHE`/
 /// `REFRESH`), or a `DESCRIBE HISTORY`/`DESC HISTORY`. Only meaningful under the Databricks dialect;
 /// callers gate on [`crate::Dialect::supports_delta_commands`].
 pub(in crate::grammar) fn at_delta_stmt_start(p: &Parser) -> bool {
-    at_command_word(p) || at_describe_history(p)
+    at_command_word(p) || at_describe_history(p) || at_msck_repair(p)
 }
 
 /// At one of the bare command words (`VACUUM`/`OPTIMIZE`/`CACHE`/`UNCACHE`/`REFRESH`) used as a
@@ -53,6 +55,12 @@ pub(in crate::grammar) fn at_describe_history(p: &Parser) -> bool {
     (p.at(DESCRIBE_KW) || p.at(DESC_KW)) && p.nth_contextual(1, ContextualKeyword::History)
 }
 
+fn at_msck_repair(p: &Parser) -> bool {
+    p.nth_contextual(0, ContextualKeyword::Msck)
+        && p.nth_contextual(1, ContextualKeyword::Repair)
+        && p.nth_at(2, TABLE_KW)
+}
+
 /// Dispatch to the matching Delta statement rule. Caller guarantees [`at_delta_stmt_start`].
 pub(in crate::grammar) fn delta_stmt(p: &mut Parser) {
     if at_describe_history(p) {
@@ -67,6 +75,12 @@ pub(in crate::grammar) fn delta_stmt(p: &mut Parser) {
         cache_stmt(p);
     } else if p.nth_contextual(0, ContextualKeyword::Refresh) {
         refresh_stmt(p);
+    } else if p.nth_contextual(0, ContextualKeyword::Restore) {
+        restore_stmt(p);
+    } else if p.nth_contextual(0, ContextualKeyword::Analyze) {
+        analyze_stmt(p);
+    } else if at_msck_repair(p) {
+        msck_repair_stmt(p);
     } else {
         // Unreachable given the `at_*` gate, but stay total.
         super::expr(p);
@@ -214,4 +228,78 @@ fn describe_history_stmt(p: &mut Parser) {
         p.bump_any();
     }
     m.complete(p, DESCRIBE_HISTORY_STMT);
+}
+
+/// `RESTORE [TABLE] <table> TO VERSION AS OF <n>` /
+/// `RESTORE [TABLE] <table> TO TIMESTAMP AS OF <expr>`.
+fn restore_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // RESTORE
+    p.eat(TABLE_KW);
+    table_or_path(p);
+    if p.nth_contextual(0, ContextualKeyword::To) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    } else {
+        p.error("expected TO in RESTORE statement");
+    }
+    if p.nth_contextual(0, ContextualKeyword::Version)
+        || p.nth_contextual(0, ContextualKeyword::Timestamp)
+    {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    }
+    p.expect(AS_KW);
+    if p.nth_contextual(0, ContextualKeyword::Of) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    } else {
+        p.error("expected OF in RESTORE statement");
+    }
+    if super::at_expr_start(p) {
+        super::expr(p);
+    } else {
+        p.error("expected a RESTORE version or timestamp value");
+    }
+    while !super::at_stmt_terminator(p) {
+        p.bump_any();
+    }
+    m.complete(p, RESTORE_STMT);
+}
+
+/// `ANALYZE TABLE <table> COMPUTE STATISTICS ...`.
+fn analyze_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // ANALYZE
+    p.expect(TABLE_KW);
+    table_or_path(p);
+    while !super::at_stmt_terminator(p) {
+        if p.nth_contextual(0, ContextualKeyword::Compute)
+            || p.nth_contextual(0, ContextualKeyword::Statistics)
+            || p.nth_contextual(0, ContextualKeyword::Columns)
+        {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+        } else if p.at(L_PAREN) {
+            super::balanced_parens(p);
+        } else {
+            p.bump_any();
+        }
+    }
+    m.complete(p, ANALYZE_STMT);
+}
+
+/// `MSCK REPAIR TABLE <table> ...`.
+fn msck_repair_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // MSCK
+    p.bump_as(CONTEXTUAL_KEYWORD); // REPAIR
+    p.expect(TABLE_KW);
+    table_or_path(p);
+    while !super::at_stmt_terminator(p) {
+        if p.nth_contextual(0, ContextualKeyword::Sync)
+            || p.nth_contextual(0, ContextualKeyword::Partitions)
+        {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+        } else {
+            p.bump_any();
+        }
+    }
+    m.complete(p, MSCK_REPAIR_STMT);
 }

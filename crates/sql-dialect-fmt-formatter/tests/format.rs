@@ -8,7 +8,7 @@
 //!   synthesized statement terminators) is unchanged, so formatting never drops or invents SQL.
 //! * **No new parse errors** — formatting clean input yields clean output.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+use sql_dialect_fmt_formatter::{format, FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
@@ -49,6 +49,72 @@ fn upcases_keywords_and_normalizes_spacing() {
         fmt("select   x  from   t  where x=1 and y<>2"),
         "SELECT x\nFROM t\nWHERE x = 1 AND y <> 2;\n"
     );
+}
+
+#[test]
+fn keyword_case_option_supports_lower_and_preserve() {
+    assert_eq!(
+        format(
+            "select a from t",
+            &FormatOptions::default().with_keyword_case(KeywordCase::Lower)
+        ),
+        "select a\nfrom t;\n"
+    );
+    assert_eq!(
+        format(
+            "select a FROM t",
+            &FormatOptions::default().with_keyword_case(KeywordCase::Preserve)
+        ),
+        "select a\nFROM t;\n"
+    );
+    assert_eq!(
+        format(
+            "select a FROM t",
+            &FormatOptions::default().with_uppercase_keywords(false)
+        ),
+        "select a\nFROM t;\n"
+    );
+}
+
+#[test]
+fn line_ending_option_controls_printed_newlines() {
+    assert_eq!(
+        format(
+            "select a from t",
+            &FormatOptions::default().with_line_ending(LineEnding::Crlf)
+        ),
+        "SELECT a\r\nFROM t;\r\n"
+    );
+    assert_eq!(
+        format(
+            "select a\r\nfrom t",
+            &FormatOptions::default().with_line_ending(LineEnding::Auto)
+        ),
+        "SELECT a\r\nFROM t;\r\n"
+    );
+}
+
+#[test]
+fn format_off_on_directives_preserve_disabled_regions() {
+    let src = "select a\n-- sql-dialect-fmt: off\nselect    a,b from t\n-- sql-dialect-fmt: on\nselect c from u";
+    let expected = "SELECT a;\n-- sql-dialect-fmt: off\nselect    a,b from t\n-- sql-dialect-fmt: on\nSELECT c\nFROM u;\n";
+    let out = fmt(src);
+    assert_eq!(out, expected);
+    assert_eq!(fmt(&out), out);
+}
+
+#[test]
+fn disabled_regions_do_not_contribute_parse_errors() {
+    let result = sql_dialect_fmt_formatter::format_with_diagnostics(
+        "-- fmt: off\nselect from where\n-- fmt: on\nselect 1",
+        &FormatOptions::default(),
+    );
+    assert!(
+        result.parse_errors.is_empty(),
+        "disabled invalid SQL should not be parsed: {:?}",
+        result.parse_errors
+    );
+    assert!(result.formatted.contains("select from where"));
 }
 
 #[test]

@@ -26,5 +26,6 @@ serde_json = "1"
 sql-dialect-fmt-formatter.workspace = true
 sql-dialect-fmt-highlight.workspace = true
 sql-dialect-fmt-hover.workspace = true
+sql-dialect-fmt-lexer.workspace = true
 sql-dialect-fmt-parser.workspace = true
 sql-dialect-fmt-text.workspace = true
