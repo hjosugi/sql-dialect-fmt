@@ -136,12 +136,14 @@ pub fn indent(inner: Doc) -> Doc {
 
 /// A hard-line-delimited, indented block: `inner` is placed on its own indented line(s), framed by a
 /// hard line before and after (Prettier/biome's `block_indent`).
+#[doc(hidden)]
 pub fn block_indent(inner: Doc) -> Doc {
     concat(vec![indent(concat(vec![hard_line(), inner])), hard_line()])
 }
 
 /// Choose `broken` when the enclosing group breaks and `flat` when it stays flat (Prettier's
 /// `ifBreak`). Neither arm emits a newline by itself; this only selects which content appears.
+#[doc(hidden)]
 pub fn if_group_breaks(broken: Doc, flat: Doc) -> Doc {
     Doc::IfBreak {
         broken: Box::new(broken),
@@ -198,6 +200,7 @@ pub fn join(sep: Doc, items: Vec<Doc>) -> Doc {
 
 /// Try the candidate documents in order, printing the first that fits in the remaining width and
 /// falling back to the last candidate when none fit. Empty candidates render as empty.
+#[doc(hidden)]
 pub fn best_fitting(candidates: Vec<Doc>) -> Doc {
     Doc::BestFitting(candidates)
 }
@@ -206,6 +209,7 @@ pub fn best_fitting(candidates: Vec<Doc>) -> Doc {
 
 /// A growable sink of [`Doc`] elements, the target of the [`doc_write!`] macro and of [`Format`]
 /// implementors.
+#[doc(hidden)]
 #[derive(Default)]
 pub struct DocBuffer {
     parts: Vec<Doc>,
@@ -243,12 +247,14 @@ impl DocBuffer {
 }
 
 /// A value that knows how to render itself into a [`DocBuffer`].
+#[doc(hidden)]
 pub trait Format {
     /// Push this value's document representation onto `buffer`, in source order.
     fn fmt(&self, buffer: &mut DocBuffer);
 }
 
 /// Formatting logic for a `T` kept outside `T`, matching the biome/ruff rule pattern.
+#[doc(hidden)]
 pub trait FormatRule<T: ?Sized> {
     /// Push `item`'s document representation onto `buffer`.
     fn fmt(&self, item: &T, buffer: &mut DocBuffer);
@@ -267,6 +273,7 @@ impl<T: Format + ?Sized> Format for &T {
 }
 
 /// Run a single [`Format`] value to completion, returning its assembled [`Doc`].
+#[doc(hidden)]
 pub fn format_value<T: Format + ?Sized>(value: &T) -> Doc {
     let mut buffer = DocBuffer::new();
     buffer.write_fmt_value(value);
@@ -274,6 +281,7 @@ pub fn format_value<T: Format + ?Sized>(value: &T) -> Doc {
 }
 
 /// Push a comma-bracketed list of [`Format`] elements into a [`DocBuffer`], in order.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! doc_write {
     ($buffer:expr, [ $( $element:expr ),* $(,)? ]) => {{

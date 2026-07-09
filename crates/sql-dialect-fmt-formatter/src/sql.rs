@@ -660,30 +660,8 @@ impl Lowerer {
 
     /// `IF <cond> THEN … [ELSEIF … THEN …] [ELSE …] END IF` — branch keywords flush, bodies indented.
     fn lower_if(&mut self, node: &SyntaxNode) -> Doc {
-        let mut parts = Vec::new();
         self.reset();
-        for child in node.children_with_tokens() {
-            if let Some(token) = child.as_token() {
-                if token.kind().is_trivia() {
-                    continue;
-                }
-                match token.kind() {
-                    ELSEIF_KW | ELSE_KW | END_KW => {
-                        parts.push(hard_line());
-                        self.reset();
-                        parts.push(self.token(token));
-                    }
-                    _ => parts.push(self.token(token)), // IF / THEN / the IF after END
-                }
-            } else if let Some(node) = child.as_node() {
-                if node.kind() == STMT_LIST {
-                    parts.push(self.lower_block_body(node));
-                } else {
-                    parts.push(self.lower_node(node)); // condition
-                }
-            }
-        }
-        concat(parts)
+        self.lower_keyword_block(node, |kind| matches!(kind, ELSEIF_KW | ELSE_KW | END_KW))
     }
 
     /// `CASE [operand] WHEN … THEN … [ELSE …] END [CASE]` — arms are indented one level, with each
@@ -739,50 +717,13 @@ impl Lowerer {
 
     /// One `WHEN <test> THEN <body>` arm of a procedural CASE statement.
     fn lower_case_stmt_when(&mut self, node: &SyntaxNode) -> Doc {
-        let mut parts = Vec::new();
-        for child in node.children_with_tokens() {
-            if let Some(token) = child.as_token() {
-                if token.kind().is_trivia() {
-                    continue;
-                }
-                parts.push(self.token(token));
-            } else if let Some(node) = child.as_node() {
-                if node.kind() == STMT_LIST {
-                    parts.push(self.lower_block_body(node));
-                } else {
-                    parts.push(self.lower_node(node));
-                }
-            }
-        }
-        concat(parts)
+        self.lower_keyword_block(node, |_| false)
     }
 
     /// `FOR/WHILE … DO … END`, `LOOP … END LOOP`, `REPEAT … UNTIL … END REPEAT` — body indented.
     fn lower_loop(&mut self, node: &SyntaxNode) -> Doc {
-        let mut parts = Vec::new();
         self.reset();
-        for child in node.children_with_tokens() {
-            if let Some(token) = child.as_token() {
-                if token.kind().is_trivia() {
-                    continue;
-                }
-                match token.kind() {
-                    END_KW | UNTIL_KW => {
-                        parts.push(hard_line());
-                        self.reset();
-                        parts.push(self.token(token));
-                    }
-                    _ => parts.push(self.token(token)),
-                }
-            } else if let Some(node) = child.as_node() {
-                if node.kind() == STMT_LIST {
-                    parts.push(self.lower_block_body(node));
-                } else {
-                    parts.push(self.lower_node(node)); // UNTIL condition
-                }
-            }
-        }
-        concat(parts)
+        self.lower_keyword_block(node, |kind| matches!(kind, END_KW | UNTIL_KW))
     }
 
     /// `EXCEPTION` then each `WHEN … THEN <body>` handler indented.
@@ -809,11 +750,23 @@ impl Lowerer {
 
     /// `WHEN <exc> THEN <body>` — the `WHEN … THEN` line then the handler body indented.
     fn lower_exception_when(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_keyword_block(node, |_| false)
+    }
+
+    fn lower_keyword_block(
+        &mut self,
+        node: &SyntaxNode,
+        break_before: impl Fn(SyntaxKind) -> bool,
+    ) -> Doc {
         let mut parts = Vec::new();
         for child in node.children_with_tokens() {
             if let Some(token) = child.as_token() {
                 if token.kind().is_trivia() {
                     continue;
+                }
+                if break_before(token.kind()) {
+                    parts.push(hard_line());
+                    self.reset();
                 }
                 parts.push(self.token(token));
             } else if let Some(node) = child.as_node() {
@@ -985,6 +938,103 @@ impl Lowerer {
         group(concat(vec![concat(head), body]))
     }
 
+    fn lower_keyword_run(&mut self, node: &SyntaxNode, force_word: fn(&str) -> bool) -> Doc {
+        let mut parts = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                let force =
+                    matches!(token.kind(), IDENT | CONTEXTUAL_KEYWORD) && force_word(token.text());
+                parts.push(self.token_cased(token, force));
+            } else if let Some(node) = child.as_node() {
+                let node_text = node.text().to_string();
+                if matches!(node.kind(), NAME | NAME_REF) && force_word(node_text.trim()) {
+                    parts.push(self.lower_keyword_run(node, force_word));
+                } else {
+                    parts.push(self.lower_node(node));
+                }
+            }
+        }
+        concat(parts)
+    }
+
+    fn lower_lenient_stmt(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_keyword_run(node, is_lenient_contextual_keyword)
+    }
+
+    fn lower_time_travel(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_keyword_run(node, is_time_travel_contextual_keyword)
+    }
+
+    fn lower_sample_clause(&mut self, node: &SyntaxNode) -> Doc {
+        self.lower_keyword_run(node, is_sample_contextual_keyword)
+    }
+
+    fn lower_window_spec(&mut self, node: &SyntaxNode) -> Doc {
+        let open_sep = self.sep_before(L_PAREN);
+        let mut segments = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() || matches!(token.kind(), L_PAREN | R_PAREN) {
+                    continue;
+                }
+                self.reset();
+                segments.push(self.token(token));
+            } else if let Some(node) = child.as_node() {
+                self.reset();
+                segments.push(self.lower_node(node));
+            }
+        }
+        self.resume_after(R_PAREN);
+        concat(vec![open_sep, paren_grouped_segments(segments)])
+    }
+
+    fn lower_logical_expr(&mut self, node: &SyntaxNode) -> Doc {
+        let Some(op) = logical_chain_operator(node) else {
+            return self.lower_children(node);
+        };
+        let mut operands = Vec::new();
+        self.collect_logical_operands(node, op, &mut operands);
+        if operands.len() < 2 {
+            return self.lower_children(node);
+        }
+
+        let mut operands = operands.into_iter();
+        let mut parts = vec![operands.next().expect("len checked")];
+        let op_doc = self.synth_kw(match op {
+            AND_KW => "AND",
+            OR_KW => "OR",
+            _ => unreachable!("logical_chain_operator only returns AND/OR"),
+        });
+        let mut tail = Vec::new();
+        for operand in operands {
+            tail.push(line());
+            tail.push(op_doc.clone());
+            tail.push(space());
+            tail.push(operand);
+        }
+        parts.push(indent(concat(tail)));
+        group(concat(parts))
+    }
+
+    fn collect_logical_operands(&mut self, node: &SyntaxNode, op: SyntaxKind, out: &mut Vec<Doc>) {
+        if node.kind() == BIN_EXPR && logical_chain_operator(node) == Some(op) {
+            let children: Vec<_> = node.children().collect();
+            if children.len() == 2 {
+                self.collect_logical_operands(&children[0], op, out);
+                self.reset();
+                self.collect_logical_operands(&children[1], op, out);
+                return;
+            }
+        }
+        if !out.is_empty() {
+            self.reset();
+        }
+        out.push(self.lower_node(node));
+    }
+
     /// Render a node, normalizing spacing and upper-casing keywords. Most constructs are emitted on
     /// a single (groupable) line by walking their tokens; parenthesized comma lists and `IN (...)`
     /// are lowered structurally so they can wrap and honor a magic trailing comma.
@@ -998,8 +1048,11 @@ impl Lowerer {
             OBJECT_FIELD => self.lower_object_field(node),
             BIND_MARKER => self.lower_bind_marker(node),
             INTERVAL_LITERAL => self.lower_value_children(node),
+            BIN_EXPR => self.lower_logical_expr(node),
             IN_EXPR => self.lower_in_expr(node),
             CASE_EXPR => self.lower_case(node),
+            WINDOW_SPEC => self.lower_window_spec(node),
+            PARTITION_BY_CLAUSE => self.lower_keyword_item_list(node),
             SUBQUERY => self.lower_subquery(node),
             WITH_QUERY => self.lower_with_query(node),
             SET_OP => self.lower_set_op(node),
@@ -1015,12 +1068,16 @@ impl Lowerer {
                 self.lower_children(node)
             }
             CREATE_STMT => self.lower_create(node),
+            ALTER_STMT | USE_STMT | SHOW_STMT | DESCRIBE_STMT | TRUNCATE_STMT
+            | TRANSACTION_STMT | UNDROP_STMT | COMMENT_STMT => self.lower_lenient_stmt(node),
             GRANT_STMT | REVOKE_STMT => self.lower_grant(node),
             COPY_STMT => self.lower_copy(node),
             COPY_OPTION | OBJECT_PROPERTY => self.lower_option_node(node),
             SEMANTIC_VIEW_CLAUSE => self.lower_semantic_view_clause(node),
             COPY_LOCATION => self.lower_copy_location(node),
             STAGE_REF => self.lower_stage_ref(node),
+            TIME_TRAVEL => self.lower_time_travel(node),
+            SAMPLE_CLAUSE => self.lower_sample_clause(node),
             COLUMN_DEF_LIST => concat(vec![space(), self.lower_column_def_list(node)]),
             MATCH_RECOGNIZE => self.lower_match_recognize(node),
             PATTERN_CLAUSE => self.lower_pattern_clause(node),
@@ -1032,6 +1089,9 @@ impl Lowerer {
             LOOP_STMT => self.lower_loop(node),
             DECLARE_SECTION => self.lower_declare_section(node),
             EXCEPTION_SECTION => self.lower_exception_section(node),
+            DECLARE_ITEM | LET_STMT | ASSIGN_STMT | RETURN_STMT | SCRIPT_STMT => {
+                self.lower_lenient_stmt(node)
+            }
             // `SET col = ...` and `VALUES (...), (...)` are keyword + comma-list clauses.
             SET_CLAUSE | VALUES_CLAUSE => self.lower_keyword_item_list(node),
             _ => self.lower_children(node),
@@ -1499,6 +1559,112 @@ impl Lowerer {
             })
             .collect()
     }
+}
+
+fn paren_grouped_segments(segments: Vec<Doc>) -> Doc {
+    if segments.is_empty() {
+        return text("()");
+    }
+    group(concat(vec![
+        text("("),
+        indent(concat(vec![soft_line(), join(line(), segments)])),
+        soft_line(),
+        text(")"),
+    ]))
+}
+
+fn logical_chain_operator(node: &SyntaxNode) -> Option<SyntaxKind> {
+    node.children_with_tokens()
+        .filter_map(|el| el.into_token())
+        .filter(|token| !token.kind().is_trivia())
+        .map(|token| token.kind())
+        .find(|kind| matches!(kind, AND_KW | OR_KW))
+}
+
+fn word_in(word: &str, set: &[&str]) -> bool {
+    set.iter()
+        .any(|candidate| word.eq_ignore_ascii_case(candidate))
+}
+
+fn is_lenient_contextual_keyword(word: &str) -> bool {
+    word_in(
+        word,
+        &[
+            "abort",
+            "add",
+            "after",
+            "all",
+            "alter",
+            "before",
+            "bernoulli",
+            "cascade",
+            "column",
+            "columns",
+            "comment",
+            "condition",
+            "continue",
+            "copy",
+            "csv",
+            "data",
+            "database",
+            "decimal",
+            "default",
+            "dynamic",
+            "execute",
+            "exists",
+            "file",
+            "format",
+            "handler",
+            "history",
+            "if",
+            "int",
+            "integer",
+            "json",
+            "location",
+            "not",
+            "null",
+            "offset",
+            "option",
+            "parquet",
+            "policy",
+            "rename",
+            "restrict",
+            "return",
+            "role",
+            "row",
+            "schema",
+            "seed",
+            "set",
+            "share",
+            "stage",
+            "statement",
+            "stream",
+            "string",
+            "system",
+            "table",
+            "tables",
+            "task",
+            "timestamp",
+            "to",
+            "type",
+            "unset",
+            "user",
+            "using",
+            "warehouse",
+            "work",
+        ],
+    )
+}
+
+fn is_time_travel_contextual_keyword(word: &str) -> bool {
+    word_in(word, &["at", "before", "offset", "statement", "timestamp"])
+}
+
+fn is_sample_contextual_keyword(word: &str) -> bool {
+    word_in(
+        word,
+        &["bernoulli", "block", "repeatable", "seed", "system"],
+    )
 }
 
 /// Build `( items )`: flat when it fits, one-per-line when it does not, and force-exploded (with

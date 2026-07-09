@@ -9,6 +9,32 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-09
+
+### Added
+
+- Added a release version updater (`scripts/update-version.py`) that keeps workspace, lockfile,
+  extension, Homebrew, README, and docs-site version references in sync.
+- Enabled Databricks SQL scripting compound blocks, including `BEGIN [NOT] ATOMIC`, in the parser
+  and formatter.
+
+### Changed
+
+- Structured Snowflake time-travel and sampling clauses so contextual words inside those clauses
+  are keyword-cased consistently.
+- Hid the unused Doc composition layer from public docs while keeping it available for internal
+  use and compatibility.
+
+### Fixed
+
+- Upper-cased recognized keywords in lenient statements such as `ALTER`, `SHOW`, and scripting
+  declaration runs.
+- Prevented comments immediately before synthesized closing delimiters from forcing whole-statement
+  verbatim fallback.
+- Wrapped long `WHERE` / `JOIN ON` logical chains and long `OVER (...)` window specs using the
+  formatter's line-width-aware Doc layout.
+- Reused one parser pass for CLI diagnostics and formatting on text inputs.
+
 ## [1.2.3] - 2026-07-08
 
 ### Fixed
@@ -127,7 +153,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.3...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.0...v1.2.1

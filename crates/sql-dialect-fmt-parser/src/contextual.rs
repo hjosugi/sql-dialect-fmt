@@ -94,6 +94,8 @@ contextual_keywords! {
     Transaction => "transaction",
     /// `BEGIN WORK` — the SQL-standard spelling of a transaction start.
     Work => "work",
+    /// `BEGIN ATOMIC` — Databricks SQL scripting atomic compound statement modifier.
+    Atomic => "atomic",
     /// `INTERVAL '1 day'` / `INTERVAL 1 DAY` expression literal.
     Interval => "interval",
     /// Interval unit word.

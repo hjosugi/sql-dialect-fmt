@@ -15,7 +15,7 @@ unchanged, significant tokens and comments are preserved, and `format(format(x))
 
 ```sh
 # From crates.io
-cargo install sql-dialect-fmt --version 1.2.3 --locked
+cargo install sql-dialect-fmt --version 1.3.0 --locked
 
 # Directly from this repository
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
@@ -40,7 +40,7 @@ CI can use the bundled composite action or the GHCR image.
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.2.3 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.3.0 --check .
 ```
 
 Try the browser playground from the docs site:
@@ -65,7 +65,7 @@ pre-commit users can enable the official hooks:
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.2.3
+    rev: v1.3.0
     hooks:
       - id: sql-dialect-fmt
 ```
@@ -105,7 +105,8 @@ cargo fmt --all --check
 Snowflake support covers SELECT, DML (`INSERT`/`UPDATE`/`DELETE`/`MERGE`), `COPY`, major DDL and
 object DDL, Semantic View, and `CREATE PROCEDURE`/`CREATE FUNCTION` bodies in SQL, JavaScript,
 Python, Java, and Scala. Databricks mode covers LATERAL VIEW, Delta DDL options,
-`VERSION`/`TIMESTAMP AS OF`, higher-order-function lambdas, and backtick identifiers.
+`VERSION`/`TIMESTAMP AS OF`, higher-order-function lambdas, SQL scripting blocks, and backtick
+identifiers.
 
 The workspace also includes an LSP server, semantic tokens, hover text, a Tree-sitter grammar, a
 CLI, VS Code packaging, and the Chrome/WASM extension. The headline formatter feature is

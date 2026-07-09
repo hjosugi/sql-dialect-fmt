@@ -34,10 +34,20 @@ Published to crates.io (in dependency order):
 
 ## Release procedure
 
-1. **Bump the workspace version.** Edit `version` under `[workspace.package]` in the
-   root `Cargo.toml`. Internal crate dependency versions are centralized in
-   `[workspace.dependencies]`; update those entries to the same version in the same edit. Also
-   update the Chrome/VS Code package versions and the tag in `Formula/sql-dialect-fmt.rb`.
+1. **Bump the release version.** Use the updater so the workspace version, internal dependency
+   versions, `Cargo.lock`, extension package versions, Homebrew formula tag, and install examples
+   stay in sync:
+
+   ```sh
+   scripts/update-version.py X.Y.Z
+   ```
+
+   If you want the helper to create the changelog release heading and compare links too, pass
+   `--changelog`:
+
+   ```sh
+   scripts/update-version.py X.Y.Z --changelog --date YYYY-MM-DD
+   ```
 
 2. **Update the changelog.** Move the `## [Unreleased]` notes in `CHANGELOG.md` into a
    new `## [X.Y.Z] - YYYY-MM-DD` section and refresh the compare links.

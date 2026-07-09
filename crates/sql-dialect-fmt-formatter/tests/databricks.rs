@@ -68,6 +68,15 @@ fn formats_delta_table_options_as_create_properties() {
 }
 
 #[test]
+fn formats_sql_scripting_blocks() {
+    assert_databricks_format("begin\nselect 1;\nend", "BEGIN\n    SELECT 1;\nEND;\n");
+    assert_databricks_format(
+        "begin atomic\ndeclare total_amount decimal(10, 2);\nif total_amount is null then\nselect 0;\nend if;\nend",
+        "BEGIN ATOMIC\n    DECLARE total_amount DECIMAL(10, 2);\n    IF total_amount IS NULL THEN\n        SELECT 0;\n    END IF;\nEND;\n",
+    );
+}
+
+#[test]
 fn keeps_backtick_quoted_identifiers() {
     assert_databricks_format(
         "select `a b` from `catalog`.`schema`.`table`",

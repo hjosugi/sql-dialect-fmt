@@ -91,6 +91,17 @@ pub fn parse(text: &str) -> Parse {
 /// which dialect-specific statements and operators the grammar accepts.
 pub fn parse_with_dialect(text: &str, dialect: Dialect) -> Parse {
     let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(text, dialect);
+    parse_lexed(text, dialect, lexed)
+}
+
+/// Parse an already-tokenized SQL source. This is primarily for callers that need lexer-level
+/// checks and parse diagnostics from the same token stream.
+#[doc(hidden)]
+pub fn parse_lexed<'a>(
+    text: &'a str,
+    dialect: Dialect,
+    lexed: sql_dialect_fmt_lexer::Lexed<'a>,
+) -> Parse {
     let input = input::Input::new(lexed);
     let (events, mut errors) = parser::Parser::new(&input, dialect).parse();
     let line_index = sql_dialect_fmt_text::LineIndex::new(text);

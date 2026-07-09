@@ -241,6 +241,8 @@ pub enum SyntaxKind {
     WHERE_CLAUSE,
     TABLE_REF,
     LATERAL_VIEW,
+    TIME_TRAVEL,
+    SAMPLE_CLAUSE,
     AS_OF_TRAVEL,
     ARG_LIST,
     TYPE_NAME,

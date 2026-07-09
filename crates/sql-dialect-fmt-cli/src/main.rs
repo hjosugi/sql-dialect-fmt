@@ -32,8 +32,8 @@ use ignore::WalkBuilder;
 use rayon::prelude::*;
 use sql_dialect_fmt_encoding::DecodedText;
 use sql_dialect_fmt_formatter::FormatOptions;
-use sql_dialect_fmt_parser::Dialect;
-use sql_dialect_fmt_text::LineIndex;
+use sql_dialect_fmt_parser::{Dialect, ParseError};
+use sql_dialect_fmt_text::LineColumn;
 
 use config::Config;
 
@@ -196,18 +196,17 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
 
     // Surface parse problems on stderr, but keep going (the formatter passes content through).
     let decoded = DecodedText::decode(&source);
-    let parse_errors =
-        collect_parse_error_messages_from_decoded(&decoded, stdin_path, options.dialect);
+    let formatted = format_decoded_with_diagnostics(&decoded, &options);
+    let parse_errors = collect_parse_error_messages(&formatted.parse_errors, stdin_path);
     for error in &parse_errors {
         eprintln!("{error}");
     }
-    let formatted = format_decoded(&decoded, &options);
 
     if args.check {
-        if formatted != source {
+        if formatted.bytes != source {
             if args.diff {
                 let label = stdin_display_name(args);
-                write_diff(&mut io::stdout().lock(), &label, &source, &formatted)?;
+                write_diff(&mut io::stdout().lock(), &label, &source, &formatted.bytes)?;
             }
             eprintln!(
                 "sql-dialect-fmt: {} is not formatted",
@@ -218,7 +217,7 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
         return Ok(ExitCode::SUCCESS);
     }
     io::stdout()
-        .write_all(&formatted)
+        .write_all(&formatted.bytes)
         .map_err(|err| format!("failed to write stdout: {err}"))?;
     Ok(ExitCode::SUCCESS)
 }
@@ -333,14 +332,13 @@ fn process_file(
     let source =
         fs::read(file).map_err(|err| format!("failed to read {}: {err}", file.display()))?;
     let decoded = DecodedText::decode(&source);
-    let parse_errors =
-        collect_parse_error_messages_from_decoded(&decoded, Some(file), options.dialect);
-    let formatted = format_decoded(&decoded, &options);
-    let changed = formatted != source;
+    let formatted = format_decoded_with_diagnostics(&decoded, &options);
+    let parse_errors = collect_parse_error_messages(&formatted.parse_errors, Some(file));
+    let changed = formatted.bytes != source;
     let mut written = false;
 
     if args.write && changed {
-        fs::write(file, &formatted)
+        fs::write(file, &formatted.bytes)
             .map_err(|err| format!("failed to write {}: {err}", file.display()))?;
         written = true;
     }
@@ -349,7 +347,7 @@ fn process_file(
         Some(unified_diff(
             &file.display().to_string(),
             &source,
-            &formatted,
+            &formatted.bytes,
         ))
     } else {
         None
@@ -359,7 +357,7 @@ fn process_file(
         formatted_stdout: if args.write || args.check {
             Vec::new()
         } else {
-            formatted
+            formatted.bytes
         },
         diff_stdout,
         changed,
@@ -496,16 +494,7 @@ fn stdin_display_name(args: &Args) -> String {
         .unwrap_or_else(|| "stdin".to_string())
 }
 
-fn collect_parse_error_messages_from_decoded(
-    decoded: &DecodedText,
-    file: Option<&Path>,
-    dialect: Dialect,
-) -> Vec<String> {
-    let Some(text) = decoded.as_str() else {
-        return Vec::new();
-    };
-    let parse = sql_dialect_fmt_parser::parse_with_dialect(text, dialect);
-    let errors = parse.errors();
+fn collect_parse_error_messages(errors: &[ParseError], file: Option<&Path>) -> Vec<String> {
     if errors.is_empty() {
         return Vec::new();
     }
@@ -514,11 +503,10 @@ fn collect_parse_error_messages_from_decoded(
         Some(path) => path.display().to_string(),
         None => "<stdin>".to_string(),
     };
-    let line_index = LineIndex::new(text);
     errors
         .iter()
         .map(|error| {
-            let position = line_index.line_column(error.offset);
+            let position = error.line_column.unwrap_or_else(|| LineColumn::new(1, 1));
             format!(
                 "sql-dialect-fmt: parse error in {where_}:{}:{}: {}",
                 position.line, position.column, error.message
@@ -534,10 +522,33 @@ fn format_bytes(bytes: &[u8], options: &FormatOptions) -> Vec<u8> {
     format_decoded(&decoded, options)
 }
 
+#[cfg(test)]
 fn format_decoded(decoded: &DecodedText, options: &FormatOptions) -> Vec<u8> {
-    decoded
-        .map_text(|text| sql_dialect_fmt_formatter::format(text, options))
-        .encode()
+    format_decoded_with_diagnostics(decoded, options).bytes
+}
+
+struct FormattedBytes {
+    bytes: Vec<u8>,
+    parse_errors: Vec<ParseError>,
+}
+
+fn format_decoded_with_diagnostics(
+    decoded: &DecodedText,
+    options: &FormatOptions,
+) -> FormattedBytes {
+    let Some(text) = decoded.as_str() else {
+        return FormattedBytes {
+            bytes: decoded.encode(),
+            parse_errors: Vec::new(),
+        };
+    };
+    let result = sql_dialect_fmt_formatter::format_with_diagnostics(text, options);
+    let parse_errors = result.parse_errors;
+    let formatted = result.formatted;
+    FormattedBytes {
+        bytes: decoded.map_text(|_| formatted).encode(),
+        parse_errors,
+    }
 }
 
 fn write_diff(

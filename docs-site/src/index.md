@@ -8,7 +8,7 @@ Use the [playground](playground.md) to run the WebAssembly formatter in the brow
 CLI for local and CI usage.
 
 ```sh
-cargo install sql-dialect-fmt --version 1.2.3 --locked
+cargo install sql-dialect-fmt --version 1.3.0 --locked
 sql-dialect-fmt --check sql/**/*.sql
 sql-dialect-fmt --write sql/**/*.sql
 ```
@@ -17,8 +17,8 @@ sql-dialect-fmt --write sql/**/*.sql
 
 - Snowflake SELECT, DML, COPY, major DDL and object DDL.
 - Snowflake Scripting and routine bodies in SQL, JavaScript, Python, Java, and Scala.
-- Databricks mode for backtick identifiers, LATERAL VIEW, Delta DDL options, time travel, and
-  higher-order function lambdas.
+- Databricks mode for backtick identifiers, LATERAL VIEW, Delta DDL options, time travel,
+  higher-order function lambdas, and SQL scripting blocks.
 - LSP, semantic tokens, hover text, Tree-sitter grammar, VS Code packaging, and Chrome/WASM
   extension packaging.
 

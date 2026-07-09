@@ -53,11 +53,11 @@ impl Dialect {
         matches!(self, Dialect::Snowflake)
     }
 
-    /// Snowflake Scripting blocks: `BEGIN ... END`, `DECLARE`, `LET`, and the `:=` assignment
-    /// operator. Snowflake only.
+    /// SQL scripting blocks: `BEGIN ... END`, declarations, control-flow statements, and the `:=`
+    /// assignment operator. Snowflake and Databricks both support compound SQL blocks.
     #[must_use]
     pub fn supports_scripting_blocks(self) -> bool {
-        matches!(self, Dialect::Snowflake)
+        matches!(self, Dialect::Snowflake | Dialect::Databricks)
     }
 
     /// Stage references: `@stage` / `@~` / `@%table` paths in `FROM`, `COPY`, and `PUT`/`GET`.
@@ -144,7 +144,7 @@ mod tests {
         assert!(!d.supports_flow_operator());
         assert!(!d.supports_copy_into());
         assert!(!d.supports_semantic_view());
-        assert!(!d.supports_scripting_blocks());
+        assert!(d.supports_scripting_blocks());
         assert!(!d.supports_stage_refs());
         assert!(d.supports_backtick_identifiers());
         assert!(d.supports_lateral_view());

@@ -52,6 +52,14 @@ fn upcases_keywords_and_normalizes_spacing() {
 }
 
 #[test]
+fn lenient_statements_case_known_keywords() {
+    assert_eq!(
+        fmt("alter table t add column c int"),
+        "ALTER TABLE t ADD COLUMN c INT;\n"
+    );
+}
+
+#[test]
 fn number_followed_by_standalone_dot_does_not_merge_into_float() {
     assert_eq!(fmt("desc select 0 . "), "DESC SELECT 0 .;\n");
 }
@@ -195,6 +203,17 @@ fn function_arguments_stay_inline_without_a_trailing_comma() {
 }
 
 #[test]
+fn comment_before_synthesized_closing_paren_does_not_force_verbatim() {
+    insta::assert_snapshot!(fmt("select f(\n a\n -- why\n) from t"), @"
+    SELECT
+        f(
+            a -- why
+        )
+    FROM t;
+    ");
+}
+
+#[test]
 fn formats_expression_literals_and_bind_markers() {
     assert_eq!(
         fmt("select interval '1' day + interval 2 hours from t where id=? and tenant_id=:tenant_id"),
@@ -249,6 +268,40 @@ fn joins_each_go_on_their_own_line() {
     LEFT JOIN c ON b.k = c.k;
     ",
     );
+}
+
+#[test]
+fn long_logical_predicates_wrap_by_operator() {
+    let out = format(
+        "select * from orders where customer_id = 1 and status = 'open' and created_at >= '2024-01-01' and region = 'us-east-1'",
+        &FormatOptions::default().with_line_width(80),
+    );
+    insta::assert_snapshot!(out, @"
+    SELECT *
+    FROM orders
+    WHERE customer_id = 1
+        AND status = 'open'
+        AND created_at >= '2024-01-01'
+        AND region = 'us-east-1';
+    ");
+}
+
+#[test]
+fn long_window_specs_wrap_inside_over() {
+    let out = format(
+        "select sum(amount) over (partition by customer_id, account_id order by created_at desc, event_id) as running_total from orders",
+        &FormatOptions::default().with_line_width(80),
+    );
+    insta::assert_snapshot!(out, @"
+    SELECT
+        sum(
+            amount
+        ) OVER (
+            PARTITION BY customer_id, account_id
+            ORDER BY created_at DESC, event_id
+        ) AS running_total
+    FROM orders;
+    ");
 }
 
 #[test]
@@ -807,7 +860,7 @@ fn from_values_is_a_table_source() {
 fn tablesample_is_kept() {
     assert_eq!(
         fmt("select * from t tablesample bernoulli(25) repeatable(99)"),
-        "SELECT *\nFROM t TABLESAMPLE bernoulli(25) repeatable(99);\n"
+        "SELECT *\nFROM t TABLESAMPLE BERNOULLI(25) REPEATABLE(99);\n"
     );
 }
 
@@ -882,7 +935,7 @@ fn flow_operator_chains_statements_one_step_per_line() {
 fn flow_operator_allows_show_statement_chains() {
     assert_eq!(
         fmt("show tables in schema db.s ->> select \"name\" from $1 where \"kind\" = 'TABLE'"),
-        "SHOW tables IN schema db.s\n->> SELECT \"name\"\nFROM $1\nWHERE \"kind\" = 'TABLE';\n"
+        "SHOW TABLES IN SCHEMA db.s\n->> SELECT \"name\"\nFROM $1\nWHERE \"kind\" = 'TABLE';\n"
     );
 }
 
@@ -890,7 +943,7 @@ fn flow_operator_allows_show_statement_chains() {
 fn changes_clause_attaches_to_its_table() {
     assert_eq!(
         fmt("select * from t changes(information => default) at(timestamp => 'x')"),
-        "SELECT *\nFROM t CHANGES (information => default) AT (timestamp => 'x');\n"
+        "SELECT *\nFROM t CHANGES (information => default) AT (TIMESTAMP => 'x');\n"
     );
 }
 
@@ -923,7 +976,7 @@ fn multi_table_insert_first_puts_each_branch_on_its_own_line() {
 fn time_travel_at_before_is_kept() {
     assert_eq!(
         fmt("select * from orders before (statement => 'abc') o"),
-        "SELECT *\nFROM orders BEFORE (statement => 'abc') o;\n"
+        "SELECT *\nFROM orders BEFORE (STATEMENT => 'abc') o;\n"
     );
 }
 

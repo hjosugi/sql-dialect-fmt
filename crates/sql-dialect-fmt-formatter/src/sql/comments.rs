@@ -70,6 +70,20 @@ impl Comments {
                 newline_since = false;
                 continue;
             }
+            // Closing delimiters are often re-synthesized by structural list formatters. A comment
+            // immediately before one would otherwise attach to a token that is never emitted and
+            // force verbatim fallback for the whole statement. Keep that trailing-list comment on
+            // the previous real token instead.
+            if matches!(kind, R_PAREN | R_BRACKET | R_BRACE) && !pending_leading.is_empty() {
+                if let Some(anchor) = last_significant {
+                    comments
+                        .trailing
+                        .entry(anchor)
+                        .or_default()
+                        .append(&mut pending_leading);
+                }
+            }
+
             // A significant token: it owns any pending leading comments and becomes the new anchor.
             let start = offset(&token);
             if !pending_leading.is_empty() {

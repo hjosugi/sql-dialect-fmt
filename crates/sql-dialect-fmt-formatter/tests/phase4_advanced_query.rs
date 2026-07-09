@@ -253,7 +253,7 @@ fn time_travel_golden_layout() {
     );
     assert_eq!(
         fmt("select * from orders before (statement => 'abc') o"),
-        "SELECT *\nFROM orders BEFORE (statement => 'abc') o;\n"
+        "SELECT *\nFROM orders BEFORE (STATEMENT => 'abc') o;\n"
     );
 }
 
@@ -261,7 +261,7 @@ fn time_travel_golden_layout() {
 fn changes_golden_layout() {
     assert_eq!(
         fmt("select * from t changes(information => default) at(timestamp => 'x')"),
-        "SELECT *\nFROM t CHANGES (information => default) AT (timestamp => 'x');\n"
+        "SELECT *\nFROM t CHANGES (information => default) AT (TIMESTAMP => 'x');\n"
     );
 }
 

@@ -168,7 +168,7 @@ fn every_case_preserves_significant_tokens() {
 fn declare_begin_end_lays_out_one_decl_and_stmt_per_line() {
     assert_eq!(
         fmt("declare x int default 1; result string; begin let v := x; return v; end"),
-        "DECLARE\n    x int DEFAULT 1;\n    result string;\nBEGIN\n    LET v := x;\n    RETURN v;\nEND;\n"
+        "DECLARE\n    x INT DEFAULT 1;\n    result STRING;\nBEGIN\n    LET v := x;\n    RETURN v;\nEND;\n"
     );
 }
 

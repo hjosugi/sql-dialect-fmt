@@ -107,6 +107,24 @@ fn sample_attaches_to_table_ref() {
             has_token_text(sql, "SAMPLE") || has_token_text(sql, "TABLESAMPLE"),
             "SAMPLE token missing in {sql:?}"
         );
+        assert!(
+            has_kind(sql, SyntaxKind::SAMPLE_CLAUSE),
+            "no SAMPLE_CLAUSE node in {sql:?}"
+        );
+    }
+}
+
+#[test]
+fn snowflake_time_travel_is_structural() {
+    for sql in [
+        "SELECT * FROM t AT (TIMESTAMP => '2024-01-01'::TIMESTAMP)",
+        "SELECT * FROM t BEFORE (STATEMENT => '01a')",
+    ] {
+        assert_parse_clean(sql);
+        assert!(
+            has_kind(sql, SyntaxKind::TIME_TRAVEL),
+            "no TIME_TRAVEL node in {sql:?}"
+        );
     }
 }
 

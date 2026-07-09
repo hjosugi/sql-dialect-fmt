@@ -67,6 +67,15 @@ fn delta_table_options_are_structured_as_create_properties() {
 }
 
 #[test]
+fn sql_scripting_blocks_are_enabled() {
+    assert!(has_node("BEGIN\nSELECT 1;\nEND", SyntaxKind::BLOCK_STMT));
+    assert!(has_node(
+        "BEGIN ATOMIC\nDECLARE total_amount DECIMAL(10, 2);\nIF total_amount IS NULL THEN\nSELECT 0;\nEND IF;\nEND",
+        SyntaxKind::IF_STMT
+    ));
+}
+
+#[test]
 fn backtick_quoted_identifiers_are_databricks_only() {
     let sql = "SELECT `a b` FROM `catalog`.`schema`.`table`";
     parse_databricks(sql);

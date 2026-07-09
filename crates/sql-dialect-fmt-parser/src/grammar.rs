@@ -1215,6 +1215,15 @@ fn block_stmt(p: &mut Parser) {
         declare_section(p);
     }
     p.expect(BEGIN_KW);
+    if p.eat(NOT_KW) {
+        if p.nth_contextual(0, ContextualKeyword::Atomic) {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+        } else {
+            p.error("expected ATOMIC after NOT");
+        }
+    } else if p.nth_contextual(0, ContextualKeyword::Atomic) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    }
     stmt_list(p, |p| p.at(END_KW) || p.at(EXCEPTION_KW));
     if p.at(EXCEPTION_KW) {
         exception_section(p);
@@ -1279,6 +1288,8 @@ fn block_statement(p: &mut Parser) {
         if_stmt(p);
     } else if p.at(FOR_KW) || p.at(WHILE_KW) || p.at(LOOP_KW) || p.at(REPEAT_KW) {
         loop_stmt(p);
+    } else if p.at(DECLARE_KW) {
+        simple_script_stmt(p, DECLARE_ITEM);
     } else if at_block_start(p) {
         block_stmt(p); // nested DECLARE…/BEGIN…END
     } else if p.at(CASE_KW) {
@@ -1841,10 +1852,12 @@ fn at_time_travel(p: &Parser) -> bool {
 
 /// `<table> {AT|BEFORE} ( TIMESTAMP|OFFSET|STATEMENT => ... )`, captured leniently.
 fn time_travel(p: &mut Parser) {
+    let m = p.start();
     p.bump_as(CONTEXTUAL_KEYWORD); // AT / BEFORE (contextual keyword)
     if p.at(L_PAREN) {
         balanced_parens(p);
     }
+    m.complete(p, TIME_TRAVEL);
 }
 
 fn at_databricks_as_of_travel(p: &Parser) -> bool {
@@ -1875,6 +1888,7 @@ fn databricks_as_of_travel(p: &mut Parser) {
 /// `<table> {SAMPLE|TABLESAMPLE} [method] ( n [ROWS] ) [REPEATABLE|SEED ( seed )]`. The fraction
 /// and any method/seed are captured leniently (balanced parens) for inline formatting.
 fn sample_clause(p: &mut Parser) {
+    let m = p.start();
     p.bump_any(); // SAMPLE / TABLESAMPLE
                   // Sampling method: BERNOULLI / SYSTEM / BLOCK are plain words; ROW is the reserved keyword
                   // `ROW_KW` (so `p.at_name()` is false for it) — accept it explicitly. Guard the `(` so a bare
@@ -1892,6 +1906,7 @@ fn sample_clause(p: &mut Parser) {
         name_ref(p);
         balanced_parens(p);
     }
+    m.complete(p, SAMPLE_CLAUSE);
 }
 
 /// `<table> MATCH_RECOGNIZE ( <body> )`. The body's clauses appear in a fixed order

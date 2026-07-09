@@ -147,10 +147,10 @@ fn sample_default_golden() {
 
 #[test]
 fn sample_bernoulli_golden() {
-    // The method word is a plain identifier (not reserved) so it keeps its case and hugs the paren.
+    // The method/seed words are contextual inside a structured sample clause.
     assert_eq!(
         fmt("select * from t tablesample bernoulli(25) repeatable(99)"),
-        "SELECT *\nFROM t TABLESAMPLE bernoulli(25) repeatable(99);\n",
+        "SELECT *\nFROM t TABLESAMPLE BERNOULLI(25) REPEATABLE(99);\n",
     );
 }
 
