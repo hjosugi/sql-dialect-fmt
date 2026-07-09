@@ -9,6 +9,21 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-10
+
+### Added
+
+- Added LSP `textDocument/documentSymbol` support for top-level SQL statement outlines.
+- Added LSP `textDocument/completion` support for SQL keywords, Snowflake-style data types, and
+  common statement snippets.
+- Added LSP semantic token range support and advertised full/delta semantic token requests with
+  stable result ids.
+
+### Changed
+
+- LSP lint diagnostics now include stable rule codes (`SDF001`-`SDF003`) and configurable lint
+  settings for enabling rules and tuning the large `IN (...)` list threshold.
+
 ## [1.4.0] - 2026-07-09
 
 ### Added
@@ -178,7 +193,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.2...v1.2.3

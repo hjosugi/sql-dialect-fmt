@@ -1,4 +1,5 @@
-//! LSP feature logic for Snowflake SQL: formatting edits, parse diagnostics, and semantic tokens.
+//! LSP feature logic for Snowflake SQL: formatting, diagnostics, hover, folding, document symbols,
+//! completion, and semantic tokens.
 //!
 //! This module is deliberately transport-free (it never touches stdio or an `lsp-server`
 //! connection), so every feature is a pure `&str -> data` function that is unit-testable. The
@@ -7,12 +8,14 @@
 //! Positions follow the LSP convention: zero-based lines and **UTF-16** column offsets.
 
 use lsp_types::{
-    Diagnostic, DiagnosticSeverity, FoldingRange, FoldingRangeKind, Hover, HoverContents,
-    MarkupContent, MarkupKind, Position, Range, SemanticToken, SemanticTokenModifier,
-    SemanticTokenType, TextEdit,
+    CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, DocumentSymbol,
+    FoldingRange, FoldingRangeKind, Hover, HoverContents, InsertTextFormat, MarkupContent,
+    MarkupKind, NumberOrString, Position, Range, SemanticToken, SemanticTokenModifier,
+    SemanticTokenType, SymbolKind, TextEdit,
 };
 use sql_dialect_fmt_formatter::{format, FormatOptions};
 use sql_dialect_fmt_highlight::{semantic, HighlightKind, HighlightToken};
+use sql_dialect_fmt_parser::{SyntaxKind, SyntaxNode};
 use sql_dialect_fmt_text::{LineIndex, Utf16Position, Utf8Position};
 
 /// LSP position encoding negotiated with the client.
@@ -22,6 +25,47 @@ pub enum PositionEncoding {
     Utf16,
     /// UTF-8 byte offsets.
     Utf8,
+}
+
+/// LSP-only lint knobs layered on top of parser diagnostics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LintOptions {
+    /// Warn on top-level `SELECT *` in a select list.
+    pub select_wildcard: bool,
+    /// Warn on large literal `IN (...)` lists.
+    pub large_in_list: bool,
+    /// Warn when `LANGUAGE <name> AS $$...$$` uses an embedded language the formatter cannot format.
+    pub unsupported_embedded_language: bool,
+    /// Item count above which a literal `IN (...)` list is considered large.
+    pub large_in_list_threshold: usize,
+}
+
+impl Default for LintOptions {
+    fn default() -> Self {
+        Self {
+            select_wildcard: true,
+            large_in_list: true,
+            unsupported_embedded_language: true,
+            large_in_list_threshold: 100,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DiagnosticCode {
+    SelectWildcard,
+    LargeInList,
+    UnsupportedEmbeddedLanguage,
+}
+
+impl DiagnosticCode {
+    fn as_str(self) -> &'static str {
+        match self {
+            DiagnosticCode::SelectWildcard => "SDF001",
+            DiagnosticCode::LargeInList => "SDF002",
+            DiagnosticCode::UnsupportedEmbeddedLanguage => "SDF003",
+        }
+    }
 }
 
 /// The semantic-token type legend, mirrored from the single source of truth in
@@ -129,6 +173,16 @@ pub fn diagnostics_with_options(
     options: &FormatOptions,
     encoding: PositionEncoding,
 ) -> Vec<Diagnostic> {
+    diagnostics_with_lint_options(text, options, LintOptions::default(), encoding)
+}
+
+/// Options-, lint-, and encoding-aware variant of [`diagnostics`].
+pub fn diagnostics_with_lint_options(
+    text: &str,
+    options: &FormatOptions,
+    lint_options: LintOptions,
+    encoding: PositionEncoding,
+) -> Vec<Diagnostic> {
     let index = LineIndex::new(text);
     let to_range = |span: std::ops::Range<usize>| {
         Range::new(
@@ -158,14 +212,17 @@ pub fn diagnostics_with_options(
                 .map(|err| make(to_range(err.range()), err.message.clone())),
         )
         .collect();
-    diagnostics.extend(embedded_language_diagnostics_with_encoding(
-        &highlighted.tokens,
-        &index,
-        encoding,
-    ));
+    if lint_options.unsupported_embedded_language {
+        diagnostics.extend(embedded_language_diagnostics_with_encoding(
+            &highlighted.tokens,
+            &index,
+            encoding,
+        ));
+    }
     diagnostics.extend(lint_diagnostics_with_encoding(
         &highlighted.tokens,
         &index,
+        lint_options,
         encoding,
     ));
     diagnostics
@@ -174,12 +231,22 @@ pub fn diagnostics_with_options(
 fn lint_diagnostics_with_encoding(
     tokens: &[HighlightToken<'_>],
     index: &LineIndex<'_>,
+    options: LintOptions,
     encoding: PositionEncoding,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    diagnostics.extend(select_wildcard_diagnostics(tokens, index, encoding));
-    diagnostics.extend(large_in_list_diagnostics(tokens, index, encoding));
+    if options.select_wildcard {
+        diagnostics.extend(select_wildcard_diagnostics(tokens, index, encoding));
+    }
+    if options.large_in_list {
+        diagnostics.extend(large_in_list_diagnostics(
+            tokens,
+            index,
+            options.large_in_list_threshold,
+            encoding,
+        ));
+    }
 
     diagnostics
 }
@@ -187,6 +254,7 @@ fn lint_diagnostics_with_encoding(
 fn lint_warning(
     index: &LineIndex<'_>,
     range: std::ops::Range<usize>,
+    code: DiagnosticCode,
     message: &str,
     encoding: PositionEncoding,
 ) -> Diagnostic {
@@ -196,6 +264,7 @@ fn lint_warning(
             lsp_position(index, range.end, encoding),
         ),
         severity: Some(DiagnosticSeverity::WARNING),
+        code: Some(NumberOrString::String(code.as_str().to_string())),
         source: Some("sql-dialect-fmt".to_string()),
         message: message.to_string(),
         ..Default::default()
@@ -238,6 +307,7 @@ fn select_wildcard_diagnostics(
                         diagnostics.push(lint_warning(
                             index,
                             token.range.clone(),
+                            DiagnosticCode::SelectWildcard,
                             "avoid SELECT * in shared SQL; list columns explicitly",
                             encoding,
                         ));
@@ -262,10 +332,9 @@ fn is_wildcard_prefix(text: &str) -> bool {
 fn large_in_list_diagnostics(
     tokens: &[HighlightToken<'_>],
     index: &LineIndex<'_>,
+    threshold: usize,
     encoding: PositionEncoding,
 ) -> Vec<Diagnostic> {
-    const LARGE_IN_LIST_THRESHOLD: usize = 100;
-
     #[derive(Debug)]
     struct InList {
         start: usize,
@@ -310,10 +379,11 @@ fn large_in_list_diagnostics(
                     } else {
                         0
                     };
-                    if !active.possible_subquery && item_count > LARGE_IN_LIST_THRESHOLD {
+                    if !active.possible_subquery && item_count > threshold {
                         diagnostics.push(lint_warning(
                             index,
                             active.start..end,
+                            DiagnosticCode::LargeInList,
                             "large IN list; prefer a temp table, CTE, or semi-join when practical",
                             encoding,
                         ));
@@ -376,6 +446,11 @@ fn embedded_language_diagnostics_with_encoding(
                                     lsp_position(index, range.end, encoding),
                                 ),
                                 severity: Some(DiagnosticSeverity::WARNING),
+                                code: Some(NumberOrString::String(
+                                    DiagnosticCode::UnsupportedEmbeddedLanguage
+                                        .as_str()
+                                        .to_string(),
+                                )),
                                 source: Some("sql-dialect-fmt".to_string()),
                                 message: format!(
                                     "unsupported embedded language {word}; expected SQL, JAVASCRIPT, PYTHON, JAVA, or SCALA"
@@ -448,6 +523,565 @@ pub fn hover_with_encoding(
         )),
     })
 }
+
+/// Document symbols for `textDocument/documentSymbol`: one outline item per top-level statement.
+pub fn document_symbols(text: &str, options: &FormatOptions) -> Vec<DocumentSymbol> {
+    document_symbols_with_encoding(text, options, PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`document_symbols`].
+pub fn document_symbols_with_encoding(
+    text: &str,
+    options: &FormatOptions,
+    encoding: PositionEncoding,
+) -> Vec<DocumentSymbol> {
+    let index = LineIndex::new(text);
+    let root = sql_dialect_fmt_parser::parse_with_dialect(text, options.dialect).syntax();
+    root.children()
+        .filter_map(|stmt| document_symbol_for_statement(&stmt, &index, encoding))
+        .collect()
+}
+
+#[derive(Clone, Debug)]
+struct SymbolToken {
+    kind: SyntaxKind,
+    text: String,
+    range: std::ops::Range<usize>,
+}
+
+fn document_symbol_for_statement(
+    stmt: &SyntaxNode,
+    index: &LineIndex<'_>,
+    encoding: PositionEncoding,
+) -> Option<DocumentSymbol> {
+    let tokens = significant_symbol_tokens(stmt);
+    let first = tokens.first()?;
+    let last = tokens.last().unwrap_or(first);
+    let range = byte_range_to_lsp(index, first.range.start..last.range.end, encoding);
+    let selection_range = statement_selection_range(&tokens)
+        .map(|range| byte_range_to_lsp(index, range, encoding))
+        .unwrap_or(range);
+    let name = statement_symbol_name(stmt.kind(), &tokens);
+    let kind = statement_symbol_kind(stmt.kind(), &tokens);
+    #[allow(deprecated)]
+    let symbol = DocumentSymbol {
+        name,
+        detail: None,
+        kind,
+        tags: None,
+        deprecated: None,
+        range,
+        selection_range,
+        children: None,
+    };
+    Some(symbol)
+}
+
+fn significant_symbol_tokens(node: &SyntaxNode) -> Vec<SymbolToken> {
+    node.descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| !token.kind().is_trivia())
+        .map(|token| {
+            let range = token.text_range();
+            let start: usize = range.start().into();
+            let end: usize = range.end().into();
+            SymbolToken {
+                kind: token.kind(),
+                text: token.text().to_string(),
+                range: start..end,
+            }
+        })
+        .collect()
+}
+
+fn byte_range_to_lsp(
+    index: &LineIndex<'_>,
+    range: std::ops::Range<usize>,
+    encoding: PositionEncoding,
+) -> Range {
+    Range::new(
+        lsp_position(index, range.start, encoding),
+        lsp_position(index, range.end, encoding),
+    )
+}
+
+fn statement_selection_range(tokens: &[SymbolToken]) -> Option<std::ops::Range<usize>> {
+    create_name_range(tokens).or_else(|| tokens.first().map(|token| token.range.clone()))
+}
+
+fn statement_symbol_name(kind: SyntaxKind, tokens: &[SymbolToken]) -> String {
+    if let Some(label) = create_statement_label(tokens) {
+        return label;
+    }
+
+    match kind {
+        SyntaxKind::SELECT_STMT => "SELECT".to_string(),
+        SyntaxKind::WITH_QUERY => "WITH".to_string(),
+        SyntaxKind::INSERT_STMT => statement_words_until(tokens, 4, &["VALUES", "SELECT"]),
+        SyntaxKind::UPDATE_STMT => statement_words_until(tokens, 3, &["SET"]),
+        SyntaxKind::DELETE_STMT => statement_words_until(tokens, 4, &["WHERE", "USING"]),
+        SyntaxKind::MERGE_STMT => statement_words_until(tokens, 4, &["USING"]),
+        SyntaxKind::COPY_STMT => statement_words_until(tokens, 4, &["FROM", "FILES"]),
+        SyntaxKind::CALL_STMT => statement_words_until(tokens, 3, &["("]),
+        SyntaxKind::BLOCK_STMT => "BEGIN".to_string(),
+        SyntaxKind::SET_OP | SyntaxKind::FLOW_STMT => statement_words_until(tokens, 3, &[]),
+        _ => statement_words_until(tokens, 4, &[";", "AS", "WHERE"]),
+    }
+}
+
+fn statement_symbol_kind(kind: SyntaxKind, tokens: &[SymbolToken]) -> SymbolKind {
+    if let Some((object_kind, _)) = create_object_kind(tokens) {
+        return match object_kind {
+            "TABLE" | "DYNAMIC TABLE" => SymbolKind::STRUCT,
+            "VIEW" | "SEMANTIC VIEW" => SymbolKind::INTERFACE,
+            "FUNCTION" => SymbolKind::FUNCTION,
+            "PROCEDURE" => SymbolKind::METHOD,
+            "TASK" => SymbolKind::EVENT,
+            "WAREHOUSE" | "STAGE" | "FILE FORMAT" | "STREAM" | "SEQUENCE" => SymbolKind::OBJECT,
+            "SCHEMA" | "DATABASE" => SymbolKind::NAMESPACE,
+            _ => SymbolKind::OBJECT,
+        };
+    }
+
+    match kind {
+        SyntaxKind::SELECT_STMT | SyntaxKind::WITH_QUERY | SyntaxKind::SET_OP => {
+            SymbolKind::FUNCTION
+        }
+        SyntaxKind::INSERT_STMT
+        | SyntaxKind::UPDATE_STMT
+        | SyntaxKind::DELETE_STMT
+        | SyntaxKind::MERGE_STMT
+        | SyntaxKind::COPY_STMT
+        | SyntaxKind::CALL_STMT
+        | SyntaxKind::SET_STMT
+        | SyntaxKind::EXECUTE_STMT => SymbolKind::METHOD,
+        SyntaxKind::BLOCK_STMT | SyntaxKind::IF_STMT | SyntaxKind::LOOP_STMT => SymbolKind::MODULE,
+        _ => SymbolKind::OBJECT,
+    }
+}
+
+fn create_statement_label(tokens: &[SymbolToken]) -> Option<String> {
+    let (object_kind, name_start) = create_object_kind(tokens)?;
+    let name = dotted_name(tokens, skip_if_not_exists(tokens, name_start));
+    Some(match name {
+        Some(name) => format!("CREATE {object_kind} {name}"),
+        None => format!("CREATE {object_kind}"),
+    })
+}
+
+fn create_name_range(tokens: &[SymbolToken]) -> Option<std::ops::Range<usize>> {
+    let (_, name_start) = create_object_kind(tokens)?;
+    tokens
+        .iter()
+        .skip(skip_if_not_exists(tokens, name_start))
+        .find(|token| is_name_token(token))
+        .map(|token| token.range.clone())
+}
+
+fn create_object_kind(tokens: &[SymbolToken]) -> Option<(&'static str, usize)> {
+    let create_index = tokens.iter().position(|token| word(token, "CREATE"))?;
+    for index in create_index + 1..tokens.len() {
+        let token = &tokens[index];
+        if word(token, "DYNAMIC") && tokens.get(index + 1).is_some_and(|t| word(t, "TABLE")) {
+            return Some(("DYNAMIC TABLE", index + 2));
+        }
+        if word(token, "SEMANTIC") && tokens.get(index + 1).is_some_and(|t| word(t, "VIEW")) {
+            return Some(("SEMANTIC VIEW", index + 2));
+        }
+        if word(token, "FILE") && tokens.get(index + 1).is_some_and(|t| word(t, "FORMAT")) {
+            return Some(("FILE FORMAT", index + 2));
+        }
+        if word(token, "MASKING") && tokens.get(index + 1).is_some_and(|t| word(t, "POLICY")) {
+            return Some(("MASKING POLICY", index + 2));
+        }
+        if word(token, "ACCESS") && tokens.get(index + 1).is_some_and(|t| word(t, "POLICY")) {
+            return Some(("ACCESS POLICY", index + 2));
+        }
+
+        for candidate in [
+            "TABLE",
+            "VIEW",
+            "FUNCTION",
+            "PROCEDURE",
+            "TASK",
+            "WAREHOUSE",
+            "STAGE",
+            "SCHEMA",
+            "DATABASE",
+            "SEQUENCE",
+            "STREAM",
+        ] {
+            if word(token, candidate) {
+                return Some((candidate, index + 1));
+            }
+        }
+    }
+    None
+}
+
+fn skip_if_not_exists(tokens: &[SymbolToken], index: usize) -> usize {
+    if tokens.get(index).is_some_and(|token| word(token, "IF"))
+        && tokens
+            .get(index + 1)
+            .is_some_and(|token| word(token, "NOT"))
+        && tokens
+            .get(index + 2)
+            .is_some_and(|token| word(token, "EXISTS"))
+    {
+        index + 3
+    } else {
+        index
+    }
+}
+
+fn dotted_name(tokens: &[SymbolToken], start: usize) -> Option<String> {
+    let mut out = String::new();
+    let mut saw_name = false;
+    let mut allow_dot = false;
+
+    for token in tokens.iter().skip(start) {
+        if token.text == "." && allow_dot {
+            out.push('.');
+            allow_dot = false;
+            continue;
+        }
+        if is_name_token(token) {
+            out.push_str(&token.text);
+            saw_name = true;
+            allow_dot = true;
+            continue;
+        }
+        break;
+    }
+
+    while out.ends_with('.') {
+        out.pop();
+    }
+    saw_name.then_some(out)
+}
+
+fn statement_words_until(tokens: &[SymbolToken], max_words: usize, stops: &[&str]) -> String {
+    let mut words = Vec::new();
+    for token in tokens.iter().filter(|token| symbol_word(token)) {
+        if !words.is_empty() && stops.iter().any(|stop| word(token, stop)) {
+            break;
+        }
+        words.push(display_word(token));
+        if words.len() == max_words {
+            break;
+        }
+    }
+    if words.is_empty() {
+        "SQL".to_string()
+    } else {
+        words.join(" ")
+    }
+}
+
+fn display_word(token: &SymbolToken) -> String {
+    if token.kind.is_keyword() || token.kind == SyntaxKind::CONTEXTUAL_KEYWORD {
+        token.text.to_ascii_uppercase()
+    } else {
+        token.text.clone()
+    }
+}
+
+fn symbol_word(token: &SymbolToken) -> bool {
+    token.kind.is_keyword()
+        || matches!(
+            token.kind,
+            SyntaxKind::IDENT | SyntaxKind::QUOTED_IDENT | SyntaxKind::CONTEXTUAL_KEYWORD
+        )
+}
+
+fn is_name_token(token: &SymbolToken) -> bool {
+    matches!(
+        token.kind,
+        SyntaxKind::IDENT | SyntaxKind::QUOTED_IDENT | SyntaxKind::CONTEXTUAL_KEYWORD
+    )
+}
+
+fn word(token: &SymbolToken, expected: &str) -> bool {
+    symbol_word(token) && token.text.eq_ignore_ascii_case(expected)
+}
+
+/// Static SQL completion items for `textDocument/completion`.
+pub fn completion_items() -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+    items.extend(SQL_KEYWORDS.iter().map(|keyword| {
+        completion_item(
+            keyword,
+            CompletionItemKind::KEYWORD,
+            "SQL keyword",
+            "Keyword recognized by sql-dialect-fmt.",
+            None,
+            "1",
+        )
+    }));
+    items.extend(SQL_TYPES.iter().map(|(label, doc)| {
+        completion_item(
+            label,
+            CompletionItemKind::TYPE_PARAMETER,
+            "SQL type",
+            doc,
+            None,
+            "2",
+        )
+    }));
+    items.extend(SQL_SNIPPETS.iter().map(|snippet| {
+        completion_item(
+            snippet.label,
+            CompletionItemKind::SNIPPET,
+            "SQL snippet",
+            snippet.documentation,
+            Some(snippet.insert_text),
+            "3",
+        )
+    }));
+    items
+}
+
+fn completion_item(
+    label: &str,
+    kind: CompletionItemKind,
+    detail: &str,
+    documentation: &str,
+    insert_text: Option<&str>,
+    sort_prefix: &str,
+) -> CompletionItem {
+    CompletionItem {
+        label: label.to_string(),
+        kind: Some(kind),
+        detail: Some(detail.to_string()),
+        documentation: Some(lsp_types::Documentation::MarkupContent(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: documentation.to_string(),
+        })),
+        insert_text: insert_text.map(str::to_string),
+        insert_text_format: insert_text.map(|_| InsertTextFormat::SNIPPET),
+        sort_text: Some(format!("{sort_prefix}-{label}")),
+        ..CompletionItem::default()
+    }
+}
+
+struct Snippet {
+    label: &'static str,
+    insert_text: &'static str,
+    documentation: &'static str,
+}
+
+const SQL_SNIPPETS: &[Snippet] = &[
+    Snippet {
+        label: "SELECT ... FROM ...",
+        insert_text: "SELECT ${1:columns}\nFROM ${2:table};",
+        documentation: "Scaffold a SELECT statement.",
+    },
+    Snippet {
+        label: "WITH ... AS (...)",
+        insert_text: "WITH ${1:cte} AS (\n    SELECT ${2:*}\n    FROM ${3:source}\n)\nSELECT ${4:*}\nFROM ${1:cte};",
+        documentation: "Scaffold a common table expression.",
+    },
+    Snippet {
+        label: "CREATE TABLE ...",
+        insert_text: "CREATE TABLE ${1:table_name} (\n    ${2:column_name} ${3:NUMBER}\n);",
+        documentation: "Scaffold a CREATE TABLE statement.",
+    },
+    Snippet {
+        label: "INSERT INTO ...",
+        insert_text: "INSERT INTO ${1:table_name} (${2:columns})\nVALUES (${3:values});",
+        documentation: "Scaffold an INSERT statement.",
+    },
+    Snippet {
+        label: "CREATE PROCEDURE ...",
+        insert_text: "CREATE PROCEDURE ${1:procedure_name}(${2:args})\nRETURNS ${3:STRING}\nLANGUAGE SQL\nAS\n$$\nBEGIN\n    ${4:RETURN 'ok';}\nEND;\n$$;",
+        documentation: "Scaffold a Snowflake SQL procedure.",
+    },
+];
+
+const SQL_TYPES: &[(&str, &str)] = &[
+    ("NUMBER", "Exact fixed-point numeric type."),
+    ("DECIMAL", "Alias for NUMBER."),
+    ("NUMERIC", "Alias for NUMBER."),
+    ("INT", "Integer numeric alias."),
+    ("INTEGER", "Integer numeric alias."),
+    ("BIGINT", "Integer numeric alias."),
+    ("FLOAT", "Approximate floating-point numeric type."),
+    ("DOUBLE", "Approximate floating-point numeric alias."),
+    ("REAL", "Approximate floating-point numeric alias."),
+    ("VARCHAR", "Variable-length character data."),
+    ("STRING", "Alias for VARCHAR."),
+    ("TEXT", "Alias for VARCHAR."),
+    ("CHAR", "Character data."),
+    ("BOOLEAN", "TRUE/FALSE logical value."),
+    ("VARIANT", "Semi-structured value."),
+    ("OBJECT", "Semi-structured key/value object."),
+    ("ARRAY", "Semi-structured ordered collection."),
+    ("MAP", "Structured key/value collection."),
+    ("VECTOR", "Vector type for embeddings."),
+    ("DATE", "Calendar date without time of day."),
+    ("TIME", "Time of day without date."),
+    ("TIMESTAMP", "Timestamp family."),
+    ("TIMESTAMP_NTZ", "Timestamp without time zone."),
+    ("TIMESTAMP_LTZ", "Timestamp using the session time zone."),
+    ("TIMESTAMP_TZ", "Timestamp with explicit offset."),
+    ("BINARY", "Variable-length binary data."),
+    ("GEOGRAPHY", "Spherical geospatial data."),
+    ("GEOMETRY", "Planar geospatial data."),
+];
+
+const SQL_KEYWORDS: &[&str] = &[
+    "AFTER",
+    "ALL",
+    "ALTER",
+    "AND",
+    "ANY",
+    "AS",
+    "ASC",
+    "BEGIN",
+    "BETWEEN",
+    "BY",
+    "CALL",
+    "CALLED",
+    "CALLER",
+    "CASE",
+    "CAST",
+    "COMMIT",
+    "CONNECT",
+    "COPY",
+    "CREATE",
+    "CROSS",
+    "CURRENT",
+    "CURSOR",
+    "DECLARE",
+    "DELETE",
+    "DESC",
+    "DESCRIBE",
+    "DISTINCT",
+    "DO",
+    "DROP",
+    "ELSE",
+    "ELSEIF",
+    "END",
+    "EXCEPT",
+    "EXCEPTION",
+    "EXECUTE",
+    "EXISTS",
+    "FALSE",
+    "FETCH",
+    "FIRST",
+    "FLATTEN",
+    "FOLLOWING",
+    "FOR",
+    "FROM",
+    "FULL",
+    "FUNCTION",
+    "GRANT",
+    "GRANTS",
+    "GROUP",
+    "HANDLER",
+    "HAVING",
+    "IF",
+    "ILIKE",
+    "IMMEDIATE",
+    "IMPORTS",
+    "IN",
+    "INNER",
+    "INPUT",
+    "INSERT",
+    "INTERSECT",
+    "INTO",
+    "IS",
+    "JAVA",
+    "JAVASCRIPT",
+    "JOIN",
+    "LANGUAGE",
+    "LAST",
+    "LATERAL",
+    "LEFT",
+    "LET",
+    "LIKE",
+    "LIMIT",
+    "LOOP",
+    "MATCHED",
+    "MERGE",
+    "MINUS",
+    "NATURAL",
+    "NOT",
+    "NULL",
+    "NULLS",
+    "OFFSET",
+    "ON",
+    "OR",
+    "ORDER",
+    "OUT",
+    "OUTER",
+    "OUTPUT",
+    "OVER",
+    "OVERWRITE",
+    "OWNER",
+    "PACKAGES",
+    "PARTITION",
+    "PIVOT",
+    "PRECEDING",
+    "PRIOR",
+    "PROCEDURE",
+    "PYTHON",
+    "QUALIFY",
+    "RANGE",
+    "RECURSIVE",
+    "REGEXP",
+    "REPEAT",
+    "REPLACE",
+    "RESULTSET",
+    "RETURN",
+    "RETURNS",
+    "REVOKE",
+    "RIGHT",
+    "RLIKE",
+    "ROLLBACK",
+    "ROW",
+    "ROWS",
+    "RUNTIME_VERSION",
+    "SAMPLE",
+    "SCALA",
+    "SCHEDULE",
+    "SECURE",
+    "SELECT",
+    "SET",
+    "SHOW",
+    "SQL",
+    "START",
+    "STRICT",
+    "TABLE",
+    "TABLESAMPLE",
+    "TASK",
+    "TEMP",
+    "TEMPORARY",
+    "THEN",
+    "TOP",
+    "TRANSIENT",
+    "TRUE",
+    "TRUNCATE",
+    "TRY_CAST",
+    "UNBOUNDED",
+    "UNDROP",
+    "UNION",
+    "UNPIVOT",
+    "UNTIL",
+    "UPDATE",
+    "USE",
+    "USING",
+    "VALUES",
+    "VIEW",
+    "VOLATILE",
+    "WAREHOUSE",
+    "WHEN",
+    "WHERE",
+    "WHILE",
+    "WINDOW",
+    "WITH",
+    "WITHIN",
+];
 
 /// Folding ranges for `textDocument/foldingRange`: one region per multi-line top-level statement,
 /// so an editor can collapse each statement in a script. The CST's root children are the statements.
@@ -546,6 +1180,66 @@ pub fn semantic_tokens_with_encoding(text: &str, encoding: PositionEncoding) -> 
             },
         )
         .collect()
+}
+
+/// The delta-encoded semantic tokens that intersect `range`.
+pub fn semantic_tokens_range_with_encoding(
+    text: &str,
+    range: Range,
+    encoding: PositionEncoding,
+) -> Vec<SemanticToken> {
+    let full = semantic_tokens_with_encoding(text, encoding);
+    let mut absolute = Vec::with_capacity(full.len());
+    let mut line = 0u32;
+    let mut start = 0u32;
+    for token in full {
+        line += token.delta_line;
+        start = if token.delta_line == 0 {
+            start + token.delta_start
+        } else {
+            token.delta_start
+        };
+        absolute.push(AbsoluteSemanticToken { line, start, token });
+    }
+
+    let mut previous: Option<(u32, u32)> = None;
+    absolute
+        .into_iter()
+        .filter(|token| semantic_token_intersects_range(token, range))
+        .map(|absolute| {
+            let delta_line = previous.map_or(absolute.line, |(line, _)| absolute.line - line);
+            let delta_start = if delta_line == 0 {
+                previous.map_or(absolute.start, |(_, start)| absolute.start - start)
+            } else {
+                absolute.start
+            };
+            previous = Some((absolute.line, absolute.start));
+            SemanticToken {
+                delta_line,
+                delta_start,
+                length: absolute.token.length,
+                token_type: absolute.token.token_type,
+                token_modifiers_bitset: absolute.token.token_modifiers_bitset,
+            }
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug)]
+struct AbsoluteSemanticToken {
+    line: u32,
+    start: u32,
+    token: SemanticToken,
+}
+
+fn semantic_token_intersects_range(token: &AbsoluteSemanticToken, range: Range) -> bool {
+    let token_start = Position::new(token.line, token.start);
+    let token_end = Position::new(token.line, token.start + token.token.length);
+    position_lt(token_start, range.end) && position_lt(range.start, token_end)
+}
+
+fn position_lt(a: Position, b: Position) -> bool {
+    a.line < b.line || (a.line == b.line && a.character < b.character)
 }
 
 #[cfg(test)]
@@ -738,6 +1432,62 @@ mod tests {
     }
 
     #[test]
+    fn lint_diagnostics_have_codes_and_respect_options() {
+        let wildcard = diagnostics("SELECT * FROM t;")
+            .into_iter()
+            .find(|diag| diag.message.contains("avoid SELECT *"))
+            .expect("SELECT * lint");
+        assert_eq!(
+            wildcard.code,
+            Some(lsp_types::NumberOrString::String("SDF001".to_string()))
+        );
+
+        let text = "SELECT id FROM t WHERE id IN (1, 2, 3);";
+        let diags = diagnostics_with_lint_options(
+            text,
+            &FormatOptions::default(),
+            LintOptions {
+                large_in_list_threshold: 2,
+                ..LintOptions::default()
+            },
+            PositionEncoding::Utf16,
+        );
+        assert!(diags.iter().any(|diag| {
+            diag.code == Some(lsp_types::NumberOrString::String("SDF002".to_string()))
+        }));
+
+        let disabled = diagnostics_with_lint_options(
+            text,
+            &FormatOptions::default(),
+            LintOptions {
+                large_in_list: false,
+                large_in_list_threshold: 2,
+                ..LintOptions::default()
+            },
+            PositionEncoding::Utf16,
+        );
+        assert!(
+            disabled
+                .iter()
+                .all(|diag| diag.code
+                    != Some(lsp_types::NumberOrString::String("SDF002".to_string())))
+        );
+    }
+
+    #[test]
+    fn unsupported_embedded_language_has_a_code() {
+        let diags = diagnostics("CREATE FUNCTION f() RETURNS STRING LANGUAGE RUBY AS $$x$$;");
+        let language = diags
+            .iter()
+            .find(|diag| diag.message.contains("unsupported embedded language RUBY"))
+            .expect("unsupported language lint");
+        assert_eq!(
+            language.code,
+            Some(lsp_types::NumberOrString::String("SDF003".to_string()))
+        );
+    }
+
+    #[test]
     fn offset_is_the_inverse_of_position() {
         let text = "SELECT a\nFROM 芋;\n";
         let index = LineIndex::new(text);
@@ -809,6 +1559,37 @@ mod tests {
     }
 
     #[test]
+    fn document_symbols_name_top_level_statements() {
+        let symbols = document_symbols(
+            "CREATE TABLE db.t (id INT);\n\nSELECT id\nFROM db.t;",
+            &FormatOptions::default(),
+        );
+        assert_eq!(symbols.len(), 2);
+        assert_eq!(symbols[0].name, "CREATE TABLE db.t");
+        assert_eq!(symbols[0].kind, SymbolKind::STRUCT);
+        assert_eq!(symbols[0].selection_range.start, Position::new(0, 13));
+        assert_eq!(symbols[1].name, "SELECT");
+        assert_eq!(symbols[1].kind, SymbolKind::FUNCTION);
+    }
+
+    #[test]
+    fn completion_items_include_keywords_types_and_snippets() {
+        let items = completion_items();
+        assert!(items.iter().any(|item| {
+            item.label == "SELECT" && item.kind == Some(CompletionItemKind::KEYWORD)
+        }));
+        assert!(items
+            .iter()
+            .any(|item| item.label == "NUMBER"
+                && item.kind == Some(CompletionItemKind::TYPE_PARAMETER)));
+        assert!(items.iter().any(|item| {
+            item.label == "CREATE TABLE ..."
+                && item.kind == Some(CompletionItemKind::SNIPPET)
+                && item.insert_text_format == Some(InsertTextFormat::SNIPPET)
+        }));
+    }
+
+    #[test]
     fn semantic_tokens_tag_keywords() {
         let tokens = semantic_tokens("select a from t");
         assert!(!tokens.is_empty());
@@ -854,5 +1635,30 @@ mod tests {
         let tokens = semantic_tokens("select 1 /* a\nb */ from t");
         // Deltas must be non-negative by construction (u32) and the stream stays consistent.
         assert!(tokens.iter().all(|t| t.length > 0));
+    }
+
+    #[test]
+    fn semantic_tokens_range_filters_and_reencodes_tokens() {
+        let text = "SELECT a\nFROM t\nWHERE a = 1";
+        let tokens = semantic_tokens_range_with_encoding(
+            text,
+            Range::new(Position::new(1, 0), Position::new(2, 0)),
+            PositionEncoding::Utf16,
+        );
+        assert!(!tokens.is_empty());
+        assert_eq!(tokens[0].delta_line, 1);
+
+        let mut line = 0u32;
+        let mut start = 0u32;
+        for token in tokens {
+            line += token.delta_line;
+            start = if token.delta_line == 0 {
+                start + token.delta_start
+            } else {
+                token.delta_start
+            };
+            assert_eq!(line, 1);
+            assert!(start + token.length <= 6);
+        }
     }
 }

@@ -1,11 +1,9 @@
 //! `sql-dialect-fmt-lsp` — a Language Server for Snowflake SQL.
 //!
-//! Speaks LSP over stdio (via `lsp-server`) and offers five features, each backed by the pure
-//! functions in [`sql_dialect_fmt_lsp`]: whole-document **formatting**, **semantic tokens** (from the
-//! lossless highlighter), **diagnostics** (the parser's recovered errors, published on every
-//! open/change), **hover** (keyword/type/symbol docs), and **folding ranges** (per statement).
-//! Documents are kept in sync incrementally (range edits are spliced as they arrive). Everything is
-//! synchronous — no async runtime — matching the rest of the workspace.
+//! Speaks LSP over stdio (via `lsp-server`) and exposes whole-document **formatting**,
+//! **semantic tokens**, **diagnostics**, **hover**, **folding ranges**, **document symbols**, and
+//! static SQL **completion**. Documents are kept in sync incrementally (range edits are spliced as
+//! they arrive). Everything is synchronous — no async runtime — matching the rest of the workspace.
 
 // `lsp_types::Uri` wraps a parsed URI whose hash/eq are value-stable; the lint can't see that, so
 // using it as a `HashMap` key is sound here.
@@ -20,22 +18,27 @@ use lsp_types::notification::{
     Notification as _, PublishDiagnostics,
 };
 use lsp_types::request::{
-    FoldingRangeRequest, Formatting, HoverRequest, Request as _, SemanticTokensFullRequest,
+    Completion, DocumentSymbolRequest, FoldingRangeRequest, Formatting, HoverRequest, Request as _,
+    SemanticTokensFullDeltaRequest, SemanticTokensFullRequest, SemanticTokensRangeRequest,
 };
 use lsp_types::{
-    DidChangeConfigurationParams, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange, FoldingRangeParams, Hover,
-    HoverParams, HoverProviderCapability, InitializeParams, OneOf, PositionEncodingKind,
-    PublishDiagnosticsParams, SemanticTokens, SemanticTokensLegend, SemanticTokensOptions,
-    SemanticTokensParams, SemanticTokensServerCapabilities, ServerCapabilities,
+    CompletionOptions, CompletionParams, CompletionResponse, DidChangeConfigurationParams,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    DocumentFormattingParams, DocumentSymbolOptions, DocumentSymbolParams, DocumentSymbolResponse,
+    FoldingRange, FoldingRangeParams, Hover, HoverParams, HoverProviderCapability,
+    InitializeParams, OneOf, PositionEncodingKind, PublishDiagnosticsParams, SemanticTokens,
+    SemanticTokensDeltaParams, SemanticTokensFullDeltaResult, SemanticTokensLegend,
+    SemanticTokensOptions, SemanticTokensParams, SemanticTokensRangeParams,
+    SemanticTokensRangeResult, SemanticTokensServerCapabilities, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
 };
 use serde::Deserialize;
 use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_lsp::{
-    apply_change_with_encoding, diagnostics_with_options, folding_ranges,
-    format_edits_with_encoding, hover_with_encoding, semantic_tokens_with_encoding,
-    token_modifiers, token_types, PositionEncoding as NegotiatedPositionEncoding,
+    apply_change_with_encoding, completion_items, diagnostics_with_lint_options,
+    document_symbols_with_encoding, folding_ranges, format_edits_with_encoding,
+    hover_with_encoding, semantic_tokens_range_with_encoding, semantic_tokens_with_encoding,
+    token_modifiers, token_types, LintOptions, PositionEncoding as NegotiatedPositionEncoding,
 };
 use sql_dialect_fmt_parser::Dialect;
 
@@ -50,14 +53,18 @@ type Docs = HashMap<Uri, Document>;
 #[derive(Clone, Debug)]
 struct ServerState {
     options: FormatOptions,
+    lint_options: LintOptions,
     position_encoding: NegotiatedPositionEncoding,
+    semantic_result_seq: u64,
 }
 
 impl ServerState {
     fn from_initialize(params: &InitializeParams) -> Self {
         let mut state = Self {
             options: FormatOptions::default(),
+            lint_options: LintOptions::default(),
             position_encoding: position_encoding_from_client(params),
+            semantic_result_seq: 0,
         };
         if let Some(settings) = &params.initialization_options {
             state.apply_settings(settings);
@@ -66,20 +73,25 @@ impl ServerState {
     }
 
     fn apply_settings(&mut self, settings: &serde_json::Value) {
-        apply_options_value(&mut self.options, settings);
+        apply_settings_value(&mut self.options, &mut self.lint_options, settings);
         for key in ["sqlDialectFmt", "sql-dialect-fmt", "sql_dialect_fmt"] {
             if let Some(nested) = settings.get(key) {
-                apply_options_value(&mut self.options, nested);
+                apply_settings_value(&mut self.options, &mut self.lint_options, nested);
             }
         }
         if let Some(nested) = settings.get("settings") {
-            apply_options_value(&mut self.options, nested);
+            apply_settings_value(&mut self.options, &mut self.lint_options, nested);
             for key in ["sqlDialectFmt", "sql-dialect-fmt", "sql_dialect_fmt"] {
                 if let Some(section) = nested.get(key) {
-                    apply_options_value(&mut self.options, section);
+                    apply_settings_value(&mut self.options, &mut self.lint_options, section);
                 }
             }
         }
+    }
+
+    fn next_semantic_result_id(&mut self) -> String {
+        self.semantic_result_seq += 1;
+        self.semantic_result_seq.to_string()
     }
 }
 
@@ -97,6 +109,22 @@ struct FormatterSettings {
     #[serde(alias = "line_ending")]
     line_ending: Option<String>,
     dialect: Option<String>,
+    #[serde(default)]
+    lint: LintSettings,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct LintSettings {
+    enabled: Option<bool>,
+    #[serde(alias = "select_wildcard")]
+    select_wildcard: Option<bool>,
+    #[serde(alias = "large_in_list")]
+    large_in_list: Option<bool>,
+    #[serde(alias = "unsupported_embedded_language")]
+    unsupported_embedded_language: Option<bool>,
+    #[serde(alias = "large_in_list_threshold")]
+    large_in_list_threshold: Option<usize>,
 }
 
 fn position_encoding_from_client(params: &InitializeParams) -> NegotiatedPositionEncoding {
@@ -118,7 +146,11 @@ fn position_encoding_from_client(params: &InitializeParams) -> NegotiatedPositio
     }
 }
 
-fn apply_options_value(options: &mut FormatOptions, value: &serde_json::Value) {
+fn apply_settings_value(
+    options: &mut FormatOptions,
+    lint_options: &mut LintOptions,
+    value: &serde_json::Value,
+) {
     let Ok(settings) = serde_json::from_value::<FormatterSettings>(value.clone()) else {
         return;
     };
@@ -143,6 +175,27 @@ fn apply_options_value(options: &mut FormatOptions, value: &serde_json::Value) {
     }
     if let Some(dialect) = settings.dialect.as_deref().and_then(parse_dialect) {
         options.dialect = dialect;
+    }
+    apply_lint_settings(lint_options, &settings.lint);
+}
+
+fn apply_lint_settings(options: &mut LintOptions, settings: &LintSettings) {
+    if let Some(enabled) = settings.enabled {
+        options.select_wildcard = enabled;
+        options.large_in_list = enabled;
+        options.unsupported_embedded_language = enabled;
+    }
+    if let Some(select_wildcard) = settings.select_wildcard {
+        options.select_wildcard = select_wildcard;
+    }
+    if let Some(large_in_list) = settings.large_in_list {
+        options.large_in_list = large_in_list;
+    }
+    if let Some(unsupported_embedded_language) = settings.unsupported_embedded_language {
+        options.unsupported_embedded_language = unsupported_embedded_language;
+    }
+    if let Some(threshold) = settings.large_in_list_threshold {
+        options.large_in_list_threshold = threshold;
     }
 }
 
@@ -200,14 +253,23 @@ fn server_capabilities(position_encoding: NegotiatedPositionEncoding) -> ServerC
         document_formatting_provider: Some(OneOf::Left(true)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
+        document_symbol_provider: Some(OneOf::Right(DocumentSymbolOptions {
+            label: Some("SQL".to_string()),
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        })),
+        completion_provider: Some(CompletionOptions {
+            resolve_provider: Some(false),
+            trigger_characters: Some(vec![".".to_string()]),
+            ..CompletionOptions::default()
+        }),
         semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
             SemanticTokensOptions {
                 legend: SemanticTokensLegend {
                     token_types: token_types(),
                     token_modifiers: token_modifiers(),
                 },
-                full: Some(lsp_types::SemanticTokensFullOptions::Bool(true)),
-                range: Some(false),
+                full: Some(lsp_types::SemanticTokensFullOptions::Delta { delta: Some(true) }),
+                range: Some(true),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
             },
         )),
@@ -238,7 +300,7 @@ fn main_loop(
     Ok(())
 }
 
-fn handle_request(request: Request, docs: &Docs, state: &ServerState) -> Response {
+fn handle_request(request: Request, docs: &Docs, state: &mut ServerState) -> Response {
     match request.method.as_str() {
         Formatting::METHOD => match cast::<Formatting>(request) {
             Ok((id, params)) => ok(id, formatting(params, docs, state)),
@@ -248,12 +310,30 @@ fn handle_request(request: Request, docs: &Docs, state: &ServerState) -> Respons
             Ok((id, params)) => ok(id, semantic_tokens_full(params, docs, state)),
             Err(response) => *response,
         },
+        SemanticTokensFullDeltaRequest::METHOD => {
+            match cast::<SemanticTokensFullDeltaRequest>(request) {
+                Ok((id, params)) => ok(id, semantic_tokens_full_delta(params, docs, state)),
+                Err(response) => *response,
+            }
+        }
+        SemanticTokensRangeRequest::METHOD => match cast::<SemanticTokensRangeRequest>(request) {
+            Ok((id, params)) => ok(id, semantic_tokens_range(params, docs, state)),
+            Err(response) => *response,
+        },
         HoverRequest::METHOD => match cast::<HoverRequest>(request) {
             Ok((id, params)) => ok(id, hover_request(params, docs, state)),
             Err(response) => *response,
         },
         FoldingRangeRequest::METHOD => match cast::<FoldingRangeRequest>(request) {
             Ok((id, params)) => ok(id, folding_request(params, docs)),
+            Err(response) => *response,
+        },
+        DocumentSymbolRequest::METHOD => match cast::<DocumentSymbolRequest>(request) {
+            Ok((id, params)) => ok(id, document_symbol_request(params, docs, state)),
+            Err(response) => *response,
+        },
+        Completion::METHOD => match cast::<Completion>(request) {
+            Ok((id, params)) => ok(id, completion_request(params)),
             Err(response) => *response,
         },
         _ => Response::new_err(
@@ -282,13 +362,46 @@ fn formatting(
 fn semantic_tokens_full(
     params: SemanticTokensParams,
     docs: &Docs,
-    state: &ServerState,
-) -> Option<SemanticTokens> {
+    state: &mut ServerState,
+) -> Option<lsp_types::SemanticTokensResult> {
     let text = &docs.get(&params.text_document.uri)?.text;
-    Some(SemanticTokens {
-        result_id: None,
-        data: semantic_tokens_with_encoding(text, state.position_encoding),
-    })
+    Some(
+        SemanticTokens {
+            result_id: Some(state.next_semantic_result_id()),
+            data: semantic_tokens_with_encoding(text, state.position_encoding),
+        }
+        .into(),
+    )
+}
+
+fn semantic_tokens_full_delta(
+    params: SemanticTokensDeltaParams,
+    docs: &Docs,
+    state: &mut ServerState,
+) -> Option<SemanticTokensFullDeltaResult> {
+    let text = &docs.get(&params.text_document.uri)?.text;
+    Some(
+        SemanticTokens {
+            result_id: Some(state.next_semantic_result_id()),
+            data: semantic_tokens_with_encoding(text, state.position_encoding),
+        }
+        .into(),
+    )
+}
+
+fn semantic_tokens_range(
+    params: SemanticTokensRangeParams,
+    docs: &Docs,
+    state: &ServerState,
+) -> Option<SemanticTokensRangeResult> {
+    let text = &docs.get(&params.text_document.uri)?.text;
+    Some(
+        SemanticTokens {
+            result_id: None,
+            data: semantic_tokens_range_with_encoding(text, params.range, state.position_encoding),
+        }
+        .into(),
+    )
 }
 
 fn hover_request(params: HoverParams, docs: &Docs, state: &ServerState) -> Option<Hover> {
@@ -300,6 +413,19 @@ fn hover_request(params: HoverParams, docs: &Docs, state: &ServerState) -> Optio
 fn folding_request(params: FoldingRangeParams, docs: &Docs) -> Option<Vec<FoldingRange>> {
     let text = &docs.get(&params.text_document.uri)?.text;
     Some(folding_ranges(text))
+}
+
+fn document_symbol_request(
+    params: DocumentSymbolParams,
+    docs: &Docs,
+    state: &ServerState,
+) -> Option<DocumentSymbolResponse> {
+    let text = &docs.get(&params.text_document.uri)?.text;
+    Some(document_symbols_with_encoding(text, &state.options, state.position_encoding).into())
+}
+
+fn completion_request(_params: CompletionParams) -> Option<CompletionResponse> {
+    Some(completion_items().into())
 }
 
 fn handle_notification(
@@ -378,7 +504,12 @@ fn publish_diagnostics(
     let diags = docs
         .get(uri)
         .map(|document| {
-            diagnostics_with_options(&document.text, &state.options, state.position_encoding)
+            diagnostics_with_lint_options(
+                &document.text,
+                &state.options,
+                state.lint_options,
+                state.position_encoding,
+            )
         })
         .unwrap_or_default();
     let version = docs.get(uri).and_then(|document| document.version);
@@ -443,7 +574,9 @@ mod tests {
     fn test_state() -> ServerState {
         ServerState {
             options: FormatOptions::default(),
+            lint_options: LintOptions::default(),
             position_encoding: NegotiatedPositionEncoding::Utf16,
+            semantic_result_seq: 0,
         }
     }
 
@@ -594,5 +727,43 @@ mod tests {
             .diagnostics
             .iter()
             .all(|diagnostic| !diagnostic.message.contains("unexpected character")));
+    }
+
+    #[test]
+    fn did_change_configuration_updates_lint_options() {
+        let (server, client) = Connection::memory();
+        let mut docs = Docs::new();
+        let mut state = test_state();
+        let uri = test_uri();
+        docs.insert(
+            uri.clone(),
+            Document {
+                text: "SELECT id FROM t WHERE id IN (1, 2, 3);".to_string(),
+                version: Some(5),
+            },
+        );
+        let notification = Notification::new(
+            DidChangeConfiguration::METHOD.to_string(),
+            DidChangeConfigurationParams {
+                settings: serde_json::json!({
+                    "sqlDialectFmt": {
+                        "lint": {
+                            "largeInList": false,
+                            "largeInListThreshold": 2
+                        }
+                    }
+                }),
+            },
+        );
+
+        handle_notification(&server, notification, &mut docs, &mut state)
+            .expect("handle didChangeConfiguration");
+
+        assert!(!state.lint_options.large_in_list);
+        assert_eq!(state.lint_options.large_in_list_threshold, 2);
+        let params = recv_diagnostics(&client);
+        assert!(params.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code != Some(lsp_types::NumberOrString::String("SDF002".to_string()))
+        }));
     }
 }

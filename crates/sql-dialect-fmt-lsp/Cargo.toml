@@ -10,7 +10,7 @@ readme.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Language Server Protocol server for Snowflake SQL (formatting, semantic tokens, diagnostics)."
+description = "Language Server Protocol server for Snowflake SQL formatting, diagnostics, symbols, completion, and semantic tokens."
 [[bin]]
 name = "sql-dialect-fmt-lsp"
 path = "src/main.rs"
