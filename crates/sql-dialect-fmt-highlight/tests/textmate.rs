@@ -7,7 +7,7 @@
 //!     lexical highlighter, so an editor using the grammar and one using the LSP/CST agree.
 
 use sql_dialect_fmt_highlight::{classify, HighlightKind};
-use sql_dialect_fmt_syntax::SyntaxKind;
+use sql_dialect_fmt_syntax::{keyword_texts, SyntaxKind, BUILTIN_TYPE_WORDS};
 
 const GRAMMAR_SRC: &str = include_str!("../../../editors/snowflake.tmLanguage.json");
 
@@ -140,59 +140,13 @@ fn keyword_words_classify_as_keywords() {
 
 #[test]
 fn keyword_list_is_complete_against_the_keyword_table() {
-    // The grammar must list every reserved keyword the lexer recognizes — otherwise editors miss
-    // colouring a word the CST treats as a keyword. We probe each `*_KW` variant's canonical text
-    // via the classifier and require the grammar's alternation to contain it.
     let g = grammar();
     let words: std::collections::HashSet<String> =
         alternation(g["repository"]["keywords"]["match"].as_str().unwrap())
             .into_iter()
             .collect();
 
-    // Representative reserved words spanning the SELECT pipeline, DDL/DML, scripting, and
-    // embedded-language declarations. Each must be present.
-    for kw in [
-        "select",
-        "from",
-        "where",
-        "group",
-        "by",
-        "having",
-        "order",
-        "qualify",
-        "join",
-        "lateral",
-        "with",
-        "recursive",
-        "union",
-        "create",
-        "table",
-        "insert",
-        "update",
-        "delete",
-        "merge",
-        "begin",
-        "declare",
-        "return",
-        "call",
-        "procedure",
-        "function",
-        "language",
-        "javascript",
-        "python",
-        "java",
-        "scala",
-        "sql",
-        "runtime_version",
-        "try_cast",
-        "tablesample",
-        "within",
-        "pivot",
-        "unpivot",
-        "connect",
-        "start",
-        "prior",
-    ] {
+    for kw in keyword_texts() {
         assert!(
             words.contains(kw),
             "grammar keyword alternation is missing `{kw}`"
@@ -216,6 +170,21 @@ fn type_words_classify_as_types() {
             "grammar lists `{word}` as a type but the highlighter disagrees"
         );
     }
+}
+
+#[test]
+fn type_list_matches_the_builtin_type_table() {
+    let g = grammar();
+    let words: std::collections::HashSet<String> =
+        alternation(g["repository"]["types"]["match"].as_str().unwrap())
+            .into_iter()
+            .collect();
+    let expected: std::collections::HashSet<String> = BUILTIN_TYPE_WORDS
+        .iter()
+        .map(|word| word.to_ascii_lowercase())
+        .collect();
+
+    assert_eq!(words, expected);
 }
 
 #[test]

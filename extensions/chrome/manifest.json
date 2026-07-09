@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "sql-dialect-fmt for SQL editors",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "Format Snowflake and Databricks SQL in browser editors with sql-dialect-fmt.",
   "minimum_chrome_version": "102",
   "permissions": ["activeTab", "storage"],

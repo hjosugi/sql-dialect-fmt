@@ -5,7 +5,7 @@
 //! `SyntaxKind` classification here before LSP/TextMate adapters consume it.
 
 use sql_dialect_fmt_lexer::{tokenize, LexError};
-use sql_dialect_fmt_syntax::{keyword_kind, SyntaxKind};
+use sql_dialect_fmt_syntax::{is_builtin_type, keyword_kind, SyntaxKind};
 
 pub mod semantic;
 pub use semantic::{
@@ -126,44 +126,6 @@ pub fn classify(kind: SyntaxKind, text: &str) -> HighlightKind {
         kind if is_operator(kind) => HighlightKind::Operator,
         _ => HighlightKind::Punctuation,
     }
-}
-
-fn is_builtin_type(text: &str) -> bool {
-    const TYPES: &[&str] = &[
-        "ARRAY",
-        "BIGINT",
-        "BINARY",
-        "BOOLEAN",
-        "CHAR",
-        "DATE",
-        "DATETIME",
-        "DEC",
-        "DECIMAL",
-        "DOUBLE",
-        "FLOAT",
-        "GEOGRAPHY",
-        "GEOMETRY",
-        "INT",
-        "INTEGER",
-        "MAP",
-        "NUMBER",
-        "NUMERIC",
-        "OBJECT",
-        "REAL",
-        "STRING",
-        "TEXT",
-        "TIME",
-        "TIMESTAMP",
-        "TIMESTAMP_LTZ",
-        "TIMESTAMP_NTZ",
-        "TIMESTAMP_TZ",
-        "VARIANT",
-        "VARCHAR",
-        "VECTOR",
-    ];
-    TYPES
-        .iter()
-        .any(|candidate| candidate.eq_ignore_ascii_case(text))
 }
 
 fn is_operator(kind: SyntaxKind) -> bool {

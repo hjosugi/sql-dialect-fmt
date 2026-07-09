@@ -1,5 +1,8 @@
+use sql_dialect_fmt_syntax::{keyword_texts, BUILTIN_TYPE_WORDS};
 use sql_dialect_fmt_test_fixtures::{EASY_CASES, MINIMUM_EMBEDDED_EASY_CASES};
 use tree_sitter::{InputEdit, Point, Query, QueryCursor, StreamingIterator};
+
+const GRAMMAR_JS: &str = include_str!("../../../tree-sitter-snowflake/grammar.js");
 
 struct SqlCase {
     name: &'static str,
@@ -162,6 +165,15 @@ const CAPTURE_CASES: &[CaptureCase] = &[
             ("string.special", "$$return \"ok\";$$"),
         ],
     },
+    CaptureCase {
+        name: "syntax keywords added to tree-sitter table",
+        sql: "ALTER TABLE t ADD COLUMN c NUMBER; ROLLBACK;",
+        expected: &[
+            ("keyword", "ALTER"),
+            ("type", "NUMBER"),
+            ("keyword", "ROLLBACK"),
+        ],
+    },
 ];
 
 fn parse(source: &str) -> tree_sitter::Tree {
@@ -275,6 +287,27 @@ fn injection_captures(sql: &str) -> Vec<(String, String)> {
     seen
 }
 
+fn js_const_words(name: &str) -> std::collections::HashSet<String> {
+    let start_marker = format!("const {name} = [");
+    let start = GRAMMAR_JS
+        .find(&start_marker)
+        .unwrap_or_else(|| panic!("missing {name} array"))
+        + start_marker.len();
+    let rest = &GRAMMAR_JS[start..];
+    let end = rest
+        .find("];")
+        .unwrap_or_else(|| panic!("unterminated {name} array"));
+
+    rest[..end]
+        .lines()
+        .filter_map(|line| {
+            let word = line.trim().trim_end_matches(',');
+            word.strip_prefix('\'')?.strip_suffix('\'')
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 #[test]
 fn grammar_metadata_is_available() {
     let language = sql_dialect_fmt_tree_sitter::language();
@@ -318,6 +351,28 @@ fn highlight_and_support_queries_compile() {
     let indent_names = indents.capture_names();
     assert!(indent_names.contains(&"indent"));
     assert!(indent_names.contains(&"dedent"));
+}
+
+#[test]
+fn tree_sitter_keywords_cover_syntax_keywords() {
+    let words = js_const_words("KEYWORDS");
+    for keyword in keyword_texts() {
+        assert!(
+            words.contains(keyword),
+            "tree-sitter KEYWORDS is missing `{keyword}`"
+        );
+    }
+}
+
+#[test]
+fn tree_sitter_types_match_builtin_type_words() {
+    let words = js_const_words("TYPES");
+    let expected: std::collections::HashSet<String> = BUILTIN_TYPE_WORDS
+        .iter()
+        .map(|word| word.to_ascii_lowercase())
+        .collect();
+
+    assert_eq!(words, expected);
 }
 
 #[test]

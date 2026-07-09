@@ -9,6 +9,14 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-07-10
+
+### Changed
+
+- Centralized built-in type and keyword list consumption through the syntax crate for highlighter
+  and LSP completions, and added TextMate/tree-sitter synchronization tests.
+- Brought the bundled tree-sitter keyword table back in sync with the syntax keyword table.
+
 ## [1.6.1] - 2026-07-10
 
 ### Changed
@@ -212,7 +220,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.4.0...v1.5.0

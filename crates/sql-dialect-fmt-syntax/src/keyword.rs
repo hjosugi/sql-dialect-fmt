@@ -280,9 +280,17 @@ pub fn keyword_kind_for(ident: &str, dialect: Dialect) -> Option<SyntaxKind> {
     kw_dialect.reserved_in(dialect).then_some(kind)
 }
 
+/// Canonical lowercase keyword spellings, in the same sorted order as the lookup table.
+///
+/// This lets editor integrations and completion providers share the parser's keyword source
+/// instead of carrying independent reserved-word lists.
+pub fn keyword_texts() -> impl ExactSizeIterator<Item = &'static str> {
+    KEYWORDS.iter().map(|(text, _, _)| *text)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{keyword_kind, keyword_kind_for, KeywordDialect, KEYWORDS};
+    use super::{keyword_kind, keyword_kind_for, keyword_texts, KeywordDialect, KEYWORDS};
     use crate::{Dialect, SyntaxKind};
 
     #[test]
@@ -342,6 +350,17 @@ mod tests {
                 left < right,
                 "KEYWORDS must be sorted: {left:?} >= {right:?}"
             );
+        }
+    }
+
+    #[test]
+    fn keyword_texts_exposes_the_lookup_table_order() {
+        let texts: Vec<_> = keyword_texts().collect();
+        assert_eq!(texts.len(), KEYWORDS.len());
+        assert_eq!(texts.first(), Some(&"after"));
+        assert_eq!(texts.last(), Some(&"within"));
+        for (text, (table_text, _, _)) in texts.iter().zip(KEYWORDS) {
+            assert_eq!(text, table_text);
         }
     }
 
