@@ -10,13 +10,17 @@
 use lsp_types::{
     CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, DocumentSymbol,
     FoldingRange, FoldingRangeKind, Hover, HoverContents, InsertTextFormat, MarkupContent,
-    MarkupKind, NumberOrString, Position, Range, SemanticToken, SemanticTokenModifier,
-    SemanticTokenType, SymbolKind, TextEdit,
+    MarkupKind, Position, Range, SemanticToken, SemanticTokenModifier, SemanticTokenType,
+    SymbolKind, TextEdit,
 };
 use sql_dialect_fmt_formatter::{format, FormatOptions};
-use sql_dialect_fmt_highlight::{semantic, HighlightKind, HighlightToken};
+use sql_dialect_fmt_highlight::semantic;
 use sql_dialect_fmt_parser::{SyntaxKind, SyntaxNode};
 use sql_dialect_fmt_text::{LineIndex, Utf16Position, Utf8Position};
+
+mod lint;
+
+pub use lint::{diagnostic_lint_code, LintCode, LintOptions};
 
 /// LSP position encoding negotiated with the client.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,47 +29,6 @@ pub enum PositionEncoding {
     Utf16,
     /// UTF-8 byte offsets.
     Utf8,
-}
-
-/// LSP-only lint knobs layered on top of parser diagnostics.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LintOptions {
-    /// Warn on top-level `SELECT *` in a select list.
-    pub select_wildcard: bool,
-    /// Warn on large literal `IN (...)` lists.
-    pub large_in_list: bool,
-    /// Warn when `LANGUAGE <name> AS $$...$$` uses an embedded language the formatter cannot format.
-    pub unsupported_embedded_language: bool,
-    /// Item count above which a literal `IN (...)` list is considered large.
-    pub large_in_list_threshold: usize,
-}
-
-impl Default for LintOptions {
-    fn default() -> Self {
-        Self {
-            select_wildcard: true,
-            large_in_list: true,
-            unsupported_embedded_language: true,
-            large_in_list_threshold: 100,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DiagnosticCode {
-    SelectWildcard,
-    LargeInList,
-    UnsupportedEmbeddedLanguage,
-}
-
-impl DiagnosticCode {
-    fn as_str(self) -> &'static str {
-        match self {
-            DiagnosticCode::SelectWildcard => "SDF001",
-            DiagnosticCode::LargeInList => "SDF002",
-            DiagnosticCode::UnsupportedEmbeddedLanguage => "SDF003",
-        }
-    }
 }
 
 /// The semantic-token type legend, mirrored from the single source of truth in
@@ -212,286 +175,14 @@ pub fn diagnostics_with_lint_options(
                 .map(|err| make(to_range(err.range()), err.message.clone())),
         )
         .collect();
-    if lint_options.unsupported_embedded_language {
-        diagnostics.extend(embedded_language_diagnostics_with_encoding(
-            &highlighted.tokens,
-            &index,
-            encoding,
-        ));
-    }
-    diagnostics.extend(lint_diagnostics_with_encoding(
+    diagnostics.extend(lint::diagnostics_with_encoding(
+        text,
         &highlighted.tokens,
         &index,
         lint_options,
         encoding,
     ));
     diagnostics
-}
-
-fn lint_diagnostics_with_encoding(
-    tokens: &[HighlightToken<'_>],
-    index: &LineIndex<'_>,
-    options: LintOptions,
-    encoding: PositionEncoding,
-) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-
-    if options.select_wildcard {
-        diagnostics.extend(select_wildcard_diagnostics(tokens, index, encoding));
-    }
-    if options.large_in_list {
-        diagnostics.extend(large_in_list_diagnostics(
-            tokens,
-            index,
-            options.large_in_list_threshold,
-            encoding,
-        ));
-    }
-
-    diagnostics
-}
-
-fn lint_warning(
-    index: &LineIndex<'_>,
-    range: std::ops::Range<usize>,
-    code: DiagnosticCode,
-    message: &str,
-    encoding: PositionEncoding,
-) -> Diagnostic {
-    Diagnostic {
-        range: Range::new(
-            lsp_position(index, range.start, encoding),
-            lsp_position(index, range.end, encoding),
-        ),
-        severity: Some(DiagnosticSeverity::WARNING),
-        code: Some(NumberOrString::String(code.as_str().to_string())),
-        source: Some("sql-dialect-fmt".to_string()),
-        message: message.to_string(),
-        ..Default::default()
-    }
-}
-
-fn select_wildcard_diagnostics(
-    tokens: &[HighlightToken<'_>],
-    index: &LineIndex<'_>,
-    encoding: PositionEncoding,
-) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-    let mut in_select_list = false;
-    let mut paren_depth = 0usize;
-    let mut previous_significant: Option<&str> = None;
-
-    for token in tokens.iter().filter(|token| is_significant(token.kind)) {
-        if token.kind == HighlightKind::Keyword && token.text.eq_ignore_ascii_case("select") {
-            in_select_list = true;
-            paren_depth = 0;
-            previous_significant = Some(token.text);
-            continue;
-        }
-
-        if in_select_list {
-            match token.text {
-                "(" => paren_depth += 1,
-                ")" => paren_depth = paren_depth.saturating_sub(1),
-                ";" if paren_depth == 0 => in_select_list = false,
-                _ => {
-                    if paren_depth == 0
-                        && token.kind == HighlightKind::Keyword
-                        && token.text.eq_ignore_ascii_case("from")
-                    {
-                        in_select_list = false;
-                    } else if paren_depth == 0
-                        && token.text == "*"
-                        && previous_significant.is_some_and(is_wildcard_prefix)
-                    {
-                        diagnostics.push(lint_warning(
-                            index,
-                            token.range.clone(),
-                            DiagnosticCode::SelectWildcard,
-                            "avoid SELECT * in shared SQL; list columns explicitly",
-                            encoding,
-                        ));
-                    }
-                }
-            }
-        }
-
-        previous_significant = Some(token.text);
-    }
-
-    diagnostics
-}
-
-fn is_wildcard_prefix(text: &str) -> bool {
-    matches!(text, "," | ".")
-        || text.eq_ignore_ascii_case("select")
-        || text.eq_ignore_ascii_case("distinct")
-        || text.eq_ignore_ascii_case("all")
-}
-
-fn large_in_list_diagnostics(
-    tokens: &[HighlightToken<'_>],
-    index: &LineIndex<'_>,
-    threshold: usize,
-    encoding: PositionEncoding,
-) -> Vec<Diagnostic> {
-    #[derive(Debug)]
-    struct InList {
-        start: usize,
-        depth: usize,
-        commas: usize,
-        saw_top_level_item: bool,
-        possible_subquery: bool,
-    }
-
-    let mut diagnostics = Vec::new();
-    let mut pending_in: Option<usize> = None;
-    let mut list: Option<InList> = None;
-
-    for token in tokens.iter().filter(|token| is_significant(token.kind)) {
-        let mut close_list_at: Option<usize> = None;
-        if let Some(active) = list.as_mut() {
-            match token.text {
-                "(" => active.depth += 1,
-                ")" => {
-                    active.depth = active.depth.saturating_sub(1);
-                    if active.depth == 0 {
-                        close_list_at = Some(token.range.end);
-                    }
-                }
-                "," if active.depth == 1 => active.commas += 1,
-                _ if active.depth == 1 && !active.saw_top_level_item => {
-                    active.saw_top_level_item = true;
-                    if token.kind == HighlightKind::Keyword
-                        && (token.text.eq_ignore_ascii_case("select")
-                            || token.text.eq_ignore_ascii_case("with"))
-                    {
-                        active.possible_subquery = true;
-                    }
-                }
-                _ => {}
-            }
-
-            if let Some(end) = close_list_at {
-                if let Some(active) = list.take() {
-                    let item_count = if active.saw_top_level_item {
-                        active.commas + 1
-                    } else {
-                        0
-                    };
-                    if !active.possible_subquery && item_count > threshold {
-                        diagnostics.push(lint_warning(
-                            index,
-                            active.start..end,
-                            DiagnosticCode::LargeInList,
-                            "large IN list; prefer a temp table, CTE, or semi-join when practical",
-                            encoding,
-                        ));
-                    }
-                }
-            }
-            continue;
-        }
-
-        if let Some(start) = pending_in.take() {
-            if token.text == "(" {
-                list = Some(InList {
-                    start,
-                    depth: 1,
-                    commas: 0,
-                    saw_top_level_item: false,
-                    possible_subquery: false,
-                });
-                continue;
-            }
-        }
-
-        if token.kind == HighlightKind::Keyword && token.text.eq_ignore_ascii_case("in") {
-            pending_in = Some(token.range.start);
-        }
-    }
-
-    diagnostics
-}
-
-fn is_significant(kind: HighlightKind) -> bool {
-    !matches!(kind, HighlightKind::Whitespace | HighlightKind::Comment)
-}
-
-fn embedded_language_diagnostics_with_encoding(
-    tokens: &[HighlightToken<'_>],
-    index: &LineIndex<'_>,
-    encoding: PositionEncoding,
-) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-    let mut expect_language_name = false;
-    let mut language_name: Option<(&str, std::ops::Range<usize>)> = None;
-    let mut saw_as_after_language = false;
-
-    for token in tokens {
-        match token.kind {
-            HighlightKind::Whitespace | HighlightKind::Comment => {}
-            HighlightKind::Punctuation if token.text == ";" => {
-                expect_language_name = false;
-                language_name = None;
-                saw_as_after_language = false;
-            }
-            HighlightKind::DollarString => {
-                if saw_as_after_language {
-                    if let Some((word, range)) = language_name.take() {
-                        if !is_supported_embedded_language(word) {
-                            diagnostics.push(Diagnostic {
-                                range: Range::new(
-                                    lsp_position(index, range.start, encoding),
-                                    lsp_position(index, range.end, encoding),
-                                ),
-                                severity: Some(DiagnosticSeverity::WARNING),
-                                code: Some(NumberOrString::String(
-                                    DiagnosticCode::UnsupportedEmbeddedLanguage
-                                        .as_str()
-                                        .to_string(),
-                                )),
-                                source: Some("sql-dialect-fmt".to_string()),
-                                message: format!(
-                                    "unsupported embedded language {word}; expected SQL, JAVASCRIPT, PYTHON, JAVA, or SCALA"
-                                ),
-                                ..Default::default()
-                            });
-                        }
-                    }
-                }
-                expect_language_name = false;
-                saw_as_after_language = false;
-            }
-            HighlightKind::Keyword if token.text.eq_ignore_ascii_case("language") => {
-                expect_language_name = true;
-                language_name = None;
-                saw_as_after_language = false;
-            }
-            HighlightKind::Keyword | HighlightKind::Identifier | HighlightKind::Type
-                if expect_language_name =>
-            {
-                language_name = Some((token.text, token.range.clone()));
-                expect_language_name = false;
-            }
-            HighlightKind::Keyword
-                if language_name.is_some() && token.text.eq_ignore_ascii_case("as") =>
-            {
-                saw_as_after_language = true;
-            }
-            _ => {
-                expect_language_name = false;
-            }
-        }
-    }
-
-    diagnostics
-}
-
-fn is_supported_embedded_language(word: &str) -> bool {
-    ["SQL", "JAVASCRIPT", "PYTHON", "JAVA", "SCALA"]
-        .iter()
-        .any(|candidate| candidate.eq_ignore_ascii_case(word))
 }
 
 /// Hover information for `textDocument/hover`: the keyword/type/symbol description at `position`,

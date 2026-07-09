@@ -18,27 +18,32 @@ use lsp_types::notification::{
     Notification as _, PublishDiagnostics,
 };
 use lsp_types::request::{
-    Completion, DocumentSymbolRequest, FoldingRangeRequest, Formatting, HoverRequest, Request as _,
-    SemanticTokensFullDeltaRequest, SemanticTokensFullRequest, SemanticTokensRangeRequest,
+    CodeActionRequest, Completion, DocumentSymbolRequest, FoldingRangeRequest, Formatting,
+    HoverRequest, Request as _, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
+    SemanticTokensRangeRequest,
 };
 use lsp_types::{
-    CompletionOptions, CompletionParams, CompletionResponse, DidChangeConfigurationParams,
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DocumentFormattingParams, DocumentSymbolOptions, DocumentSymbolParams, DocumentSymbolResponse,
-    FoldingRange, FoldingRangeParams, Hover, HoverParams, HoverProviderCapability,
-    InitializeParams, OneOf, PositionEncodingKind, PublishDiagnosticsParams, SemanticTokens,
+    CodeAction, CodeActionKind, CodeActionOptions, CodeActionOrCommand, CodeActionParams,
+    CodeActionProviderCapability, CodeActionResponse, CompletionOptions, CompletionParams,
+    CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
+    DocumentSymbolOptions, DocumentSymbolParams, DocumentSymbolResponse, FoldingRange,
+    FoldingRangeParams, Hover, HoverParams, HoverProviderCapability, InitializeParams, OneOf,
+    Position, PositionEncodingKind, PublishDiagnosticsParams, Range, SemanticTokens,
     SemanticTokensDeltaParams, SemanticTokensFullDeltaResult, SemanticTokensLegend,
     SemanticTokensOptions, SemanticTokensParams, SemanticTokensRangeParams,
     SemanticTokensRangeResult, SemanticTokensServerCapabilities, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
+    WorkspaceEdit,
 };
 use serde::Deserialize;
 use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_lsp::{
-    apply_change_with_encoding, completion_items, diagnostics_with_lint_options,
-    document_symbols_with_encoding, folding_ranges, format_edits_with_encoding,
-    hover_with_encoding, semantic_tokens_range_with_encoding, semantic_tokens_with_encoding,
-    token_modifiers, token_types, LintOptions, PositionEncoding as NegotiatedPositionEncoding,
+    apply_change_with_encoding, completion_items, diagnostic_lint_code,
+    diagnostics_with_lint_options, document_symbols_with_encoding, folding_ranges,
+    format_edits_with_encoding, hover_with_encoding, semantic_tokens_range_with_encoding,
+    semantic_tokens_with_encoding, token_modifiers, token_types, LintOptions,
+    PositionEncoding as NegotiatedPositionEncoding,
 };
 use sql_dialect_fmt_parser::Dialect;
 
@@ -262,6 +267,11 @@ fn server_capabilities(position_encoding: NegotiatedPositionEncoding) -> ServerC
             trigger_characters: Some(vec![".".to_string()]),
             ..CompletionOptions::default()
         }),
+        code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
+            code_action_kinds: Some(vec![CodeActionKind::QUICKFIX]),
+            resolve_provider: Some(false),
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        })),
         semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
             SemanticTokensOptions {
                 legend: SemanticTokensLegend {
@@ -334,6 +344,10 @@ fn handle_request(request: Request, docs: &Docs, state: &mut ServerState) -> Res
         },
         Completion::METHOD => match cast::<Completion>(request) {
             Ok((id, params)) => ok(id, completion_request(params)),
+            Err(response) => *response,
+        },
+        CodeActionRequest::METHOD => match cast::<CodeActionRequest>(request) {
+            Ok((id, params)) => ok(id, code_action_request(params, docs)),
             Err(response) => *response,
         },
         _ => Response::new_err(
@@ -426,6 +440,69 @@ fn document_symbol_request(
 
 fn completion_request(_params: CompletionParams) -> Option<CompletionResponse> {
     Some(completion_items().into())
+}
+
+fn code_action_request(params: CodeActionParams, docs: &Docs) -> Option<CodeActionResponse> {
+    if !allows_quickfix(params.context.only.as_deref()) {
+        return Some(Vec::new());
+    }
+
+    let uri = params.text_document.uri;
+    let document = docs.get(&uri)?;
+    let mut actions = Vec::new();
+    let mut seen = Vec::new();
+    for diagnostic in params.context.diagnostics {
+        let Some(code) = diagnostic_lint_code(&diagnostic) else {
+            continue;
+        };
+        let line = diagnostic.range.start.line;
+        if seen.contains(&(line, code.as_str())) {
+            continue;
+        }
+        seen.push((line, code.as_str()));
+        let Some(indent) = line_indent(&document.text, line) else {
+            continue;
+        };
+
+        let edit = TextEdit {
+            range: Range::new(Position::new(line, 0), Position::new(line, 0)),
+            new_text: format!(
+                "{indent}-- sql-dialect-fmt: disable-next-line {}\n",
+                code.as_str()
+            ),
+        };
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![edit]);
+        actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+            title: format!("Suppress {} for next line", code.as_str()),
+            kind: Some(CodeActionKind::QUICKFIX),
+            diagnostics: Some(vec![diagnostic]),
+            edit: Some(WorkspaceEdit::new(changes)),
+            is_preferred: Some(false),
+            ..CodeAction::default()
+        }));
+    }
+
+    Some(actions)
+}
+
+fn allows_quickfix(only: Option<&[CodeActionKind]>) -> bool {
+    let Some(kinds) = only else {
+        return true;
+    };
+    kinds.iter().any(|kind| {
+        kind.as_str().is_empty()
+            || kind.as_str() == CodeActionKind::QUICKFIX.as_str()
+            || kind.as_str().starts_with("quickfix.")
+    })
+}
+
+fn line_indent(text: &str, line: u32) -> Option<&str> {
+    let line = text.lines().nth(line as usize)?;
+    let end = line
+        .find(|ch| ch != ' ' && ch != '\t')
+        .unwrap_or(line.len());
+    Some(&line[..end])
 }
 
 fn handle_notification(
@@ -765,5 +842,75 @@ mod tests {
         assert!(params.diagnostics.iter().all(|diagnostic| {
             diagnostic.code != Some(lsp_types::NumberOrString::String("SDF002".to_string()))
         }));
+    }
+
+    #[test]
+    fn code_action_inserts_lint_suppression_comment() {
+        let uri = test_uri();
+        let text = "    SELECT * FROM t;";
+        let docs = HashMap::from([(
+            uri.clone(),
+            Document {
+                text: text.to_string(),
+                version: Some(1),
+            },
+        )]);
+        let diagnostic = diagnostics_with_lint_options(
+            text,
+            &FormatOptions::default(),
+            LintOptions::default(),
+            NegotiatedPositionEncoding::Utf16,
+        )
+        .into_iter()
+        .find(|diagnostic| {
+            diagnostic.code == Some(lsp_types::NumberOrString::String("SDF001".to_string()))
+        })
+        .expect("SELECT * lint diagnostic");
+
+        let response = code_action_request(
+            CodeActionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                range: diagnostic.range,
+                context: lsp_types::CodeActionContext {
+                    diagnostics: vec![diagnostic.clone()],
+                    only: None,
+                    trigger_kind: None,
+                },
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+            &docs,
+        )
+        .expect("code action response");
+
+        assert_eq!(response.len(), 1);
+        let CodeActionOrCommand::CodeAction(action) = &response[0] else {
+            panic!("expected code action")
+        };
+        assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
+        let changes = action
+            .edit
+            .as_ref()
+            .and_then(|edit| edit.changes.as_ref())
+            .expect("workspace edit changes");
+        let edit = changes
+            .get(&uri)
+            .and_then(|edits| edits.first())
+            .expect("text edit");
+        assert_eq!(
+            edit.new_text,
+            "    -- sql-dialect-fmt: disable-next-line SDF001\n"
+        );
+
+        let updated = format!("{}{}", edit.new_text, text);
+        assert!(diagnostics_with_lint_options(
+            &updated,
+            &FormatOptions::default(),
+            LintOptions::default(),
+            NegotiatedPositionEncoding::Utf16,
+        )
+        .iter()
+        .all(|diagnostic| diagnostic.code
+            != Some(lsp_types::NumberOrString::String("SDF001".to_string()))));
     }
 }

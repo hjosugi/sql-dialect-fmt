@@ -9,6 +9,18 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-10
+
+### Added
+
+- Added LSP `textDocument/codeAction` quick fixes for lint diagnostics, starting with suppression
+  comments such as `-- sql-dialect-fmt: disable-next-line SDF001`.
+
+### Changed
+
+- Moved LSP lint rules into a dedicated trait-based `lint` module with shared rule-code helpers,
+  keeping diagnostics and quick fixes on the same `SDF001`-`SDF003` contract.
+
 ## [1.5.0] - 2026-07-10
 
 ### Added
@@ -193,7 +205,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.2.3...v1.3.0
