@@ -9,6 +9,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-10
+
+### Changed
+
+- Split the hover crate into focused scan/data modules so token scanning, static hover tables, and
+  object-hover logic no longer live in one large file.
+
 ## [1.6.0] - 2026-07-10
 
 ### Added
@@ -205,7 +212,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.3.0...v1.4.0
