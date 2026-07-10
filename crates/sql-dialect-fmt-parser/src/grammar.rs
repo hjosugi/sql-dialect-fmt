@@ -14,6 +14,7 @@ use crate::parser::{CompletedMarker, ContextualKeyword, Parser};
 
 mod delta;
 mod dml;
+mod stage;
 mod stmt;
 
 // Binding powers for the Pratt parser. Higher binds tighter; (left, right) for infix.
@@ -1991,16 +1992,26 @@ fn match_recognize(p: &mut Parser) {
     m.complete(p, MATCH_RECOGNIZE);
 }
 
-/// `MEASURES <expr> [AS] <alias> [, ...]` (reusing the select-item shape: expression + optional
-/// alias). `FINAL`/`RUNNING` measure prefixes are not modelled yet; they parse leniently.
+/// `MEASURES [ { FINAL | RUNNING } ] <expr> [AS] <alias> [, ...]` (reusing the select-item shape:
+/// expression + optional alias). The window-semantics prefixes are contextual: they are tagged as
+/// keywords only at the start of a measure item and stay ordinary identifiers elsewhere.
 fn measures_clause(p: &mut Parser) {
     let m = p.start();
     p.bump_as(CONTEXTUAL_KEYWORD); // MEASURES
-    select_item(p);
+    measure_item(p);
     while p.eat(COMMA) {
-        select_item(p);
+        measure_item(p);
     }
     m.complete(p, MEASURES_CLAUSE);
+}
+
+fn measure_item(p: &mut Parser) {
+    if p.nth_contextual(0, ContextualKeyword::Final)
+        || p.nth_contextual(0, ContextualKeyword::Running)
+    {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    }
+    select_item(p);
 }
 
 /// `PATTERN ( <row pattern> )`. The pattern is a regex-like sub-language (`A+ B* (C | D){1,3}`)

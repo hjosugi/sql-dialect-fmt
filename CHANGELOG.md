@@ -9,6 +9,18 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-07-10
+
+### Added
+
+- Structured Snowflake `PUT`, `GET`, `LIST`, and `REMOVE` stage file operations, including
+  contextual command/option casing and lossless local `file://` locations.
+- Modeled `FINAL` and `RUNNING` window semantics on `MATCH_RECOGNIZE` measure items.
+
+### Fixed
+
+- Kept `//` inside unquoted Snowflake `file://` locations from being lexed as a line comment.
+
 ## [1.9.0] - 2026-07-10
 
 ### Added
@@ -253,7 +265,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.0...v1.7.1

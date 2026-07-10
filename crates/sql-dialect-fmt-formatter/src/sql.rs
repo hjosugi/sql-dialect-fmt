@@ -1148,6 +1148,7 @@ impl Lowerer {
             | TRANSACTION_STMT | UNDROP_STMT | COMMENT_STMT => self.lower_lenient_stmt(node),
             GRANT_STMT | REVOKE_STMT => self.lower_grant(node),
             COPY_STMT => self.lower_copy(node),
+            STAGE_FILE_STMT => self.lower_children(node),
             COPY_OPTION | OBJECT_PROPERTY => self.lower_option_node(node),
             SEMANTIC_VIEW_CLAUSE => self.lower_semantic_view_clause(node),
             COPY_LOCATION => self.lower_copy_location(node),

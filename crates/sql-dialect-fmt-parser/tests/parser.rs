@@ -54,6 +54,7 @@ fn lossless_roundtrip_valid_and_broken() {
         "SELECT * FROM t PIVOT (sum(amount) FOR month IN ('jan', 'feb')) AS p",
         "SELECT * FROM sales UNPIVOT (amount FOR quarter IN (q1, q2))",
         "SELECT * FROM t MATCH_RECOGNIZE (PARTITION BY id PATTERN (a b+) DEFINE b AS b.v > 0) mr",
+        "SELECT * FROM t MATCH_RECOGNIZE (ORDER BY ts MEASURES FINAL LAST(v) AS final_v, RUNNING SUM(v) AS running_v PATTERN (a+) DEFINE a AS TRUE)",
         "SELECT * FROM (WITH c AS (SELECT 1) SELECT * FROM c)",
         "CREATE VIEW v AS WITH c AS (SELECT 1) SELECT * FROM c",
         "MERGE INTO tgt USING (WITH c AS (SELECT 1 id) SELECT * FROM c) s ON tgt.id = s.id WHEN MATCHED THEN DELETE",

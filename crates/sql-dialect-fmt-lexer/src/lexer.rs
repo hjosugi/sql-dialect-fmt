@@ -198,6 +198,13 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 c if c.is_ascii_digit() => self.number(start),
                 // Leading-dot float like `.5` (a bare `.` is the DOT operator, handled below).
                 b'.' if self.peek_at(1).is_ascii_digit() => self.number(start),
+                c if is_ident_start(c)
+                    && self.options.dialect.supports_stage_refs()
+                    && self.at_file_uri_start() =>
+                {
+                    self.file_uri();
+                    self.push(SyntaxKind::FILE_URI, start);
+                }
                 c if is_ident_start(c) => {
                     self.eat_while(is_ident_continue);
                     self.push(SyntaxKind::IDENT, start);
@@ -209,6 +216,22 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
             tokens: self.tokens,
             errors: self.errors,
         }
+    }
+
+    /// Whether the current position begins an unquoted Snowflake client-file URI. Recognizing the
+    /// entire `file://...` run before identifier/comment dispatch prevents the URI's `//` from
+    /// being mistaken for a line comment.
+    fn at_file_uri_start(&self) -> bool {
+        self.bytes
+            .get(self.pos..self.pos.saturating_add(b"file://".len()))
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"file://"))
+    }
+
+    /// Consume an unquoted `file://...` URI through the next SQL separator. Paths containing
+    /// spaces or other separators must be single-quoted per Snowflake syntax and are therefore
+    /// handled by [`Self::string_body`] instead.
+    fn file_uri(&mut self) {
+        self.eat_while(|c| !c.is_ascii_whitespace() && c != b';');
     }
 
     /// Consume `--`/`//` and the rest of the physical line (not the newline itself).

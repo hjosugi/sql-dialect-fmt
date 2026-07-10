@@ -105,6 +105,50 @@ fn snowflake_semi_structured_and_stage_edges() {
 }
 
 #[test]
+fn unquoted_file_uris_are_not_double_slash_comments() {
+    let cases = [
+        "file:///tmp/data/*.csv",
+        r"FILE://C:\temp\data\mydata.csv",
+        "file:///tmp/data/**",
+    ];
+    for uri in cases {
+        assert_lexes_non_trivia_to(uri, &[(FILE_URI, uri)]);
+        let lexed = tokenize(uri);
+        assert!(lexed.errors.is_empty(), "{uri:?}: {:?}", lexed.errors);
+        assert!(!lexed.tokens.iter().any(|token| token.kind == COMMENT));
+    }
+
+    let sql = "PUT file:///tmp/data/mydata.csv @stage // trailing comment";
+    let lexed = tokenize(sql);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    assert_eq!(
+        lexed
+            .tokens
+            .iter()
+            .filter(|token| token.kind == FILE_URI)
+            .map(|token| token.text)
+            .collect::<Vec<_>>(),
+        ["file:///tmp/data/mydata.csv"]
+    );
+    assert_eq!(
+        lexed
+            .tokens
+            .iter()
+            .filter(|token| token.kind == COMMENT)
+            .map(|token| token.text)
+            .collect::<Vec<_>>(),
+        ["// trailing comment"]
+    );
+    assert_lex_lossless(sql);
+
+    // Quoted URIs still use the ordinary string token, including spaces.
+    assert_lexes_non_trivia_to(
+        "'file:///tmp/data/my file.csv'",
+        &[(STRING, "'file:///tmp/data/my file.csv'")],
+    );
+}
+
+#[test]
 fn dollar_body_can_contain_sql_javascript_python_like_text() {
     let sql = r#"CREATE PROCEDURE p()
 RETURNS STRING

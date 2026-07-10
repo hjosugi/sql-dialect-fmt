@@ -58,6 +58,8 @@ const CASES: &[&str] = &[
     "select * from t match_recognize(order by ts measures last(price) as fp pattern(a+) define a as true)",
     // + MEASURES (multiple, comma-separated)
     "select * from t match_recognize(order by ts measures match_number() as mn, last(price) as fp, classifier() as cl pattern(a+) define a as true)",
+    // + explicit FINAL / RUNNING window semantics on individual measures
+    "select * from t match_recognize(order by ts measures final last(price) as fp, running sum(volume) as running_volume pattern(a+) define a as true)",
     // ONE ROW PER MATCH
     "select * from t match_recognize(order by ts measures last(c) as lc one row per match pattern(a b+) define b as c > 0)",
     // ALL ROWS PER MATCH (bare)
@@ -206,7 +208,11 @@ fn each_construct_builds_its_node() {
     assert!(has_node_kind(CASES[0], PATTERN_CLAUSE));
     assert!(has_node_kind(CASES[0], DEFINE_CLAUSE));
     assert!(has_node_kind(CASES[3], MEASURES_CLAUSE));
-    assert!(has_node_kind(CASES[16], SUBSET_CLAUSE)); // the SUBSET case
+    let subset_case = CASES
+        .iter()
+        .find(|sql| sql.contains(" subset "))
+        .expect("a SUBSET case");
+    assert!(has_node_kind(subset_case, SUBSET_CLAUSE));
 }
 
 // ---- exact-string goldens for the canonical layouts ----
@@ -271,7 +277,39 @@ fn changes_golden_layout() {
 #[test]
 fn contextual_keywords_stay_identifiers_outside_their_clause() {
     assert_eq!(
-        fmt("select at, before, changes, measures, pattern, define from t"),
-        "SELECT at, before, changes, measures, pattern, define\nFROM t;\n"
+        fmt("select at, before, changes, measures, final, running, pattern, define from t"),
+        "SELECT at, before, changes, measures, final, running, pattern, define\nFROM t;\n"
+    );
+}
+
+#[test]
+fn match_recognize_measure_semantics_are_contextual_keywords() {
+    let sql = "select * from t match_recognize(order by ts measures final last(price) as fp, \
+         running sum(volume) as running_volume pattern(a+) define a as true)";
+    let parse = parse(sql);
+    assert!(parse.errors().is_empty(), "{:?}", parse.errors());
+
+    let semantics: Vec<_> = parse
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::MEASURES_CLAUSE)
+        .expect("a MEASURES_CLAUSE")
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::CONTEXTUAL_KEYWORD)
+        .map(|token| token.text().to_ascii_uppercase())
+        .filter(|text| matches!(text.as_str(), "FINAL" | "RUNNING"))
+        .collect();
+    assert_eq!(semantics, ["FINAL", "RUNNING"]);
+
+    assert_eq!(
+        fmt(sql),
+        "SELECT *\n\
+         FROM t MATCH_RECOGNIZE (\n\
+         \x20   ORDER BY ts\n\
+         \x20   MEASURES FINAL last(price) AS fp, RUNNING sum(volume) AS running_volume\n\
+         \x20   PATTERN (a+)\n\
+         \x20   DEFINE a AS TRUE\n\
+         );\n"
     );
 }

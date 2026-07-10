@@ -172,6 +172,7 @@ ast_nodes! {
     ExecuteStmt, EXECUTE_STMT;
     GroupingSets, GROUPING_SETS;
     CopyStmt, COPY_STMT;
+    StageFileStmt, STAGE_FILE_STMT;
     CopyLocation, COPY_LOCATION;
     CopyOption, COPY_OPTION;
     StageRef, STAGE_REF;

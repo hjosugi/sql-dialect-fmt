@@ -120,6 +120,7 @@ pub fn classify(kind: SyntaxKind, text: &str) -> HighlightKind {
         SyntaxKind::QUOTED_IDENT => HighlightKind::QuotedIdentifier,
         SyntaxKind::STRING => HighlightKind::String,
         SyntaxKind::DOLLAR_STRING => HighlightKind::DollarString,
+        SyntaxKind::FILE_URI => HighlightKind::String,
         SyntaxKind::INT_NUMBER | SyntaxKind::FLOAT_NUMBER => HighlightKind::Number,
         SyntaxKind::VARIABLE | SyntaxKind::DOLLAR | SyntaxKind::QUESTION => HighlightKind::Variable,
         SyntaxKind::ERROR | SyntaxKind::BANG => HighlightKind::Error,
@@ -206,5 +207,21 @@ mod tests {
         for token in &highlighted.tokens {
             assert_eq!(&sql[token.range.clone()], token.text);
         }
+    }
+
+    #[test]
+    fn unquoted_file_uri_is_string_like_not_a_comment() {
+        let highlighted = highlight("PUT file:///tmp/data/mydata.csv @stage");
+        assert!(highlighted.errors.is_empty());
+        let uri = highlighted
+            .tokens
+            .iter()
+            .find(|token| token.text.starts_with("file://"))
+            .expect("a file URI token");
+        assert_eq!(uri.kind, HighlightKind::String);
+        assert!(!highlighted
+            .tokens
+            .iter()
+            .any(|token| token.kind == HighlightKind::Comment));
     }
 }
