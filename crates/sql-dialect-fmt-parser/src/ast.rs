@@ -153,6 +153,8 @@ ast_nodes! {
     ScriptStmt, SCRIPT_STMT;
     ColumnDefList, COLUMN_DEF_LIST;
     ColumnDef, COLUMN_DEF;
+    RoutineReturnsClause, ROUTINE_RETURNS_CLAUSE;
+    RoutineLanguageClause, ROUTINE_LANGUAGE_CLAUSE;
     WithinGroup, WITHIN_GROUP;
     PivotClause, PIVOT_CLAUSE;
     NamedArg, NAMED_ARG;

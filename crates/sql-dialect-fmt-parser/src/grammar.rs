@@ -589,19 +589,31 @@ fn create_body(p: &mut Parser) {
     }
 }
 
-/// Object kinds without a query body that this rule does not specialize — parsed leniently as a flat
-/// token run so they round-trip and get inline spacing (like [`alter_stmt`]).
+/// Object kinds this rule does not specialize. Their open-ended header stays a lenient token run,
+/// but an unambiguous `AS <query>` tail is parsed structurally so new/preview CTAS-like objects get
+/// the same query formatting as the object kinds known to this parser. Other `AS` surfaces (for
+/// example a policy's `AS (<args>) RETURNS ...`) remain verbatim and are not mistaken for CTAS.
 fn create_other(p: &mut Parser) {
     while !at_stmt_terminator(p) {
-        if at_create_body(p) {
-            p.error("CREATE ... AS <body> is not yet formatted; left verbatim");
-            while !at_stmt_terminator(p) {
-                p.bump_any();
-            }
+        if at_create_query_body(p) {
+            p.bump(AS_KW);
+            query_expr(p);
             return;
         }
         p.bump_any();
     }
+}
+
+/// An `AS` whose next token(s) unambiguously start a query. Keeping this narrower than
+/// [`at_create_body`] prevents an unknown policy/object signature beginning `AS (...)` from being
+/// parsed as a parenthesized query.
+fn at_create_query_body(p: &Parser) -> bool {
+    p.at(AS_KW)
+        && (p.nth_at(1, SELECT_KW)
+            || p.nth_at(1, WITH_KW)
+            || p.nth_at(1, VALUES_KW)
+            || (p.nth_at(1, L_PAREN)
+                && (p.nth_at(2, SELECT_KW) || p.nth_at(2, WITH_KW) || p.nth_at(2, VALUES_KW))))
 }
 
 // ---- access control: GRANT / REVOKE ----
@@ -766,19 +778,29 @@ fn at_create_body(p: &Parser) -> bool {
 
 /// `CREATE ... PROCEDURE/FUNCTION name (params) RETURNS ... <options> AS <body>`.
 ///
-/// Skeleton support (Phase 8): the signature/options are kept leniently as tokens. Delimited bodies
-/// (`$$ … $$` or a quoted string) remain a single token, while unquoted Snowflake Scripting bodies
-/// (`AS BEGIN … END` / `AS DECLARE … BEGIN … END`) reuse the block parser so inner `;` separators
-/// never split the outer routine statement.
+/// `RETURNS <type>` and `LANGUAGE <language>` are structured signature clauses; the remaining
+/// open-ended option surface stays lenient. Delimited bodies (`$$ … $$` or a quoted string) remain
+/// a single token, while unquoted Snowflake Scripting bodies (`AS BEGIN … END` /
+/// `AS DECLARE … BEGIN … END`) reuse the block parser so inner `;` separators never split the
+/// outer routine statement.
 fn create_routine(p: &mut Parser) {
     p.bump_any(); // PROCEDURE or FUNCTION
     name_ref(p);
     if p.at(L_PAREN) {
         column_def_list(p); // parameter list, parsed leniently like column defs
     }
-    // RETURNS / LANGUAGE / RUNTIME_VERSION / PACKAGES / HANDLER / EXECUTE AS / ... up to `AS <body>`.
+    // Structure the first RETURNS clause (the return type) while leaving a later
+    // `RETURNS NULL ON NULL INPUT` behavior phrase in the lenient option run.
+    let mut seen_returns = false;
     while !at_routine_body(p) && !at_stmt_terminator(p) {
-        p.bump_any();
+        if !seen_returns && p.at(RETURNS_KW) {
+            routine_returns_clause(p);
+            seen_returns = true;
+        } else if p.at(LANGUAGE_KW) {
+            routine_language_clause(p);
+        } else {
+            p.bump_any();
+        }
     }
     if at_routine_body(p) {
         p.bump(AS_KW);
@@ -790,6 +812,36 @@ fn create_routine(p: &mut Parser) {
     } else {
         p.error("expected a routine body (AS $$ … $$, AS '…', or AS BEGIN … END)");
     }
+}
+
+fn routine_returns_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(RETURNS_KW);
+    if p.at(TABLE_KW) {
+        p.bump(TABLE_KW);
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        }
+    } else if !p.at(LANGUAGE_KW) && p.at_name() {
+        type_name(p);
+    } else {
+        p.error("expected a routine return type");
+    }
+    if p.eat(NOT_KW) {
+        p.expect(NULL_KW);
+    }
+    m.complete(p, ROUTINE_RETURNS_CLAUSE);
+}
+
+fn routine_language_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(LANGUAGE_KW);
+    if p.at_name() || p.at_keyword() {
+        p.bump_any();
+    } else {
+        p.error("expected a routine language");
+    }
+    m.complete(p, ROUTINE_LANGUAGE_CLAUSE);
 }
 
 /// At `AS` immediately followed by a routine body (so we don't stop on `EXECUTE AS`).

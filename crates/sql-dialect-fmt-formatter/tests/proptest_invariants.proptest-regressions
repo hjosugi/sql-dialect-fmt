@@ -12,3 +12,4 @@ cc 342e1ab4d1bf58ae35d13ae044cb9a7b16d54ac7a14630127aa37f24d7b5e2a1 # shrinks to
 cc e117bb7eef86bb01a10b13a6e8a65901f810f53229b0eb0c28382cf5c15c30ba # shrinks to s = "cluster 'abc' ->>-- c\n'abc' "
 cc 1290ebbc034c1483e1519d9ddbab54dab9293804c5a2d96f50172af63d519ec3 # shrinks to s = "create - > "
 cc b73ec857e881bb2c5147949da222abf522d7b7a5a62cd95386c8813f96cc0c27 # shrinks to s = "'abc' //* b */$$\n(a)$$ $$$$$$ "
+cc 1b7c26c9f4677e02af8803fcfc7f03053d791e93b04e2348f960cd35126329e1 # shrinks to s = "'abc' [ 'abc' and cluster = 'abc' [ [ select select = 'abc' { select "

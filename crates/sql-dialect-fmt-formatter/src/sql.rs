@@ -530,6 +530,30 @@ impl Lowerer {
         concat(parts)
     }
 
+    /// A structured `RETURNS <type>` clause stays inline. Snowflake's table-return form is spelled
+    /// `RETURNS TABLE (...)`; preserve the separating space while keeping the open-ended return
+    /// column definitions lossless rather than applying parameter-list expansion rules.
+    fn lower_routine_returns_clause(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        let mut prev_sig = None;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if token.kind() == L_PAREN && prev_sig == Some(TABLE_KW) {
+                    parts.push(space());
+                }
+                parts.push(self.token(token));
+                prev_sig = Some(token.kind());
+            } else if let Some(node) = child.as_node() {
+                parts.push(self.lower_node(node));
+                prev_sig = None;
+            }
+        }
+        concat(parts)
+    }
+
     /// `EXECUTE IMMEDIATE $$ ... $$`: the statement header stays inline, and a dollar-quoted body
     /// immediately after `IMMEDIATE` is formatted as embedded SQL when it parses cleanly.
     fn lower_execute(&mut self, node: &SyntaxNode) -> Doc {
@@ -1156,6 +1180,7 @@ impl Lowerer {
             TIME_TRAVEL => self.lower_time_travel(node),
             SAMPLE_CLAUSE => self.lower_sample_clause(node),
             COLUMN_DEF_LIST => concat(vec![space(), self.lower_column_def_list(node)]),
+            ROUTINE_RETURNS_CLAUSE => self.lower_routine_returns_clause(node),
             MATCH_RECOGNIZE => self.lower_match_recognize(node),
             PATTERN_CLAUSE => self.lower_pattern_clause(node),
             FLOW_STMT => self.lower_flow(node),

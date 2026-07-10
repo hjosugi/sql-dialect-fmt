@@ -12,7 +12,10 @@ use crate::event::Event;
 use crate::input::Input;
 use crate::ParseError;
 
-const INITIAL_FUEL: u32 = 256;
+// Top-level dispatch intentionally probes the broad Snowflake/Databricks statement surface twice:
+// once to decide whether a token starts a statement and once to select its grammar. Keep enough
+// headroom for those bounded lookaheads while still terminating a genuinely non-advancing loop.
+const INITIAL_FUEL: u32 = 1024;
 
 pub(crate) use crate::contextual::ContextualKeyword;
 
