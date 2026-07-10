@@ -141,13 +141,14 @@
 
 ---
 
-### 現状サマリ（2026-06-27）
-**v1.0.0 到達**。Phase 0–10 の 1.0 scope は完了: コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証しつつ実用段階。Databricks mode は LATERAL VIEW / Delta DDL options / VERSION・TIMESTAMP AS OF / lambda / backtick identifier を dialect mode で実装済み。LSP/editor/CLI/Chrome+WASM/VSIX/GitHub Release/外部 corpus/conformance report まで 1.0 配布面を整備済み。
+### 現状サマリ（2026-07-10）
+**v1.7.1 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。
 
-**1.0 後の継続タスク（リリース blocker ではない）**:
+**継続タスク（個別 issue で追跡）**:
 1. **Store 運用**: Chrome Web Store / VS Code Marketplace は workflow 済み。初回 listing・審査・publisher 権限を済ませ、OAuth/PAT または Entra ID 設定を helper で repo に入れたら tag push で本公開できる。
 2. **仕様追随**: Snowflake Preview option / Semantic View / Cortex-AISQL の追加は conformance generator と外部 corpus の継続運用で追う。
-3. **Directive polish**: 必要なら `-- sql-dialect-fmt: off/on` の範囲制御など細部。
-4. **研究開発**: もし機械可読な公式 grammar が得られた場合のみ、Pure Rust CST parser 生成の feasibility を再評価。
+3. **Formatter polish**: コメント配置、長い論理式、空行保存、embedded SQL body などは小さな issue 単位で進める。
+4. **LSP / editor polish**: rich hover、設定 reload、VS Code integration、store listing を個別 issue で完了させる。
+5. **研究開発**: もし機械可読な公式 grammar が得られた場合のみ、Pure Rust CST parser 生成の feasibility を再評価する。
 
-回帰ゲートは `cargo test --workspace`（golden=insta、full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）＋ `cargo clippy --workspace --all-targets` ＋ `cargo fmt --all --check`。
+回帰ゲートは `cargo test --workspace`（golden=insta、full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）＋ `cargo clippy --workspace --all-targets -- -D warnings` ＋ `cargo fmt --all -- --check`。release 時は `scripts/package-extensions.sh`、formatter bench smoke、external corpus sample、conformance report、GitHub Actions の Release / CI / Docs / Corpus も確認する。

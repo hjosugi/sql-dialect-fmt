@@ -9,6 +9,15 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-07-10
+
+### Changed
+
+- Archived the stale `HANDOFF.md` snapshot and replaced it with current restart,
+  validation, release, and source-of-truth guidance.
+- Updated the roadmap status summary to reflect the current release lane and issue-based follow-up
+  tracking.
+
 ## [1.7.0] - 2026-07-10
 
 ### Changed
@@ -220,7 +229,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.5.0...v1.6.0
