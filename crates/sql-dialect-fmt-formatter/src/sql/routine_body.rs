@@ -41,10 +41,13 @@ pub(super) fn is_create_routine(node: &SyntaxNode) -> bool {
 }
 
 pub(super) fn routine_body_language(node: &SyntaxNode) -> Option<RoutineBodyLanguage> {
+    let clause = node
+        .children()
+        .find(|child| child.kind() == ROUTINE_LANGUAGE_CLAUSE)?;
     let mut after_language = false;
-    for token in node
-        .children_with_tokens()
-        .filter_map(|el| el.into_token())
+    for token in clause
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
         .filter(|token| !token.kind().is_trivia())
     {
         if after_language {

@@ -9,6 +9,24 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-10
+
+### Added
+
+- Structured unambiguous `CREATE ... AS <query>` bodies for object kinds without a specialized
+  grammar, while leaving non-query `AS (...)` surfaces lossless and verbatim.
+- Added dedicated CST nodes for routine `RETURNS <type>` and `LANGUAGE <language>` clauses.
+
+### Changed
+
+- Added CI coverage for minimal, JavaScript-only, and Python-only formatter feature sets, including
+  dependency-tree checks that keep disabled Biome/Ruff formatter graphs out of each build.
+
+### Fixed
+
+- Increased bounded parser lookahead headroom so broad statement dispatch cannot trip the progress
+  guard on malformed token sequences; the minimized regression remains covered by proptest.
+
 ## [1.10.0] - 2026-07-10
 
 ### Added
@@ -265,7 +283,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.1...v1.8.0

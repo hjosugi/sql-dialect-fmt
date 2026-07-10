@@ -660,6 +660,16 @@ fn javascript_routine_body_is_formatted_when_supported() {
 }
 
 #[test]
+#[cfg(not(feature = "embedded-javascript"))]
+fn javascript_routine_body_stays_verbatim_without_feature() {
+    let src = "create function f() returns string language javascript as $$ return 'x'; $$";
+    assert_eq!(
+        fmt(src),
+        "CREATE FUNCTION f () RETURNS string LANGUAGE JAVASCRIPT AS $$ return 'x'; $$;\n"
+    );
+}
+
+#[test]
 #[cfg(feature = "embedded-javascript")]
 fn javascript_routine_body_preserves_template_literal_indentation() {
     let src = "create procedure p() returns string language javascript as $$ const sqlText = `\nSELECT\n    col\nFROM t\n`; return snowflake.createStatement({sqlText}).execute(); $$";
@@ -784,6 +794,16 @@ fn python_routine_body_is_formatted_when_supported() {
         "CREATE PROCEDURE py_p () RETURNS string LANGUAGE PYTHON RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' AS $$\ndef main(session):\n    return \"ok\"\n$$;\n"
     );
     assert_eq!(fmt(&py_out), py_out);
+}
+
+#[test]
+#[cfg(not(feature = "embedded-python"))]
+fn python_routine_body_stays_verbatim_without_feature() {
+    let src = "create function py_f() returns string language python as $$\ndef f():\n    return 'ok'\n$$";
+    assert_eq!(
+        fmt(src),
+        "CREATE FUNCTION py_f () RETURNS string LANGUAGE PYTHON AS $$\ndef f():\n    return 'ok'\n$$;\n"
+    );
 }
 
 #[test]

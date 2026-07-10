@@ -343,6 +343,10 @@ pub enum SyntaxKind {
     SCRIPT_STMT,
     COLUMN_DEF_LIST,
     COLUMN_DEF,
+    /// A routine's `RETURNS <type>` signature clause.
+    ROUTINE_RETURNS_CLAUSE,
+    /// A routine's `LANGUAGE <language>` signature clause.
+    ROUTINE_LANGUAGE_CLAUSE,
     // Phase 4: Snowflake query extensions
     WITHIN_GROUP,
     PIVOT_CLAUSE,

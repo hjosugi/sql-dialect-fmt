@@ -63,6 +63,38 @@ jobs:
       - name: Check workspace
         run: cargo check --workspace --all-targets --locked
 
+  formatter-features:
+    name: Formatter features (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: minimal
+            args: --no-default-features
+            forbidden: biome|ruff
+          - name: javascript-only
+            args: --no-default-features --features embedded-javascript
+            forbidden: ruff
+          - name: python-only
+            args: --no-default-features --features embedded-python
+            forbidden: biome
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: formatter-features-${{ matrix.name }}
+      - name: Test formatter feature selection
+        run: cargo test --locked -p sql-dialect-fmt-formatter ${{ matrix.args }}
+      - name: Verify formatter dependency isolation
+        shell: bash
+        run: |
+          if cargo tree --locked -e normal -p sql-dialect-fmt-formatter ${{ matrix.args }} | grep -Eiq '${{ matrix.forbidden }}'; then
+            echo "unexpected dependency matched: ${{ matrix.forbidden }}"
+            exit 1
+          fi
+
   wasm:
     name: Wasm
     runs-on: ubuntu-latest
