@@ -51,6 +51,10 @@ contextual_keywords! {
     Sets => "sets",
     /// `MEASURES <expr> AS <alias> [, ...]`.
     Measures => "measures",
+    /// `MEASURES [FINAL | RUNNING] <window-function> AS <alias>`.
+    Final => "final",
+    /// `MEASURES [FINAL | RUNNING] <window-function> AS <alias>`.
+    Running => "running",
     /// `PATTERN ( <row pattern> )`.
     Pattern => "pattern",
     /// `DEFINE <symbol> AS <predicate> [, ...]`.
@@ -146,6 +150,14 @@ contextual_keywords! {
     Database => "database",
     /// `CREATE STAGE ...` / `... ON STAGE ...`.
     Stage => "stage",
+    /// `PUT file://... @stage`.
+    Put => "put",
+    /// `GET @stage file://...`.
+    Get => "get",
+    /// `LIST @stage [PATTERN = ...]`.
+    List => "list",
+    /// `REMOVE @stage [PATTERN = ...]`.
+    Remove => "remove",
     /// `CREATE SEQUENCE ...`.
     Sequence => "sequence",
     /// `CREATE STREAM ...`.

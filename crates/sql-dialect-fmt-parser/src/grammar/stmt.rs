@@ -58,6 +58,7 @@ pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
         || (p.dialect().supports_copy_into() && p.at(COPY_KW))
+        || super::stage::at_stage_file_stmt(p)
         || (p.dialect().supports_delta_commands() && super::delta::at_delta_stmt_start(p))
 }
 
@@ -108,6 +109,8 @@ pub(super) fn statement(p: &mut Parser) {
         super::execute_stmt(p);
     } else if p.dialect().supports_copy_into() && p.at(COPY_KW) {
         super::copy_stmt(p);
+    } else if super::stage::at_stage_file_stmt(p) {
+        super::stage::stage_file_stmt(p);
     } else if p.dialect().supports_delta_commands() && super::delta::at_delta_stmt_start(p) {
         super::delta::delta_stmt(p);
     } else if p.at(SELECT_KW)

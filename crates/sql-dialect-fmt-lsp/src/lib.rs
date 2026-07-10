@@ -314,6 +314,7 @@ fn statement_symbol_name(kind: SyntaxKind, tokens: &[SymbolToken]) -> String {
         SyntaxKind::DELETE_STMT => statement_words_until(tokens, 4, &["WHERE", "USING"]),
         SyntaxKind::MERGE_STMT => statement_words_until(tokens, 4, &["USING"]),
         SyntaxKind::COPY_STMT => statement_words_until(tokens, 4, &["FROM", "FILES"]),
+        SyntaxKind::STAGE_FILE_STMT => statement_words_until(tokens, 1, &[]),
         SyntaxKind::CALL_STMT => statement_words_until(tokens, 3, &["("]),
         SyntaxKind::BLOCK_STMT => "BEGIN".to_string(),
         SyntaxKind::SET_OP | SyntaxKind::FLOW_STMT => statement_words_until(tokens, 3, &[]),
@@ -344,6 +345,7 @@ fn statement_symbol_kind(kind: SyntaxKind, tokens: &[SymbolToken]) -> SymbolKind
         | SyntaxKind::DELETE_STMT
         | SyntaxKind::MERGE_STMT
         | SyntaxKind::COPY_STMT
+        | SyntaxKind::STAGE_FILE_STMT
         | SyntaxKind::CALL_STMT
         | SyntaxKind::SET_STMT
         | SyntaxKind::EXECUTE_STMT => SymbolKind::METHOD,
@@ -1106,6 +1108,19 @@ mod tests {
         assert_eq!(symbols[0].selection_range.start, Position::new(0, 13));
         assert_eq!(symbols[1].name, "SELECT");
         assert_eq!(symbols[1].kind, SymbolKind::FUNCTION);
+    }
+
+    #[test]
+    fn document_symbols_name_stage_file_operations() {
+        let symbols = document_symbols(
+            "PUT file:///tmp/x.csv @stage;\nLIST @stage/path;",
+            &FormatOptions::default(),
+        );
+        assert_eq!(symbols.len(), 2);
+        assert_eq!(symbols[0].name, "PUT");
+        assert_eq!(symbols[0].kind, SymbolKind::METHOD);
+        assert_eq!(symbols[1].name, "LIST");
+        assert_eq!(symbols[1].kind, SymbolKind::METHOD);
     }
 
     #[test]

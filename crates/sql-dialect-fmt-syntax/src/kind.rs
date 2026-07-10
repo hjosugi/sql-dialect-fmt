@@ -19,6 +19,7 @@ pub enum SyntaxKind {
     QUOTED_IDENT,  // "quoted identifier"
     STRING,        // 'string literal'
     DOLLAR_STRING, // delimited body token; current Snowflake delimiter is $$ ... $$
+    FILE_URI,      // unquoted file:// URI used by Snowflake PUT / GET
     INT_NUMBER,
     FLOAT_NUMBER,
     VARIABLE, // $1, $42 (positional)  or  $name (session/binding)
@@ -367,6 +368,8 @@ pub enum SyntaxKind {
     GROUPING_SETS,
     // Phase 6: COPY INTO
     COPY_STMT,
+    // Snowflake client/stage file operations: PUT / GET / LIST / REMOVE.
+    STAGE_FILE_STMT,
     COPY_LOCATION,
     COPY_OPTION,
     // A `@stage[/path]` reference used as a table/source (e.g. `FROM @s/p`, `COPY ... FROM @s`).
@@ -464,6 +467,7 @@ impl SyntaxKind {
             QUOTED_IDENT => "a quoted identifier",
             STRING => "a string literal",
             DOLLAR_STRING => "a dollar-quoted string",
+            FILE_URI => "a file URI",
             INT_NUMBER => "an integer literal",
             FLOAT_NUMBER => "a number literal",
             VARIABLE => "a variable",
@@ -617,6 +621,7 @@ mod tests {
         assert_eq!(SyntaxKind::FAT_ARROW.describe(), "'=>'");
         assert_eq!(SyntaxKind::IDENT.describe(), "an identifier");
         assert_eq!(SyntaxKind::STRING.describe(), "a string literal");
+        assert_eq!(SyntaxKind::FILE_URI.describe(), "a file URI");
         assert_eq!(SyntaxKind::EOF.describe(), "end of input");
     }
 
