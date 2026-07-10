@@ -142,7 +142,7 @@
 ---
 
 ### 現状サマリ（2026-07-10）
-**v1.7.1 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。
+**v1.8.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。
 
 **継続タスク（個別 issue で追跡）**:
 1. **Store 運用**: Chrome Web Store / VS Code Marketplace は workflow 済み。初回 listing・審査・publisher 権限を済ませ、OAuth/PAT または Entra ID 設定を helper で repo に入れたら tag push で本公開できる。

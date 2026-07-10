@@ -12,7 +12,7 @@
 
 ## 現在の状態
 
-- 最新の GitHub release は `v1.7.1`。
+- 最新の GitHub release は `v1.8.0`。
 - CLI / formatter / parser / LSP / tree-sitter / VS Code extension /
   Chrome extension / release asset workflow は実用配布レーンに乗っている。
 - crates.io publish は release workflow 上で opt-in のため、GitHub release と
@@ -29,7 +29,7 @@
 通常のコード変更では次を最初に確認する。
 
 ```sh
-python3 scripts/check-version-consistency.py 1.7.1
+python3 scripts/check-version-consistency.py 1.8.0
 cargo fmt --all -- --check
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings

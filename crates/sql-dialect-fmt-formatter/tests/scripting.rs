@@ -28,13 +28,21 @@ fn fmt(src: &str) -> String {
 
 /// The case-folded text of every significant token: trivia and the formatter-synthesized statement
 /// terminators are dropped (the formatter normalizes `;` placement), and identifiers/keywords are
-/// upper-cased so the comparison ignores only the formatter's keyword casing, never its content.
+/// upper-cased so the comparison ignores only the formatter's keyword casing. Embedded
+/// dollar-string bodies are compared by token class because supported SQL bodies may be recursively
+/// formatted inside the delimiter.
 fn significant_token_texts(src: &str) -> Vec<String> {
     tokenize(src)
         .tokens
         .iter()
         .filter(|t| !t.kind.is_trivia() && t.kind != SyntaxKind::SEMICOLON)
-        .map(|t| t.text.to_ascii_uppercase())
+        .map(|t| {
+            if t.kind == SyntaxKind::DOLLAR_STRING {
+                "$$...$$".to_string()
+            } else {
+                t.text.to_ascii_uppercase()
+            }
+        })
         .collect()
 }
 
@@ -104,7 +112,7 @@ const CASES: &[&str] = &[
     "BEGIN WHILE (x < 10) DO FOR j IN 1 TO 3 DO x := x + j; END FOR; END WHILE; END",
     // ---- the full DECLARE + BEGIN + EXCEPTION skeleton ----
     "DECLARE total INT DEFAULT 0; BEGIN FOR i IN 1 TO 5 DO total := total + i; END FOR; RETURN total; EXCEPTION WHEN OTHER THEN RETURN -1; END",
-    // ---- block wrapped in EXECUTE IMMEDIATE $$ … $$ (body verbatim) ----
+    // ---- block wrapped in EXECUTE IMMEDIATE $$ … $$ ----
     "EXECUTE IMMEDIATE $$ BEGIN RETURN 1; END $$",
     // ---- END label ----
     "BEGIN RETURN 1; END",
@@ -245,17 +253,12 @@ fn let_with_a_scalar_subquery_is_kept_on_one_line() {
 }
 
 #[test]
-fn execute_immediate_dollar_body_is_preserved_verbatim() {
-    // The `$$ … $$` body is a single delimited token: its bytes are never reflowed.
+fn execute_immediate_dollar_body_is_formatted_as_sql() {
     let src = "execute immediate $$\nbegin\n  return 1;\nend\n$$";
     let out = fmt(src);
-    assert!(
-        out.starts_with("EXECUTE IMMEDIATE $$"),
-        "header not up-cased: {out:?}"
-    );
-    assert!(
-        out.contains("\nbegin\n  return 1;\nend\n$$"),
-        "body changed: {out:?}"
+    assert_eq!(
+        out,
+        "EXECUTE IMMEDIATE $$\nBEGIN\n    RETURN 1;\nEND;\n$$;\n"
     );
     assert_eq!(fmt(&out), out, "not idempotent");
 }

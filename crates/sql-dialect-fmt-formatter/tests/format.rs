@@ -225,7 +225,16 @@ fn long_select_list_breaks_one_item_per_line() {
 
 #[test]
 fn multiple_statements_are_separated_and_terminated() {
-    assert_eq!(fmt("select 1; select 2"), "SELECT 1;\n\nSELECT 2;\n");
+    assert_eq!(fmt("select 1; select 2"), "SELECT 1;\nSELECT 2;\n");
+    assert_eq!(fmt("select 1;\n\n\nselect 2"), "SELECT 1;\n\nSELECT 2;\n");
+    assert_eq!(
+        fmt("select 1;\n-- group\nselect 2"),
+        "SELECT 1;\n-- group\nSELECT 2;\n"
+    );
+    assert_eq!(
+        fmt("select 1;\n\n-- group\nselect 2"),
+        "SELECT 1;\n\n-- group\nSELECT 2;\n"
+    );
 }
 
 #[test]
@@ -863,6 +872,10 @@ fn session_set_and_execute_immediate_format_inline() {
         fmt("execute immediate 'insert into t values (1)' using (x)"),
         "EXECUTE IMMEDIATE 'insert into t values (1)' USING (x);\n"
     );
+    assert_eq!(
+        fmt("execute immediate $$select a,b from t$$ using (x)"),
+        "EXECUTE IMMEDIATE $$\nSELECT a, b\nFROM t;\n$$ USING (x);\n"
+    );
 }
 
 #[test]
@@ -1223,7 +1236,7 @@ fn statement_end_comments_format_idempotently() {
 #[test]
 fn line_comment_before_structured_child_formats_idempotently() {
     let once = fmt("'abc' //* b */$$\n(a)$$ $$$$$$ ");
-    assert_eq!(once, "'abc' //* b */$$\n(a);\n\n$$ $$;\n\n$$$$;\n");
+    assert_eq!(once, "'abc' //* b */$$\n(a);\n$$ $$;\n$$$$;\n");
     assert_eq!(fmt(&once), once);
 }
 

@@ -9,6 +9,15 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-10
+
+### Changed
+
+- Preserved statement grouping in the formatter: adjacent statements stay adjacent, while one or
+  more source blank lines are retained as a single blank line.
+- Formatted `EXECUTE IMMEDIATE $$...$$` bodies as embedded SQL/Snowflake Scripting when they parse
+  cleanly, with the existing verbatim fallback for unsupported bodies.
+
 ## [1.7.1] - 2026-07-10
 
 ### Changed
@@ -229,7 +238,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.0...v1.6.1

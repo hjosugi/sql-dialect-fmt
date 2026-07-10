@@ -47,8 +47,8 @@ pub(crate) struct Ctx {
     pub dialect: Dialect,
 }
 
-/// Lower a `SOURCE_FILE` node into a document: each statement formatted, separated by a blank line,
-/// and terminated with a semicolon.
+/// Lower a `SOURCE_FILE` node into a document: each statement formatted, separated according to
+/// the author's grouping (at most one blank line), and terminated with a semicolon.
 ///
 /// A statement's own leading/interior comments attach *inside* its node and are placed by the
 /// statement lowering. Trivia trailing the final statement — including a comment-only file — lands
@@ -60,7 +60,9 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
     for stmt in root.children() {
         if emitted {
             parts.push(hard_line());
-            parts.push(hard_line());
+            if statement_has_leading_blank_line(&stmt) {
+                parts.push(hard_line());
+            }
         }
         let lowered = lower_stmt(&stmt, ctx);
         parts.push(lowered.body);
@@ -97,6 +99,31 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
     }
 
     concat(parts)
+}
+
+fn statement_has_leading_blank_line(stmt: &SyntaxNode) -> bool {
+    let mut saw_newline = false;
+    let mut line_has_content = false;
+    for token in stmt
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+    {
+        match token.kind() {
+            WHITESPACE => {}
+            NEWLINE => {
+                if saw_newline && !line_has_content {
+                    return true;
+                }
+                saw_newline = true;
+                line_has_content = false;
+            }
+            kind if kind.is_comment() => {
+                line_has_content = true;
+            }
+            _ => break,
+        }
+    }
+    false
 }
 
 /// Lower one statement. Builds its comment attachment, lowers structurally, and — if any comment
@@ -501,6 +528,48 @@ impl Lowerer {
             }
         }
         concat(parts)
+    }
+
+    /// `EXECUTE IMMEDIATE $$ ... $$`: the statement header stays inline, and a dollar-quoted body
+    /// immediately after `IMMEDIATE` is formatted as embedded SQL when it parses cleanly.
+    fn lower_execute(&mut self, node: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        let mut prev_sig = None;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                parts.push(self.token(token));
+                prev_sig = Some(token.kind());
+            } else if let Some(node) = child.as_node() {
+                if prev_sig == Some(IMMEDIATE_KW) {
+                    if let Some(formatted) = self.lower_execute_immediate_body(node) {
+                        parts.push(formatted);
+                        prev_sig = None;
+                        continue;
+                    }
+                }
+                parts.push(self.lower_node(node));
+                prev_sig = None;
+            }
+        }
+        concat(parts)
+    }
+
+    fn lower_execute_immediate_body(&mut self, node: &SyntaxNode) -> Option<Doc> {
+        if node.kind() != LITERAL {
+            return None;
+        }
+        let token = node
+            .children_with_tokens()
+            .filter_map(|element| element.into_token())
+            .find(|token| !token.kind().is_trivia())?;
+        if token.kind() != DOLLAR_STRING {
+            return None;
+        }
+        format_embedded_body_token(token.text(), RoutineBodyLanguage::Sql, self.ctx)
+            .map(|formatted| self.token_rendered(&token, text(formatted)))
     }
 
     /// Object DDL with a property region: the `CREATE <kind> <name> [(cols)]` header stays inline,
@@ -1074,6 +1143,7 @@ impl Lowerer {
             | ANALYZE_STMT
             | MSCK_REPAIR_STMT => self.lower_children(node),
             CREATE_STMT => self.lower_create(node),
+            EXECUTE_STMT => self.lower_execute(node),
             ALTER_STMT | USE_STMT | SHOW_STMT | DESCRIBE_STMT | TRUNCATE_STMT
             | TRANSACTION_STMT | UNDROP_STMT | COMMENT_STMT => self.lower_lenient_stmt(node),
             GRANT_STMT | REVOKE_STMT => self.lower_grant(node),
