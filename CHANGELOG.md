@@ -9,6 +9,21 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-10
+
+### Added
+
+- Added formatter Cargo features for embedded language formatting:
+  `embedded-javascript`, `embedded-python`, the default aggregate `external-formatters`, and the
+  opt-in `embedded-brace-formatters`.
+
+### Changed
+
+- Made the Biome/Ruff formatter dependency graph optional; `sql-dialect-fmt-formatter` now builds
+  without those dependencies under `--no-default-features`.
+- Made the simple Java/Scala brace-aware embedded body formatter opt-in. Java/Scala bodies are
+  preserved verbatim by default unless `embedded-brace-formatters` is enabled.
+
 ## [1.8.0] - 2026-07-10
 
 ### Changed
@@ -238,7 +253,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.6.1...v1.7.0

@@ -4,13 +4,19 @@
 //! language-specific formatters for the body token, always returning `None` when a body cannot be
 //! formatted safely so the caller can keep the original token verbatim.
 
+#[cfg(feature = "embedded-javascript")]
 use biome_formatter::{IndentStyle, IndentWidth, LineWidth};
+#[cfg(feature = "embedded-javascript")]
 use biome_js_formatter::{context::JsFormatOptions, format_range as format_js_range};
+#[cfg(feature = "embedded-javascript")]
 use biome_js_parser::{parse as parse_js, JsParserOptions};
+#[cfg(feature = "embedded-javascript")]
 use biome_js_syntax::{JsFileSource, TextRange, TextSize};
+#[cfg(feature = "embedded-python")]
 use ruff_formatter::{
     IndentStyle as PyIndentStyle, IndentWidth as PyIndentWidth, LineWidth as PyLineWidth,
 };
+#[cfg(feature = "embedded-python")]
 use ruff_python_formatter::{format_module_source, PyFormatOptions};
 use sql_dialect_fmt_syntax::{SyntaxKind::*, SyntaxNode, SyntaxToken};
 
@@ -123,6 +129,11 @@ fn body_token_content(text: &str) -> Option<String> {
     decode_single_quoted_string(text)
 }
 
+#[cfg(any(
+    feature = "embedded-javascript",
+    feature = "embedded-python",
+    feature = "embedded-brace-formatters"
+))]
 fn render_body_token(original: &str, formatted: &str) -> Option<String> {
     if original.starts_with("$$") {
         Some(format!("$$\n{formatted}\n$$"))
@@ -166,6 +177,7 @@ fn encode_single_quoted_string_body(text: &str) -> String {
     text.replace('\'', "''")
 }
 
+#[cfg(feature = "embedded-javascript")]
 fn format_embedded_javascript_body_token(text: &str, ctx: Ctx) -> Option<String> {
     let body = body_token_content(text)?;
     let source = body.trim();
@@ -181,6 +193,7 @@ fn format_embedded_javascript_body_token(text: &str, ctx: Ctx) -> Option<String>
     render_body_token(text, formatted.trim_end())
 }
 
+#[cfg(feature = "embedded-javascript")]
 fn format_javascript_body_once(source: &str, ctx: Ctx) -> Option<String> {
     let source_type = JsFileSource::js_script();
     let wrapper_prefix = "function __sql_dialect_fmt_snowflake_body__() {\n";
@@ -213,6 +226,12 @@ fn format_javascript_body_once(source: &str, ctx: Ctx) -> Option<String> {
     }
 }
 
+#[cfg(not(feature = "embedded-javascript"))]
+fn format_embedded_javascript_body_token(_text: &str, _ctx: Ctx) -> Option<String> {
+    None
+}
+
+#[cfg(feature = "embedded-python")]
 fn format_embedded_python_body_token(text: &str, ctx: Ctx) -> Option<String> {
     let body = body_token_content(text)?;
     let source = body.trim();
@@ -228,6 +247,7 @@ fn format_embedded_python_body_token(text: &str, ctx: Ctx) -> Option<String> {
     render_body_token(text, formatted.trim_end())
 }
 
+#[cfg(feature = "embedded-python")]
 fn format_python_body_once(source: &str, ctx: Ctx) -> Option<String> {
     let line_width =
         PyLineWidth::try_from(ctx.line_width.clamp(1, u16::MAX as usize) as u16).ok()?;
@@ -246,6 +266,12 @@ fn format_python_body_once(source: &str, ctx: Ctx) -> Option<String> {
     }
 }
 
+#[cfg(not(feature = "embedded-python"))]
+fn format_embedded_python_body_token(_text: &str, _ctx: Ctx) -> Option<String> {
+    None
+}
+
+#[cfg(feature = "embedded-brace-formatters")]
 fn format_embedded_brace_language_body_token(text: &str, ctx: Ctx) -> Option<String> {
     let body = body_token_content(text)?;
     let source = body.trim();
@@ -261,6 +287,7 @@ fn format_embedded_brace_language_body_token(text: &str, ctx: Ctx) -> Option<Str
     render_body_token(text, formatted.trim_end())
 }
 
+#[cfg(feature = "embedded-brace-formatters")]
 fn format_brace_language_body_once(source: &str, indent_width: usize) -> Option<String> {
     let mut rough = String::new();
     let mut chars = source.chars().peekable();
@@ -371,6 +398,12 @@ fn format_brace_language_body_once(source: &str, indent_width: usize) -> Option<
     }
 }
 
+#[cfg(not(feature = "embedded-brace-formatters"))]
+fn format_embedded_brace_language_body_token(_text: &str, _ctx: Ctx) -> Option<String> {
+    None
+}
+
+#[cfg(feature = "embedded-brace-formatters")]
 fn copy_quoted_literal(
     quote: char,
     chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
@@ -392,11 +425,13 @@ fn copy_quoted_literal(
     None
 }
 
+#[cfg(feature = "embedded-brace-formatters")]
 fn starts_triple_quote(chars: &std::iter::Peekable<std::str::Chars<'_>>) -> bool {
     let mut lookahead = chars.clone();
     lookahead.next() == Some('"') && lookahead.next() == Some('"')
 }
 
+#[cfg(feature = "embedded-brace-formatters")]
 fn copy_triple_quoted_literal(
     chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
     out: &mut String,
@@ -416,12 +451,14 @@ fn copy_triple_quoted_literal(
     None
 }
 
+#[cfg(feature = "embedded-brace-formatters")]
 fn push_newline_if_needed(out: &mut String) {
     if !out.ends_with('\n') {
         out.push('\n');
     }
 }
 
+#[cfg(feature = "embedded-brace-formatters")]
 fn ensure_newline_before(out: &mut String) {
     if out.trim_end().is_empty() {
         return;

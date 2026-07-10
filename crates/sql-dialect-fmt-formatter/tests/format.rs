@@ -648,6 +648,7 @@ fn sql_procedure_body_is_recursively_formatted() {
 }
 
 #[test]
+#[cfg(feature = "embedded-javascript")]
 fn javascript_routine_body_is_formatted_when_supported() {
     let src = "create function f() returns string language javascript as $$ return 'x'; $$";
     let out = fmt(src);
@@ -659,6 +660,7 @@ fn javascript_routine_body_is_formatted_when_supported() {
 }
 
 #[test]
+#[cfg(feature = "embedded-javascript")]
 fn javascript_routine_body_preserves_template_literal_indentation() {
     let src = "create procedure p() returns string language javascript as $$ const sqlText = `\nSELECT\n    col\nFROM t\n`; return snowflake.createStatement({sqlText}).execute(); $$";
     let out = fmt(src);
@@ -670,6 +672,7 @@ fn javascript_routine_body_preserves_template_literal_indentation() {
 }
 
 #[test]
+#[cfg(feature = "embedded-javascript")]
 fn documented_javascript_procedure_api_body_is_formatted() {
     let src = "create procedure stproc1() returns string not null language javascript as -- \"$$\" is delimiter\n$$ var statement = snowflake.createStatement({sqlText: \"select 1\"}); return statement.execute().next(); $$";
     let out = fmt(src);
@@ -681,6 +684,7 @@ fn documented_javascript_procedure_api_body_is_formatted() {
 }
 
 #[test]
+#[cfg(all(feature = "embedded-javascript", feature = "embedded-python"))]
 fn single_quoted_routine_bodies_are_formatted_when_safe() {
     let js = "create function f() returns string language javascript as ' return ''x''; '";
     let js_out = fmt(js);
@@ -709,6 +713,7 @@ fn single_quoted_routine_bodies_are_formatted_when_safe() {
 }
 
 #[test]
+#[cfg(feature = "embedded-brace-formatters")]
 fn single_quoted_java_and_scala_bodies_are_formatted_when_safe() {
     let java =
         "create function jq() returns int language java as 'class C { public static int run() { return 1; } }'";
@@ -730,6 +735,23 @@ fn single_quoted_java_and_scala_bodies_are_formatted_when_safe() {
 }
 
 #[test]
+#[cfg(not(feature = "embedded-brace-formatters"))]
+fn java_and_scala_bodies_stay_verbatim_without_brace_feature() {
+    let java =
+        "create function jq() returns int language java as 'class C { public static int run() { return 1; } }'";
+    assert_eq!(
+        fmt(java),
+        "CREATE FUNCTION jq () RETURNS int LANGUAGE JAVA AS 'class C { public static int run() { return 1; } }';\n"
+    );
+
+    let scala = "create function sq() returns int language scala as $$ class C { def run(): Int = { 1 } } $$";
+    assert_eq!(
+        fmt(scala),
+        "CREATE FUNCTION sq () RETURNS int LANGUAGE SCALA AS $$ class C { def run(): Int = { 1 } } $$;\n"
+    );
+}
+
+#[test]
 fn sql_expression_quoted_body_stays_verbatim() {
     let src = "create function add1(n float) returns float language sql as 'n + 1'";
     let out = fmt(src);
@@ -741,6 +763,7 @@ fn sql_expression_quoted_body_stays_verbatim() {
 }
 
 #[test]
+#[cfg(feature = "embedded-javascript")]
 fn invalid_javascript_routine_body_stays_verbatim() {
     let src = "create function f() returns string language javascript as $$ if ( $$";
     let out = fmt(src);
@@ -752,7 +775,8 @@ fn invalid_javascript_routine_body_stays_verbatim() {
 }
 
 #[test]
-fn python_java_and_scala_routine_bodies_are_formatted_when_supported() {
+#[cfg(feature = "embedded-python")]
+fn python_routine_body_is_formatted_when_supported() {
     let py = "create procedure py_p() returns string language python RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' as $$\ndef main(session):\n    return 'ok'\n$$";
     let py_out = fmt(py);
     assert_eq!(
@@ -760,7 +784,11 @@ fn python_java_and_scala_routine_bodies_are_formatted_when_supported() {
         "CREATE PROCEDURE py_p () RETURNS string LANGUAGE PYTHON RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' AS $$\ndef main(session):\n    return \"ok\"\n$$;\n"
     );
     assert_eq!(fmt(&py_out), py_out);
+}
 
+#[test]
+#[cfg(feature = "embedded-brace-formatters")]
+fn java_and_scala_routine_bodies_are_formatted_when_supported() {
     let java = "create function java_f(x int) returns int language java HANDLER = 'C.run' as $$ class C { public static int run(int x) { return x + 1; } } $$";
     let java_out = fmt(java);
     assert_eq!(
@@ -787,6 +815,7 @@ fn python_java_and_scala_routine_bodies_are_formatted_when_supported() {
 }
 
 #[test]
+#[cfg(feature = "embedded-brace-formatters")]
 fn java_and_scala_text_blocks_do_not_break_brace_formatting() {
     let java = "create function j() returns string language java as $$ class C { public static String run() { String sql = \"\"\"select { not_a_block }\"\"\"; return sql; } } $$";
     let java_out = fmt(java);
@@ -806,6 +835,7 @@ fn java_and_scala_text_blocks_do_not_break_brace_formatting() {
 }
 
 #[test]
+#[cfg(feature = "embedded-brace-formatters")]
 fn java_and_scala_comments_do_not_break_brace_formatting() {
     let java = "create function j() returns int language java as $$ class C { // entry\n public static int run() { /* keep */ return 1; } } $$";
     let java_out = fmt(java);

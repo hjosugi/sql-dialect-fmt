@@ -15,7 +15,7 @@
 - **CST**: `rowan` の green/red ツリー。パーサは木を直接作らず **イベント列**（`Start`/`Token`/`Finish`/`Error`）を吐き、別パスで `GreenNodeBuilder` に流し込み、その際にトリビア（空白・コメント）を付与する（文法はクリーン、木はロスレス）。
 - **パーサ**: 手書き再帰下降 ＋ `Marker`/`CompletedMarker`（`complete`/`abandon`/`precede`）。**「パースは失敗しない」**＝ `(SyntaxNode, Vec<SyntaxError>)` を返し、未知トークンは `ERROR` ノード、`TokenSet`(FOLLOW集合)で回復、無限ループは fuel カウンタで防ぐ。式は Pratt parsing。参考: matklad *Resilient LL Parsing* / *Pratt parsing*。
 - **フォーマッタ**: **自前の汎用 Doc エンジン** `sql-dialect-fmt-formatter` を作る。`biome_formatter` には直接依存せず、その `FormatElement` 設計（Prettier → rome → biome/ruff の系譜）を模倣。SQL 固有の整形規則は別レイヤに分離。**magic trailing comma**（末尾カンマを「展開して」の意思表示として尊重）を看板機能に。
-- **埋め込み言語**: SQL 本体の Doc エンジンとは独立に、delimiter-aware body token（現行 Snowflake は `$$…$$`）の本体のみ言語別サブフォーマッタで整形。SQL は自己再帰、JavaScript は `biome_js_formatter`、Python は `ruff_python_formatter`、Java/Scala は brace-aware lightweight formatter で処理し、解析不能時は verbatim フォールバック。
+- **埋め込み言語**: SQL 本体の Doc エンジンとは独立に、delimiter-aware body token（現行 Snowflake は `$$…$$`）の本体のみ言語別サブフォーマッタで整形。SQL は自己再帰、JavaScript は `biome_js_formatter`、Python は `ruff_python_formatter`、Java/Scala は opt-in の brace-aware lightweight formatter で処理し、解析不能時や feature 無効時は verbatim フォールバック。
 - **テスト**: `insta` スナップショット ＋ **stability-check（べき等）** ＋ ロスレス往復 ＋ 実コーパスでの**類似度スコア**ゲート ＋ ファズ。フィクスチャは sqlparser-rs の Snowflake テスト（Apache-2.0）を流用。
 - **スタイル**: gofmt / zig fmt に倣い **opinionated・ほぼ設定なし**（`line-length`、必要なら `keyword-case` 程度）。
 - **仕様追随**: `uroborosql-fmt` / `postgresql-cst-parser` の Pure Rust CST 移行に倣い、公式構文や公式サンプルから parser coverage を機械生成・照合するレーンを持つ。Snowflake には PostgreSQL の `gram.y` 相当が公開されていないため、当面は公式 docs/examples miner → fixture/keyword delta/statement skeleton/parser-gap report を生成し、手書き parser を安全に補強する。
@@ -103,7 +103,7 @@
 - ✅ 細かい object option の key-position 認識を拡張（`CONTACT`/`CLASSIFICATION_PROFILE`/`DATA_METRIC_SCHEDULE`/`TASK_AUTO_RETRY_ATTEMPTS`/`TRACE_LEVEL`/semantic AI option、Preview 系の `AGGREGATION_POLICY`/`JOIN_POLICY`/`PROJECTION_POLICY`/`DATA_METRIC_FUNCTION`/compute pool・policy・default role/warehouse 系 option 等）。将来の Preview option は conformance/report lane で継続追随
 
 ## Phase 8 — 手続き・関数・埋め込み言語 ✅ ＜第2の差別化点＞
-- ✅ `CREATE PROCEDURE`/`FUNCTION`（**骨格 + SQL/JS/Python/Java/Scala ボディ整形**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持。`RETURNS TABLE (...)`、`RETURNS ... NOT NULL`、Java/JavaScript stored procedure docs/API 例を回帰テスト化。`LANGUAGE SQL AS $$ … $$` は内部 SQL/Scripting を同じ formatter で再帰整形、`LANGUAGE JAVASCRIPT` は Biome (`biome_js_formatter`)、`LANGUAGE PYTHON` は Ruff (`ruff_python_formatter`)、Java/Scala は brace-aware lightweight formatter に委譲。解析不能時は安全に元 token を保持。single-quoted body も `AS '...'` 直後の body token として JS/Python/Java/Scala/SQL scripting を保守的に整形（SQL expression body は verbatim）。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/sql-dialect-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/sql-dialect-fmt-formatter/src/sql.rs) `lower_create_routine` / [routine_body.rs](crates/sql-dialect-fmt-formatter/src/sql/routine_body.rs)
+- ✅ `CREATE PROCEDURE`/`FUNCTION`（**骨格 + SQL/JS/Python body 整形、Java/Scala body の opt-in 整形**: シグネチャ・`RETURNS`・`LANGUAGE`・各種オプションを寛容にトークン保持。`RETURNS TABLE (...)`、`RETURNS ... NOT NULL`、Java/JavaScript stored procedure docs/API 例を回帰テスト化。`LANGUAGE SQL AS $$ … $$` は内部 SQL/Scripting を同じ formatter で再帰整形、`LANGUAGE JAVASCRIPT` は Biome (`biome_js_formatter`)、`LANGUAGE PYTHON` は Ruff (`ruff_python_formatter`)、Java/Scala は `embedded-brace-formatters` feature 有効時だけ brace-aware lightweight formatter に委譲。解析不能時または feature 無効時は安全に元 token を保持。single-quoted body も `AS '...'` 直後の body token として JS/Python/SQL scripting を保守的に整形し、Java/Scala は opt-in 時のみ整形（SQL expression body は verbatim）。ヘッダは構造的整形・引数は1つ1行）… [grammar.rs](crates/sql-dialect-fmt-parser/src/grammar.rs) `create_routine` / [sql.rs](crates/sql-dialect-fmt-formatter/src/sql.rs) `lower_create_routine` / [routine_body.rs](crates/sql-dialect-fmt-formatter/src/sql/routine_body.rs)
 - ✅ セッション `SET <var> = <expr>` / `SET (a, b) = (...)`、`EXECUTE IMMEDIATE <string|$$…$$|:var> [USING (...)]`（`SET_STMT`/`EXECUTE_STMT` ノード、新キーワード `IMMEDIATE`。式に `DOLLAR_STRING` を許可）。**コーパス clean 20→22件** … [grammar.rs](crates/sql-dialect-fmt-parser/src/grammar.rs) `set_stmt`/`execute_stmt`
 - ✅ `CALL proc(args)`（プロシージャ呼び出し。`CALL_STMT` ノード、呼び出しは通常の call 式として整形＝引数オーバーフロー時は1引数1行、`INTO :var` 等の末尾は寛容保持）。fixture `case_033` … [grammar.rs](crates/sql-dialect-fmt-parser/src/grammar.rs) `call_stmt`
 - ✅ トランザクション制御 `BEGIN`/`COMMIT`/`ROLLBACK`（`BEGIN TRANSACTION`/`BEGIN WORK`/`BEGIN;`、`COMMIT WORK`、`ROLLBACK TO SAVEPOINT …` 含む。`TRANSACTION_STMT`）。**バグ修正**: `COMMIT WORK`/`ROLLBACK TO SAVEPOINT …` の複数文分割を解消。fixture `case_036`/`case_037`。`BEGIN` はコンテキストキーワード `transaction`/`work` か直後 `;` でのみトランザクションと判定し、Scripting ブロック `BEGIN … END`（内部 `;` 区切り）は誤分割せず verbatim 維持 … [grammar.rs](crates/sql-dialect-fmt-parser/src/grammar.rs) `at_begin_transaction`
@@ -111,7 +111,7 @@
 - ✅ delimiter-aware body token の言語判定 → サブフォーマッタへ委譲 → 再インデント
   - ✅ **JavaScript**: Biome の `biome_js_formatter` を組み込み（top-level `return` は synthetic function body で処理、失敗時 verbatim）
   - ✅ **Python**: Ruff の `ruff_python_formatter` を組み込み（失敗時 verbatim）
-  - ✅ **Java / Scala**: brace-aware lightweight formatter（不均衡 brace/comment/string は verbatim、Java/Scala text block `"""..."""` は brace count から隔離）
+  - ✅ **Java / Scala**: opt-in brace-aware lightweight formatter（`embedded-brace-formatters` 有効時のみ。不均衡 brace/comment/string は verbatim、Java/Scala text block `"""..."""` は brace count から隔離）
   - ✅ ネストした SQL（`LANGUAGE SQL`）: `$$ … $$` body と single-quoted Snowflake Scripting body を自分自身で再帰整形
   - ✅ quoted Java/Scala body と line/block comment 入り brace body を 1.0 回帰テスト化
 
@@ -142,12 +142,12 @@
 ---
 
 ### 現状サマリ（2026-07-10）
-**v1.8.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。
+**v1.9.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。Formatter の Biome/Ruff 依存は Cargo feature で切り離し可能で、Java/Scala の簡易 brace body formatting は opt-in。
 
 **継続タスク（個別 issue で追跡）**:
 1. **Store 運用**: Chrome Web Store / VS Code Marketplace は workflow 済み。初回 listing・審査・publisher 権限を済ませ、OAuth/PAT または Entra ID 設定を helper で repo に入れたら tag push で本公開できる。
 2. **仕様追随**: Snowflake Preview option / Semantic View / Cortex-AISQL の追加は conformance generator と外部 corpus の継続運用で追う。
-3. **Formatter polish**: コメント配置、長い論理式、空行保存、embedded SQL body などは小さな issue 単位で進める。
+3. **Formatter polish**: コメント配置、未構造化 DDL、balanced-paren 構文などは小さな issue 単位で進める。
 4. **LSP / editor polish**: rich hover、設定 reload、VS Code integration、store listing を個別 issue で完了させる。
 5. **研究開発**: もし機械可読な公式 grammar が得られた場合のみ、Pure Rust CST parser 生成の feasibility を再評価する。
 

@@ -11,27 +11,55 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Generic Wadler/Prettier-style Doc IR + width-aware printer, plus the Snowflake SQL formatting rules built on the lossless CST."
+
+[features]
+default = ["external-formatters"]
+external-formatters = ["embedded-javascript", "embedded-python"]
+embedded-javascript = [
+    "dep:biome_console",
+    "dep:biome_deserialize",
+    "dep:biome_diagnostics",
+    "dep:biome_formatter",
+    "dep:biome_js_factory",
+    "dep:biome_js_formatter",
+    "dep:biome_js_parser",
+    "dep:biome_js_syntax",
+    "dep:biome_json_factory",
+    "dep:biome_json_parser",
+    "dep:biome_json_syntax",
+    "dep:biome_parser",
+    "dep:biome_rowan",
+    "dep:biome_text_edit",
+    "dep:biome_text_size",
+    "dep:biome_unicode_table",
+]
+embedded-python = [
+    "dep:ruff_formatter",
+    "dep:ruff_python_formatter",
+]
+embedded-brace-formatters = []
+
 [dependencies]
-biome_formatter = "=0.5.7"
-biome_js_formatter = "=0.5.7"
-biome_js_parser = "=0.5.7"
-biome_js_syntax = "=0.5.7"
+biome_formatter = { version = "=0.5.7", optional = true }
+biome_js_formatter = { version = "=0.5.7", optional = true }
+biome_js_parser = { version = "=0.5.7", optional = true }
+biome_js_syntax = { version = "=0.5.7", optional = true }
 # Biome 0.5.x internal crates are not semver-compatible across patch releases.
 # Keep the formatter/parser/syntax graph on one exact patch level.
-biome_console = "=0.5.7"
-biome_deserialize = "=0.5.7"
-biome_diagnostics = "=0.5.7"
-biome_js_factory = "=0.5.7"
-biome_json_factory = "=0.5.7"
-biome_json_parser = "=0.5.7"
-biome_json_syntax = "=0.5.7"
-biome_parser = "=0.5.7"
-biome_rowan = "=0.5.7"
-biome_text_edit = "=0.5.7"
-biome_text_size = "=0.5.7"
-biome_unicode_table = "=0.5.7"
-ruff_formatter = "=0.0.3"
-ruff_python_formatter = "=0.0.3"
+biome_console = { version = "=0.5.7", optional = true }
+biome_deserialize = { version = "=0.5.7", optional = true }
+biome_diagnostics = { version = "=0.5.7", optional = true }
+biome_js_factory = { version = "=0.5.7", optional = true }
+biome_json_factory = { version = "=0.5.7", optional = true }
+biome_json_parser = { version = "=0.5.7", optional = true }
+biome_json_syntax = { version = "=0.5.7", optional = true }
+biome_parser = { version = "=0.5.7", optional = true }
+biome_rowan = { version = "=0.5.7", optional = true }
+biome_text_edit = { version = "=0.5.7", optional = true }
+biome_text_size = { version = "=0.5.7", optional = true }
+biome_unicode_table = { version = "=0.5.7", optional = true }
+ruff_formatter = { version = "=0.0.3", optional = true }
+ruff_python_formatter = { version = "=0.0.3", optional = true }
 sql-dialect-fmt-syntax = { workspace = true, features = ["rowan"] }
 sql-dialect-fmt-lexer.workspace = true
 sql-dialect-fmt-parser.workspace = true

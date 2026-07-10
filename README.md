@@ -15,7 +15,7 @@ unchanged, significant tokens and comments are preserved, and `format(format(x))
 
 ```sh
 # From crates.io
-cargo install sql-dialect-fmt --version 1.8.0 --locked
+cargo install sql-dialect-fmt --version 1.9.0 --locked
 
 # Directly from this repository
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
@@ -40,7 +40,7 @@ CI can use the bundled composite action or the GHCR image.
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.8.0 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.9.0 --check .
 ```
 
 Try the browser playground from the docs site:
@@ -65,7 +65,7 @@ pre-commit users can enable the official hooks:
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.8.0
+    rev: v1.9.0
     hooks:
       - id: sql-dialect-fmt
 ```
@@ -100,11 +100,31 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo fmt --all --check
 ```
 
+### Formatter feature flags
+
+`sql-dialect-fmt-formatter` enables embedded JavaScript and Python formatting by default through
+the `external-formatters` feature. Minimal builds can drop the Biome/Ruff formatter graph:
+
+```sh
+cargo test -p sql-dialect-fmt-formatter --no-default-features
+```
+
+Fine-grained features are available for embedders:
+
+| feature | default | effect |
+| --- | --- | --- |
+| `external-formatters` | yes | enables both `embedded-javascript` and `embedded-python` |
+| `embedded-javascript` | yes | formats `LANGUAGE JAVASCRIPT AS $$...$$` with Biome |
+| `embedded-python` | yes | formats `LANGUAGE PYTHON AS $$...$$` with Ruff |
+| `embedded-brace-formatters` | no | opts into the simple Java/Scala brace-aware formatter |
+
 ## Status
 
 Snowflake support covers SELECT, DML (`INSERT`/`UPDATE`/`DELETE`/`MERGE`), `COPY`, major DDL and
 object DDL, Semantic View, and `CREATE PROCEDURE`/`CREATE FUNCTION` bodies in SQL, JavaScript,
-Python, Java, and Scala. Databricks mode covers LATERAL VIEW, Delta DDL options,
+Python, Java, and Scala. JavaScript/Python embedded body formatting is enabled by default; Java and
+Scala body formatting is opt-in through `embedded-brace-formatters` and otherwise stays verbatim.
+Databricks mode covers LATERAL VIEW, Delta DDL options,
 `VERSION`/`TIMESTAMP AS OF`, higher-order-function lambdas, SQL scripting blocks, and backtick
 identifiers.
 
