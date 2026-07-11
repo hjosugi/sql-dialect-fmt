@@ -100,7 +100,8 @@ Published to crates.io (in dependency order):
 7. **Publish in dependency order.** Each `cargo publish` must complete and the new
    version must be indexed before publishing a dependent crate. The helper publishes the
    canonical order and waits for each just-published crate to resolve through Cargo before moving
-   on:
+   on. It skips crate/version pairs that already exist, so rerunning it safely resumes a partially
+   completed release:
 
    ```sh
    scripts/publish-crates.sh
@@ -109,6 +110,22 @@ Published to crates.io (in dependency order):
    The canonical order is **syntax → text → lexer → parser → formatter → highlight → hover →
    cli / lsp / wasm** (with `encoding` published any time before `cli`, and `wasm`
    any time after `formatter`).
+
+   For automatic publication from future `v*.*.*` tag pushes, create a crates.io API token,
+   export it locally, and let the helper store it without printing the value:
+
+   ```sh
+   export CARGO_REGISTRY_TOKEN=...
+   scripts/configure-crates-publishing.sh --repo hjosugi/sql-dialect-fmt
+   ```
+
+   This writes the `CARGO_REGISTRY_TOKEN` secret and enables the
+   `CRATES_IO_AUTO_PUBLISH=true` repository variable. Use `--dry-run` to inspect setting names or
+   `--no-auto` to store the token without enabling tag-triggered publication.
+
+   If automatic publication partially fails, rerun the failed GitHub Actions job. You can also
+   dispatch the `Release` workflow for the same version with `publish_crates=true`; already
+   published crate/version pairs are skipped before the remaining crates are uploaded.
 
 8. **Store publishing** is automated after one-time store setup. Follow
    [docs/STORE_PUBLISHING.md](docs/STORE_PUBLISHING.md) for the exact no-decision setup runbook.
@@ -164,7 +181,9 @@ Published to crates.io (in dependency order):
    ```
 
    Manual fallback remains available from the `Extension Packages` workflow: choose `publish=true`
-   and `publish_target=all|vscode|chrome`.
+   and `publish_target=all|vscode|chrome`. Publishing a package with a new version updates the
+   existing Marketplace/Web Store item; it does not create a second listing. Both release
+   workflows validate the required credentials before attempting publication.
 
 ## Notes
 

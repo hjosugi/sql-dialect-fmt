@@ -1,6 +1,6 @@
 # Store Publishing Runbook
 
-Last checked against official store docs: 2026-06-28.
+Last checked against official store docs: 2026-07-11.
 
 This is the no-decision path for the remaining one-time store setup. After this setup, future
 `v*.*.*` tag pushes can publish the VS Code Marketplace package and Chrome Web Store package
@@ -305,13 +305,32 @@ Remove the one-time skip immediately after that run finishes:
 gh variable delete CHROME_SKIP_UPLOAD --repo hjosugi/sql-dialect-fmt
 ```
 
+## Publish Updates
+
 For future releases, the normal release tag push is enough once `EXTENSIONS_AUTO_PUBLISH=true` is
-set:
+set. The VSIX publisher uses the existing publisher/extension identity, and the Chrome publisher
+uploads the new package to the configured `CHROME_EXTENSION_ID`, so both operations update the
+existing listing:
 
 ```sh
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
+
+To retry one store after a partial failure, dispatch the manual workflow with the same release
+version and only that target. Store versions are immutable, so use the same version only when its
+package was not accepted; otherwise publish a newer workspace version.
+
+```sh
+gh workflow run "Extension Packages" \
+  --repo hjosugi/sql-dialect-fmt \
+  -f version=X.Y.Z \
+  -f publish=true \
+  -f publish_target=vscode # or chrome
+```
+
+Both workflows run `scripts/check-publishing-credentials.sh` before a requested publish. A missing
+secret or variable therefore fails with its setting name while keeping secret values redacted.
 
 ## Long-Term VS Code Auth: Entra ID
 
@@ -350,6 +369,8 @@ After this, VS Code publishing uses `vsce publish --azure-credential` in GitHub 
 - GitHub workflow packages but does not publish: check `EXTENSIONS_AUTO_PUBLISH=true`, or the
   per-store variables `VSCODE_MARKETPLACE_AUTO_PUBLISH=true` and
   `CHROME_WEBSTORE_AUTO_PUBLISH=true`.
+- A retry says the version already exists: the store accepted that package. Bump the workspace
+  version and publish the update instead of trying to overwrite an immutable version.
 
 ## Official References
 

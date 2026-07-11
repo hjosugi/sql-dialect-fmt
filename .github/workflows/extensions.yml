@@ -94,6 +94,23 @@ jobs:
           echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
           echo "VS Code Marketplace publish: $vscode"
           echo "Chrome Web Store publish: $chrome"
+      - name: Validate VS Code Marketplace credentials
+        if: ${{ steps.publish.outputs.vscode == 'true' }}
+        env:
+          VSCE_AUTH_MODE: ${{ vars.VSCE_AUTH_MODE || 'pat' }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+        run: ./scripts/check-publishing-credentials.sh vscode
+      - name: Validate Chrome Web Store credentials
+        if: ${{ steps.publish.outputs.chrome == 'true' }}
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID || vars.CHROME_PUBLISHER_ID }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID || vars.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: ./scripts/check-publishing-credentials.sh chrome
       - name: Build Chrome zip and VSIX
         run: ./scripts/package-extensions.sh "${{ steps.version.outputs.version }}"
       - uses: actions/upload-artifact@v7

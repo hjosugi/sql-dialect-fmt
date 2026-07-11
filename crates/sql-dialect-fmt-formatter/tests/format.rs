@@ -856,6 +856,26 @@ fn java_and_scala_text_blocks_do_not_break_brace_formatting() {
 
 #[test]
 #[cfg(feature = "embedded-brace-formatters")]
+fn java_and_scala_char_literals_do_not_change_brace_depth() {
+    let java = r#"create function j() returns string language java as $$ class C { public static char run() { char close = '}'; char quote = '\''; return close; } } $$"#;
+    let java_out = fmt(java);
+    assert_eq!(
+        java_out,
+        "CREATE FUNCTION j () RETURNS string LANGUAGE JAVA AS $$\nclass C {\n    public static char run() {\n        char close = '}';\n        char quote = '\\'';\n        return close;\n    }\n}\n$$;\n"
+    );
+    assert_eq!(fmt(&java_out), java_out);
+
+    let scala = r#"create function s() returns string language scala as $$ class C { def run(): Char = { val open = '{'; val slash = '\\'; open } } $$"#;
+    let scala_out = fmt(scala);
+    assert_eq!(
+        scala_out,
+        "CREATE FUNCTION s () RETURNS string LANGUAGE SCALA AS $$\nclass C {\n    def run(): Char = {\n        val open = '{';\n        val slash = '\\\\';\n        open\n    }\n}\n$$;\n"
+    );
+    assert_eq!(fmt(&scala_out), scala_out);
+}
+
+#[test]
+#[cfg(feature = "embedded-brace-formatters")]
 fn java_and_scala_comments_do_not_break_brace_formatting() {
     let java = "create function j() returns int language java as $$ class C { // entry\n public static int run() { /* keep */ return 1; } } $$";
     let java_out = fmt(java);
