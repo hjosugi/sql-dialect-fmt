@@ -19,8 +19,8 @@ sql-dialect-fmt-text.workspace = true
 criterion = { version = "0.8", default-features = false }
 # Let integration tests call into the syntax crate directly (e.g. keyword_kind).
 sql-dialect-fmt-syntax.workspace = true
-sql-dialect-fmt-test-fixtures.workspace = true
-sql-dialect-fmt-test-support.workspace = true
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
+sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
 
 [[bench]]
 name = "lex"

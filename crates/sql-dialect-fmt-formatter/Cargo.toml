@@ -69,8 +69,8 @@ unicode-width = "0.2.2"
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
 insta = "1.48.0"
-sql-dialect-fmt-test-fixtures.workspace = true
-sql-dialect-fmt-test-support.workspace = true
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
+sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
 proptest = "1"
 
 [[bench]]

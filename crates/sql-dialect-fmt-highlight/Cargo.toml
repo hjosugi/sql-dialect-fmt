@@ -17,6 +17,6 @@ sql-dialect-fmt-syntax.workspace = true
 sql-dialect-fmt-text.workspace = true
 
 [dev-dependencies]
-sql-dialect-fmt-test-fixtures.workspace = true
-sql-dialect-fmt-test-support.workspace = true
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }
+sql-dialect-fmt-test-support = { path = "../sql-dialect-fmt-test-support" }
 serde_json = "1"
