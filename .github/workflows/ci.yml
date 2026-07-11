@@ -79,6 +79,9 @@ jobs:
           - name: python-only
             args: --no-default-features --features embedded-python
             forbidden: biome
+          - name: brace-only
+            args: --no-default-features --features embedded-brace-formatters
+            forbidden: biome|ruff
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable

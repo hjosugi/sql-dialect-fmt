@@ -9,7 +9,12 @@ on:
       version:
         description: "Release version tag to create (e.g. v1.1.0)"
         required: true
-        default: v1.1.0
+        default: v1.12.0
+      publish_crates:
+        description: "Publish or resume this version on crates.io."
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -67,6 +72,23 @@ jobs:
           fi
           echo "vscode=$vscode" >> "$GITHUB_OUTPUT"
           echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
+      - name: Validate VS Code Marketplace credentials
+        if: ${{ steps.publish.outputs.vscode == 'true' }}
+        env:
+          VSCE_AUTH_MODE: ${{ vars.VSCE_AUTH_MODE || 'pat' }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+        run: ./scripts/check-publishing-credentials.sh vscode
+      - name: Validate Chrome Web Store credentials
+        if: ${{ steps.publish.outputs.chrome == 'true' }}
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID || vars.CHROME_PUBLISHER_ID }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID || vars.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: ./scripts/check-publishing-credentials.sh chrome
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -199,10 +221,14 @@ jobs:
     name: Publish crates.io
     needs: release
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && vars.CRATES_IO_AUTO_PUBLISH == 'true' }}
+    if: ${{ (github.event_name == 'push' && vars.CRATES_IO_AUTO_PUBLISH == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish_crates) }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - name: Validate crates.io credentials
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: ./scripts/check-publishing-credentials.sh crates
       - name: Publish crates in dependency order
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

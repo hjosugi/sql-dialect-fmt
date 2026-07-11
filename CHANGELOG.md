@@ -9,6 +9,21 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-07-11
+
+### Added
+
+- Added redacting publication credential preflight checks and a helper that configures the
+  crates.io token and tag-triggered GitHub Actions publication.
+- Added isolated CI coverage and char-literal regressions for the opt-in Java/Scala brace-aware
+  embedded formatter.
+
+### Changed
+
+- Made ordered crates.io publishing resumable by skipping crate versions that are already
+  published, so a partially completed release can be retried safely.
+- Documented first publication and subsequent Marketplace, Web Store, and crates.io update flows.
+
 ## [1.11.0] - 2026-07-10
 
 ### Added
@@ -283,7 +298,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.8.0...v1.9.0

@@ -50,7 +50,17 @@ EOF
   exit 1
 }
 
+version_is_published() {
+  local crate="$1"
+  cargo info "$crate@$VERSION" --registry crates-io >/dev/null 2>&1
+}
+
 for crate in "${CRATES[@]}"; do
+  if version_is_published "$crate"; then
+    echo "Skipping $crate $VERSION (already published)"
+    continue
+  fi
+
   echo "Publishing $crate"
   cargo publish --manifest-path "$ROOT_DIR/Cargo.toml" -p "$crate"
   wait_for_index "$crate"
