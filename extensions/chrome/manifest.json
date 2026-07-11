@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "sql-dialect-fmt for SQL editors",
-  "version": "1.12.1",
+  "version": "1.13.0",
   "description": "Format Snowflake and Databricks SQL in browser editors with sql-dialect-fmt.",
   "minimum_chrome_version": "102",
   "permissions": ["activeTab", "storage"],
+  "icons": {
+    "16": "images/icon16.png",
+    "32": "images/icon32.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
   "host_permissions": [
     "https://app.snowflake.com/*",
     "https://*.snowflake.com/*",
@@ -17,7 +23,13 @@
     "service_worker": "src/background.js"
   },
   "action": {
-    "default_title": "Format with sql-dialect-fmt"
+    "default_title": "Format with sql-dialect-fmt",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "32": "images/icon32.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
   },
   "options_page": "options.html",
   "content_scripts": [

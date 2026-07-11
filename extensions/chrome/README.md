@@ -40,3 +40,8 @@ formatted.
 
 Open the extension options page to choose Snowflake or Databricks mode and adjust line width,
 indent width, and keyword casing.
+
+Only those formatter preferences are saved through `chrome.storage.sync`. SQL text is read from
+the active editor on demand, formatted locally with the bundled WebAssembly module, and written
+back without being stored or sent to an external service. See [the privacy
+policy](../../docs/PRIVACY.md).

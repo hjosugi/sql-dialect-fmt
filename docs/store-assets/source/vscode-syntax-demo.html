@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Snowflake SQL syntax highlighting</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { width: 1280px; height: 800px; margin: 0; overflow: hidden; }
+      body { background: #181818; color: #d4d4d4; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .title { height: 36px; display: flex; align-items: center; justify-content: center; background: #323233; color: #cccccc; font-size: 12px; }
+      .workbench { display: grid; grid-template-columns: 52px 220px 1fr; height: 742px; }
+      .activity { padding-top: 15px; border-right: 1px solid #2b2b2b; background: #252526; color: #8d8d8d; text-align: center; font-size: 22px; line-height: 2.2; }
+      .explorer { border-right: 1px solid #2b2b2b; background: #1f1f1f; }
+      .explorer h2 { margin: 0; padding: 12px 18px; font-size: 11px; font-weight: 500; letter-spacing: .08em; }
+      .folder { padding: 8px 14px; font-size: 12px; font-weight: 700; }
+      .file { padding: 7px 26px; background: #37373d; color: #fff; font-size: 13px; }
+      .editor { min-width: 0; background: #1e1e1e; }
+      .tabs { height: 38px; display: flex; background: #181818; }
+      .tab { display: flex; align-items: center; gap: 8px; padding: 0 16px; border-top: 1px solid #55d6be; background: #1e1e1e; font-size: 12px; }
+      .sql-icon { color: #55d6be; font-weight: 800; }
+      .crumbs { height: 30px; padding: 8px 18px; color: #919191; font-size: 12px; }
+      pre { margin: 0; padding: 18px 28px; font: 17px/1.72 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .ln { display: inline-block; width: 38px; color: #858585; text-align: right; margin-right: 25px; }
+      .kw { color: #c586c0; font-weight: 700; }
+      .type { color: #4ec9b0; }
+      .fn { color: #dcdcaa; }
+      .id { color: #9cdcfe; }
+      .str { color: #ce9178; }
+      .num { color: #b5cea8; }
+      .comment { color: #6a9955; }
+      .status { height: 22px; display: flex; justify-content: space-between; padding: 3px 12px; background: #173d3f; color: #fff; font-size: 12px; }
+      .status div { display: flex; gap: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="title">revenue_procedure.sql — analytics — Visual Studio Code</div>
+    <div class="workbench">
+      <aside class="activity">▱<br>⌕<br>⑂<br>▷<br>▦</aside>
+      <aside class="explorer"><h2>EXPLORER</h2><div class="folder">⌄ ANALYTICS</div><div class="file">revenue_procedure.sql</div><div class="folder">› models</div><div class="folder">› tests</div></aside>
+      <main class="editor">
+        <div class="tabs"><div class="tab"><span class="sql-icon">SQL</span> revenue_procedure.sql</div></div>
+        <div class="crumbs">analytics › revenue_procedure.sql</div>
+        <pre><span class="ln">1</span><span class="comment">-- Snowflake Scripting with embedded SQL</span>
+<span class="ln">2</span><span class="kw">CREATE OR REPLACE PROCEDURE</span> <span class="fn">monthly_revenue</span>(
+<span class="ln">3</span>    <span class="id">start_date</span> <span class="type">DATE</span>
+<span class="ln">4</span>) <span class="kw">RETURNS TABLE</span> (<span class="id">month</span> <span class="type">DATE</span>, <span class="id">revenue</span> <span class="type">NUMBER</span>)
+<span class="ln">5</span><span class="kw">LANGUAGE SQL</span>
+<span class="ln">6</span><span class="kw">AS</span>
+<span class="ln">7</span><span class="str">$$</span>
+<span class="ln">8</span><span class="kw">BEGIN</span>
+<span class="ln">9</span>    <span class="kw">RETURN TABLE</span> (
+<span class="ln">10</span>        <span class="kw">SELECT</span>
+<span class="ln">11</span>            <span class="fn">DATE_TRUNC</span>(<span class="str">'month'</span>, <span class="id">ordered_at</span>) <span class="kw">AS</span> <span class="id">month</span>,
+<span class="ln">12</span>            <span class="fn">SUM</span>(<span class="id">order_total</span>) <span class="kw">AS</span> <span class="id">revenue</span>
+<span class="ln">13</span>        <span class="kw">FROM</span> <span class="id">analytics.orders</span>
+<span class="ln">14</span>        <span class="kw">WHERE</span> <span class="id">ordered_at</span> &gt;= <span class="id">start_date</span>
+<span class="ln">15</span>        <span class="kw">GROUP BY</span> <span class="num">1</span>
+<span class="ln">16</span>    );
+<span class="ln">17</span><span class="kw">END</span>;
+<span class="ln">18</span><span class="str">$$</span>;</pre>
+      </main>
+    </div>
+    <footer class="status"><div><span>main*</span><span>0 errors</span></div><div><span>Ln 18, Col 4</span><span>Spaces: 4</span><span>Snowflake SQL</span></div></footer>
+  </body>
+</html>

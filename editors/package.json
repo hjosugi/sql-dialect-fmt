@@ -1,8 +1,8 @@
 {
   "name": "snowflake-sql-sql-dialect-fmt",
   "displayName": "Snowflake SQL (sql-dialect-fmt)",
-  "description": "Snowflake SQL language support backed by sql-dialect-fmt's TextMate grammar.",
-  "version": "1.12.1",
+  "description": "Snowflake SQL syntax highlighting for worksheets, scripts, stages, variables, and embedded routine bodies.",
+  "version": "1.13.0",
   "publisher": "sql-dialect-fmt",
   "license": "0BSD",
   "repository": {
@@ -14,6 +14,12 @@
     "url": "https://github.com/hjosugi/sql-dialect-fmt/issues"
   },
   "qna": false,
+  "pricing": "Free",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#173d3f",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -23,10 +29,16 @@
   "keywords": [
     "snowflake",
     "sql",
-    "sql-dialect-fmt"
+    "sql-dialect-fmt",
+    "syntax highlighting",
+    "textmate",
+    "snowsight",
+    "snowflake scripting"
   ],
   "files": [
     "CHANGELOG.md",
+    "images/icon.png",
+    "images/syntax-highlighting.png",
     "LICENSE.md",
     "README.md",
     "language-configuration.json",
