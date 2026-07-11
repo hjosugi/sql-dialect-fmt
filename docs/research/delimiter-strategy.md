@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](delimiter-strategy.md) | [日本語](delimiter-strategy.ja.md)
+
 # Delimiter Strategy
 
 Snowflake procedure/function bodies are tricky because they often contain

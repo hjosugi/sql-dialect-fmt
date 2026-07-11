@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ASSET_PROVENANCE.md) | [日本語](ASSET_PROVENANCE.ja.md)
+
 # Store asset provenance
 
 Last updated: 2026-07-11.

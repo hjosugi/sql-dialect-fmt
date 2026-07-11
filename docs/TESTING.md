@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](TESTING.md) | [日本語](TESTING.ja.md)
+
 # Testing
 
 The test suite is intentionally layered. When a change fails, the failing crate

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](snowflake-github-prior-art.md) | [日本語](snowflake-github-prior-art.ja.md)
+
 # Snowflake GitHub Prior Art Notes
 
 Last checked: 2026-06-21.

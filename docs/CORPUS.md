@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](CORPUS.md) | [日本語](CORPUS.ja.md)
+
 # Corpus regression harness
 
 The corpus harness keeps the formatter honest against large, real-world SQL it has never seen. It
