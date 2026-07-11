@@ -9,6 +9,15 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-07-11
+
+### Fixed
+
+- Fixed crates.io index polling so it queries the exact published crate/version instead of an
+  invalid temporary Cargo package.
+- Excluded unpublished internal test helpers from published crate metadata, allowing dependent
+  workspace crates to pass `cargo publish` verification.
+
 ## [1.12.0] - 2026-07-11
 
 ### Added
@@ -298,7 +307,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.1...HEAD
+[1.12.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.9.0...v1.10.0

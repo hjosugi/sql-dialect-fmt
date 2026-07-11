@@ -18,6 +18,11 @@ CRATES=(
   sql-dialect-fmt-wasm
 )
 
+version_is_published() {
+  local crate="$1"
+  cargo info "$crate@$VERSION" --registry crates-io >/dev/null 2>&1
+}
+
 wait_for_index() {
   local crate="$1"
 
@@ -26,33 +31,15 @@ wait_for_index() {
   fi
 
   for attempt in $(seq 1 60); do
-    local tmp
-    tmp="$(mktemp -d)"
-    cat >"$tmp/Cargo.toml" <<EOF
-[package]
-name = "sql-dialect-fmt-index-check"
-version = "0.0.0"
-edition = "2021"
-
-[dependencies]
-$crate = "=$VERSION"
-EOF
-    if cargo metadata --quiet --manifest-path "$tmp/Cargo.toml" --format-version 1 >/dev/null 2>&1; then
-      rm -rf "$tmp"
+    if version_is_published "$crate"; then
       return
     fi
-    rm -rf "$tmp"
     echo "Waiting for $crate $VERSION to appear in the crates.io index ($attempt/60)"
     sleep 10
   done
 
   echo "Timed out waiting for $crate $VERSION to appear in crates.io" >&2
   exit 1
-}
-
-version_is_published() {
-  local crate="$1"
-  cargo info "$crate@$VERSION" --registry crates-io >/dev/null 2>&1
 }
 
 for crate in "${CRATES[@]}"; do
