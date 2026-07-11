@@ -1,65 +1,47 @@
-# Editor integration assets
+# Snowflake SQL
 
-This directory holds the editor-facing highlighting assets for Snowflake SQL.
+Focused Snowflake SQL syntax highlighting for Visual Studio Code, backed by the same keyword and
+type definitions used by [sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt).
 
-## `snowflake.tmLanguage.json`
+![Snowflake SQL syntax highlighting](images/syntax-highlighting.png)
 
-A complete [TextMate grammar](https://macromates.com/manual/en/language_grammars) for
-Snowflake SQL, consumable by any editor that loads `.tmLanguage` files (VS Code, Sublime
-Text, TextMate, GitHub Linguist, Zed). It is a *lexical* grammar — it scopes tokens, not
-statement structure — covering:
+## Features
 
-- line (`--`, `//`) and block (`/* */`) comments
-- single-quoted strings (with `''` / `\\` escapes) and `$$ … $$` dollar-quoted bodies
-- numeric literals (integers, floats, leading-dot, exponents)
-- built-in types and the full reserved-keyword set
-- variables: positional `$1`, session `$name`, bind `:name`, placeholder `?`
-- stage references: `@stage`, `@~` (user stage), `@%table` (table stage), `@ns.stage/path`
-- double-quoted identifiers (with `""` escape)
-- operators including the Snowflake/GoogleSQL-specific `::`, `:`, `->`, `->>`, `=>`, `|>`,
-  `||`, and `:=`
-- structural punctuation
+- Snowflake SQL keywords and built-in types
+- Snowflake Scripting and `$$ ... $$` routine bodies
+- line (`--`, `//`) and block (`/* ... */`) comments
+- strings, quoted identifiers, numeric literals, and operators
+- positional `$1`, session `$name`, bind `:name`, and `?` variables
+- `@stage`, `@~`, `@%table`, and namespaced stage references
+- `.sql`, `.snowsql`, and `.sfsql` file associations
 
+- **Language ID:** `snowflake-sql`
 - **Scope name:** `source.snowflake-sql`
-- **File types:** `.sql`, `.snowsql`
+- **File types:** `.sql`, `.snowsql`, `.sfsql`
 
 The keyword and type word lists are kept in lock-step with the formatter's own
 lexer/highlighter by tests in `sql-dialect-fmt-highlight` (`tests/textmate.rs`): every word the
 grammar scopes as a keyword or type must be classified the same way by
 `sql_dialect_fmt_highlight::classify`, so the grammar can't drift from the rest of the toolchain.
 
-### VS Code extension package
+## Use
 
-The `editors/` directory is also a minimal VS Code extension root. Package both editor
-extensions from the repository root with `./scripts/package-extensions.sh` (or package this
-directory directly with `vsce package`) to
-contribute:
+1. Install the extension.
+2. Open a `.sql`, `.snowsql`, or `.sfsql` file.
+3. If needed, choose **Change Language Mode** and select **Snowflake SQL**.
 
-- language id: `snowflake-sql`
-- grammar scope: `source.snowflake-sql`
-- file extensions: `.sql`, `.snowsql`, `.sfsql`
+This extension contributes syntax highlighting and language metadata. It does not execute SQL,
+connect to Snowflake, or include the browser formatter. For CLI formatting and other integrations,
+see the [main project README](https://github.com/hjosugi/sql-dialect-fmt#readme).
 
-### Embedding the grammar manually
+## Privacy
 
-```json
-{
-  "contributes": {
-    "grammars": [
-      {
-        "scopeName": "source.snowflake-sql",
-        "path": "./snowflake.tmLanguage.json",
-        "language": "sql"
-      }
-    ]
-  }
-}
-```
+The extension contains no runtime code, telemetry, analytics, network requests, or remote
+formatting. It only contributes static language configuration and TextMate grammar files. See the
+[privacy policy](https://github.com/hjosugi/sql-dialect-fmt/blob/main/docs/PRIVACY.md).
 
-## Semantic tokens (LSP)
+## Support and source
 
-For LSP-based editors, `sql-dialect-fmt-highlight::semantic` maps the lexical highlighter onto the
-standard LSP semantic-token legend (`keyword`, `type`, `variable`, `string`, `number`,
-`parameter`, `operator`, `comment`, `namespace`) plus `documentation` / `defaultLibrary`
-modifiers, and exposes `$$ … $$` embedded-language regions as `Injection`s (JavaScript,
-Python, Java, Scala, or SQL, picked from the `LANGUAGE` clause). The `sql-dialect-fmt-lsp` server
-delta-encodes these for `textDocument/semanticTokens/full`.
+- [Report an issue](https://github.com/hjosugi/sql-dialect-fmt/issues)
+- [Source code](https://github.com/hjosugi/sql-dialect-fmt)
+- License: [0BSD](LICENSE.md)

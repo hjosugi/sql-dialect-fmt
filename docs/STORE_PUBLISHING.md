@@ -31,6 +31,7 @@ done in a browser.
 | Chrome Web Store dashboard | [Developer Dashboard](https://chrome.google.com/webstore/developer/dashboard) |
 | Chrome developer account setup | [Set up your developer account](https://developer.chrome.com/docs/webstore/set-up-account) |
 | Chrome listing fields | [Complete your listing information](https://developer.chrome.com/docs/webstore/cws-dashboard-listing) |
+| Chrome image requirements | [Supplying Images](https://developer.chrome.com/docs/webstore/images) |
 | Chrome privacy fields | [Fill out the privacy fields](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy) |
 | Chrome distribution fields | [Set your distribution options](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution) |
 | Google Cloud project creation | [Create project](https://console.cloud.google.com/projectcreate) |
@@ -119,7 +120,7 @@ Do not commit or paste the token into docs/issues/chat. The helper stores it as 
 4. Create a new item by uploading:
 
 ```text
-target/dist/sql-dialect-fmt-v1.0.0-chrome.zip
+target/dist/sql-dialect-fmt-v1.13.0-chrome.zip
 ```
 
 5. Copy the extension item ID from the item URL or dashboard.
@@ -172,6 +173,8 @@ Permission justifications:
 ```text
 activeTab: Used so the extension action and keyboard shortcut can run only after the user invokes the formatter in the active tab.
 
+storage: Stores only formatter preferences such as SQL dialect, line width, indent width, and keyword casing using chrome.storage.sync. It does not store SQL text.
+
 Host permissions for Snowflake/Snowsight and Databricks domains: Required to detect the active SQL editor and replace the selected SQL, or the whole editor contents, with formatted SQL.
 ```
 
@@ -183,9 +186,25 @@ Remote code: No remote code is used. The formatter WebAssembly file is bundled w
 Data sharing or sale: No data is shared or sold.
 ```
 
-If the dashboard asks for screenshots or icons and the repo does not yet contain final store art,
-create simple product screenshots from Snowsight with the formatter button visible. Do not use
-customer SQL; use a tiny demo query such as `select 1 as id`.
+## Chrome Graphic Assets And Video
+
+Upload the checked-in assets exactly as follows:
+
+| Dashboard field | File |
+| --- | --- |
+| Store icon, 128×128 | `docs/store-assets/chrome/store-icon-128.png` |
+| Screenshot 1, 1280×800 | `docs/store-assets/chrome/screenshot-formatter-1280x800.png` |
+| Screenshot 2, 1280×800 | `docs/store-assets/chrome/screenshot-options-1280x800.png` |
+| Small promo tile, 440×280 | `docs/store-assets/chrome/small-promo-440x280.png` |
+| Marquee promo tile, 1400×560, optional | `docs/store-assets/chrome/marquee-promo-1400x560.png` |
+| YouTube demo source, 1280×720 | `docs/store-assets/chrome/demo-video-1280x720.mp4` |
+
+Upload the demo MP4 to the release account's YouTube channel as `Unlisted`, then paste its real
+`https://www.youtube.com/watch?v=...` URL into the Localized promo video field. A repository or
+GitHub Release URL cannot replace this field. Do not invent a placeholder URL in the dashboard.
+
+The complete copy/paste submission sheet and reviewer instructions live in
+[`docs/store-assets/CHROME_WEB_STORE_SUBMISSION.md`](store-assets/CHROME_WEB_STORE_SUBMISSION.md).
 
 ## Chrome Web Store API Credentials
 
@@ -265,9 +284,8 @@ scripts/configure-extension-publishing.sh --repo hjosugi/sql-dialect-fmt --targe
 
 ## First Publish
 
-Because `v1.0.0` may already exist and the Chrome dashboard item was created by uploading the same
-zip, make the first workflow publish submit the existing Chrome draft instead of uploading the same
-version again:
+Because the Chrome dashboard item is created by uploading the `v1.13.0` zip, make the first
+workflow publish submit that existing draft instead of uploading the same version again:
 
 ```sh
 gh variable set CHROME_SKIP_UPLOAD --repo hjosugi/sql-dialect-fmt --body true
@@ -278,7 +296,7 @@ Then dispatch the first store publish:
 ```sh
 gh workflow run "Extension Packages" \
   --repo hjosugi/sql-dialect-fmt \
-  -f version=1.0.0 \
+  -f version=1.13.0 \
   -f publish=true \
   -f publish_target=all
 ```

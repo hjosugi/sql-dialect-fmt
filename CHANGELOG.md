@@ -9,6 +9,24 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-07-11
+
+### Added
+
+- Added complete Chrome Web Store artwork: 128×128 icon, two 1280×800 product screenshots,
+  440×280 promo tile, optional 1400×560 marquee, YouTube-ready demo video and thumbnail.
+- Added a copy/paste Chrome review submission sheet, asset provenance, and CI validation for image
+  dimensions, alpha channels, manifest references, privacy copy, and video encoding.
+- Added a VS Code Marketplace icon and accurate Snowflake SQL highlighting screenshot.
+
+### Changed
+
+- Reworked the VS Code Marketplace README and changelog around user-facing features, setup,
+  support, and the extension's static/no-telemetry behavior.
+- Documented Databricks access and `chrome.storage.sync` formatter preferences in the privacy
+  policy and Chrome review permission justifications.
+- Updated initial store upload and workflow examples to v1.13.0 and packaged Chrome runtime icons.
+
 ## [1.12.1] - 2026-07-11
 
 ### Fixed
@@ -307,7 +325,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.1...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.10.0...v1.11.0

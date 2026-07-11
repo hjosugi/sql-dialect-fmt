@@ -98,6 +98,14 @@ jobs:
             exit 1
           fi
 
+  store-assets:
+    name: Store assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Marketplace and Web Store assets
+        run: python3 scripts/check-store-assets.py
+
   wasm:
     name: Wasm
     runs-on: ubuntu-latest
