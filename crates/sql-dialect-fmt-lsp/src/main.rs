@@ -20,22 +20,22 @@ use lsp_types::notification::{
 };
 use lsp_types::request::{
     CodeActionRequest, Completion, DocumentSymbolRequest, FoldingRangeRequest, Formatting,
-    HoverRequest, Request as _, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
-    SemanticTokensRangeRequest,
+    HoverRequest, RangeFormatting, Request as _, SemanticTokensFullDeltaRequest,
+    SemanticTokensFullRequest, SemanticTokensRangeRequest,
 };
 use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOptions, CodeActionOrCommand, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CompletionOptions, CompletionParams,
     CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
-    DocumentSymbolOptions, DocumentSymbolParams, DocumentSymbolResponse, FoldingRange,
-    FoldingRangeParams, Hover, HoverParams, HoverProviderCapability, InitializeParams, OneOf,
-    Position, PositionEncodingKind, PublishDiagnosticsParams, Range, SemanticTokens,
-    SemanticTokensDeltaParams, SemanticTokensFullDeltaResult, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensParams, SemanticTokensRangeParams,
-    SemanticTokensRangeResult, SemanticTokensServerCapabilities, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
-    WorkspaceEdit,
+    DocumentRangeFormattingParams, DocumentSymbolOptions, DocumentSymbolParams,
+    DocumentSymbolResponse, FoldingRange, FoldingRangeParams, Hover, HoverParams,
+    HoverProviderCapability, InitializeParams, OneOf, Position, PositionEncodingKind,
+    PublishDiagnosticsParams, Range, SemanticTokens, SemanticTokensDeltaParams,
+    SemanticTokensFullDeltaResult, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensParams, SemanticTokensRangeParams, SemanticTokensRangeResult,
+    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use serde::Deserialize;
 use sql_dialect_fmt_config::Config;
@@ -43,9 +43,9 @@ use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_lsp::{
     apply_change_with_encoding, completion_items, diagnostic_lint_code,
     diagnostics_with_lint_options, document_symbols_with_encoding, folding_ranges,
-    format_edits_with_encoding, hover_with_encoding, semantic_tokens_range_with_encoding,
-    semantic_tokens_with_encoding, token_modifiers, token_types, LintOptions,
-    PositionEncoding as NegotiatedPositionEncoding,
+    format_edits_with_encoding, format_range_edits_with_encoding, hover_with_encoding,
+    semantic_tokens_range_with_encoding, semantic_tokens_with_encoding, token_modifiers,
+    token_types, LintOptions, PositionEncoding as NegotiatedPositionEncoding,
 };
 use sql_dialect_fmt_parser::Dialect;
 
@@ -393,6 +393,7 @@ fn server_capabilities(position_encoding: NegotiatedPositionEncoding) -> ServerC
             TextDocumentSyncKind::INCREMENTAL,
         )),
         document_formatting_provider: Some(OneOf::Left(true)),
+        document_range_formatting_provider: Some(OneOf::Left(true)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
         document_symbol_provider: Some(OneOf::Right(DocumentSymbolOptions {
@@ -453,6 +454,10 @@ fn handle_request(request: Request, docs: &Docs, state: &mut ServerState) -> Res
             Ok((id, params)) => ok(id, formatting(params, docs, state)),
             Err(response) => *response,
         },
+        RangeFormatting::METHOD => match cast::<RangeFormatting>(request) {
+            Ok((id, params)) => ok(id, range_formatting(params, docs, state)),
+            Err(response) => *response,
+        },
         SemanticTokensFullRequest::METHOD => match cast::<SemanticTokensFullRequest>(request) {
             Ok((id, params)) => ok(id, semantic_tokens_full(params, docs, state)),
             Err(response) => *response,
@@ -508,6 +513,26 @@ fn formatting(
         options.indent_width = (params.options.tab_size as usize).max(1);
     }
     format_edits_with_encoding(&document.text, &options, state.position_encoding)
+}
+
+fn range_formatting(
+    params: DocumentRangeFormattingParams,
+    docs: &Docs,
+    state: &ServerState,
+) -> Vec<lsp_types::TextEdit> {
+    let Some(document) = docs.get(&params.text_document.uri) else {
+        return Vec::new();
+    };
+    let mut options = state.effective_options(&params.text_document.uri);
+    if params.options.insert_spaces {
+        options.indent_width = (params.options.tab_size as usize).max(1);
+    }
+    format_range_edits_with_encoding(
+        &document.text,
+        params.range,
+        &options,
+        state.position_encoding,
+    )
 }
 
 fn semantic_tokens_full(

@@ -56,6 +56,7 @@ sql-dialect-fmt --check --diff query.sql  # show a unified diff for unformatted 
 cat query.sql | sql-dialect-fmt           # stdin to stdout
 cat query.sql | sql-dialect-fmt -         # explicitly read stdin with `-`
 sql-dialect-fmt --stdin-filepath src/query.sql < query.sql  # use a path for config discovery
+cat query.sql | sql-dialect-fmt --range 40:120  # reformat only statements in a byte range (stdin)
 
 # Options: --dialect snowflake|databricks / --line-width N / --indent-width N / --no-uppercase
 ```

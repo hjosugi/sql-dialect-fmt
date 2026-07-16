@@ -21,10 +21,12 @@
 //! backwards compatible.
 
 pub mod doc;
+pub mod range;
 mod sql;
 
 #[doc(inline)]
 pub use doc::{print, Doc, PrintOptions};
+pub use range::{format_range, RangeEdit};
 use sql_dialect_fmt_parser::ParseError;
 pub use sql_dialect_fmt_syntax::Dialect;
 

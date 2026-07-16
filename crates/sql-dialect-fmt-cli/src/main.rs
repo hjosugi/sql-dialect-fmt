@@ -29,7 +29,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use sql_dialect_fmt_encoding::DecodedText;
-use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
+use sql_dialect_fmt_formatter::{format_range, FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_parser::{Dialect, ParseError};
 use sql_dialect_fmt_text::LineColumn;
 
@@ -74,6 +74,8 @@ struct Args {
     diff: bool,
     /// File path context for stdin, used for config discovery and diagnostics.
     stdin_filepath: Option<PathBuf>,
+    /// Reformat only the statements intersecting this byte range (stdin mode only).
+    range: Option<(usize, usize)>,
     /// Ignore any `sql-dialect-fmt.toml` and use defaults + CLI flags only.
     no_config: bool,
     /// CLI-flag overrides, layered on top of any config file. `None` means "not set on the CLI".
@@ -200,6 +202,10 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
         .read_to_end(&mut source)
         .map_err(|err| format!("failed to read stdin: {err}"))?;
 
+    if let Some((start, end)) = args.range {
+        return run_stdin_range(&source, &options, start, end);
+    }
+
     // Surface parse problems on stderr, but keep going (the formatter passes content through).
     let decoded = DecodedText::decode(&source);
     let formatted = format_decoded_with_diagnostics(&decoded, &options);
@@ -224,6 +230,34 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
     }
     io::stdout()
         .write_all(&formatted.bytes)
+        .map_err(|err| format!("failed to write stdout: {err}"))?;
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Reformat only the statements intersecting `[start, end)` (byte offsets into the decoded text) and
+/// write the whole document to stdout with the rest kept verbatim. Non-text input (e.g. binary or a
+/// range that touches no statement) round-trips unchanged.
+fn run_stdin_range(
+    source: &[u8],
+    options: &FormatOptions,
+    start: usize,
+    end: usize,
+) -> Result<ExitCode, String> {
+    let decoded = DecodedText::decode(source);
+    let spliced = decoded.as_str().and_then(|text| {
+        let edit = format_range(text, start..end, options)?;
+        let mut out = String::with_capacity(text.len() + edit.new_text.len());
+        out.push_str(&text[..edit.range.start]);
+        out.push_str(&edit.new_text);
+        out.push_str(&text[edit.range.end..]);
+        Some(out)
+    });
+    let bytes = match spliced {
+        Some(text) => decoded.map_text(|_| text).encode(),
+        None => decoded.encode(),
+    };
+    io::stdout()
+        .write_all(&bytes)
         .map_err(|err| format!("failed to write stdout: {err}"))?;
     Ok(ExitCode::SUCCESS)
 }
@@ -678,6 +712,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
     let mut check = false;
     let mut diff = false;
     let mut stdin_filepath = None;
+    let mut range = None;
     let mut no_config = false;
     let mut overrides = Overrides::default();
     let mut args = raw.into_iter();
@@ -702,6 +737,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
                 overrides.indent_width = Some(take_usize(&mut args, "--indent-width")?)
             }
             "--stdin-filepath" => stdin_filepath = Some(take_path(&mut args, "--stdin-filepath")?),
+            "--range" => range = Some(take_range(&mut args, "--range")?),
             "-h" | "--help" => return Ok(Parsed::Help),
             "-V" | "--version" => return Ok(Parsed::Version),
             "--" => {
@@ -727,6 +763,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
                             overrides.line_ending = Some(parse_line_ending_flag(value)?)
                         }
                         "--stdin-filepath" => stdin_filepath = Some(parse_path_flag(flag, value)?),
+                        "--range" => range = Some(parse_range(flag, value)?),
                         _ => return Err(format!("unknown option {flag}\n\n{}", usage())),
                     }
                 } else {
@@ -757,12 +794,21 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
     if stdin_filepath.is_some() && !paths.is_empty() && stdin_path_count == 0 {
         return Err("--stdin-filepath requires stdin input (no paths or '-')".to_string());
     }
+    if range.is_some() {
+        if write || check {
+            return Err("--range cannot be combined with --write or --check".to_string());
+        }
+        if paths.len() - stdin_path_count > 0 {
+            return Err("--range requires stdin input (no file paths)".to_string());
+        }
+    }
     Ok(Parsed::Run(Args {
         paths,
         write,
         check,
         diff,
         stdin_filepath,
+        range,
         no_config,
         overrides,
     }))
@@ -810,6 +856,27 @@ fn take_path<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<P
         return Err(format!("{flag} requires a non-empty path"));
     }
     Ok(PathBuf::from(value))
+}
+
+fn take_range<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<(usize, usize), String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires START:END byte offsets"))?;
+    parse_range(flag, value.to_string_lossy().as_ref())
+}
+
+fn parse_range(flag: &str, value: &str) -> Result<(usize, usize), String> {
+    let malformed = || format!("{flag} expects START:END byte offsets, got {value:?}");
+    let (start, end) = value.split_once(':').ok_or_else(malformed)?;
+    let start = start.parse::<usize>().map_err(|_| malformed())?;
+    let end = end.parse::<usize>().map_err(|_| malformed())?;
+    if start > end {
+        return Err(format!("{flag} START must not exceed END, got {value:?}"));
+    }
+    Ok((start, end))
 }
 
 fn parse_dialect_flag(value: &str) -> Result<Dialect, String> {
@@ -862,6 +929,8 @@ OPTIONS:
         --diff            With --check, print a unified diff for unformatted input
         --stdin-filepath PATH
                            File path context for stdin config discovery and diagnostics
+        --range START:END Reformat only statements intersecting the byte range [START, END)
+                           (stdin only; prints the whole document to stdout)
         --line-width N    Target line width (default 100)
         --indent-width N  Spaces per indent level (default 4)
         --dialect NAME    SQL dialect: snowflake or databricks (default snowflake)
