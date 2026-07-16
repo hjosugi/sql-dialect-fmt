@@ -2266,7 +2266,7 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "sql-dialect-fmt"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "globset",
  "ignore",
@@ -2281,7 +2281,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-config"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "serde",
  "sql-dialect-fmt-formatter",
@@ -2291,11 +2291,11 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-encoding"
-version = "1.13.0"
+version = "1.14.0"
 
 [[package]]
 name = "sql-dialect-fmt-formatter"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "biome_console",
  "biome_deserialize",
@@ -2329,7 +2329,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-highlight"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "serde_json",
  "sql-dialect-fmt-lexer",
@@ -2341,7 +2341,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-hover"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "sql-dialect-fmt-lexer",
  "sql-dialect-fmt-syntax",
@@ -2349,7 +2349,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-lexer"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "criterion",
  "sql-dialect-fmt-syntax",
@@ -2360,7 +2360,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-lsp"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "lsp-server",
  "lsp-types",
@@ -2379,7 +2379,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-parser"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -2393,18 +2393,18 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-syntax"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "rowan",
 ]
 
 [[package]]
 name = "sql-dialect-fmt-test-fixtures"
-version = "1.13.0"
+version = "1.14.0"
 
 [[package]]
 name = "sql-dialect-fmt-test-support"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "sql-dialect-fmt-highlight",
  "sql-dialect-fmt-lexer",
@@ -2413,11 +2413,11 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-text"
-version = "1.13.0"
+version = "1.14.0"
 
 [[package]]
 name = "sql-dialect-fmt-tree-sitter"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "cc",
  "sql-dialect-fmt-syntax",
@@ -2428,7 +2428,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-wasm"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "sql-dialect-fmt-formatter",
 ]

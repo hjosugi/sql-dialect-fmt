@@ -8,7 +8,7 @@ Use the [playground](playground.md) to run the WebAssembly formatter in the brow
 CLI for local and CI usage.
 
 ```sh
-cargo install sql-dialect-fmt --version 1.13.0 --locked
+cargo install sql-dialect-fmt --version 1.14.0 --locked
 sql-dialect-fmt --check sql/**/*.sql
 sql-dialect-fmt --write sql/**/*.sql
 ```

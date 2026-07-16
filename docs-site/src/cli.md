@@ -47,7 +47,7 @@ brew install sql-dialect-fmt
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.13.0 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.14.0 --check .
 ```
 
 ## pre-commit
@@ -55,7 +55,7 @@ docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.13.0 
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.13.0
+    rev: v1.14.0
     hooks:
       - id: sql-dialect-fmt
 ```

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.14.0
 
 - Added a local document and selection formatter for `snowflake-sql` files, powered by the bundled
   `sql-dialect-fmt` WebAssembly engine. **Format Document**, **Format Selection**, and
