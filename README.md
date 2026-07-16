@@ -91,6 +91,21 @@ Release packages for the Chrome extension and VS Code extension are built togeth
 ./scripts/package-extensions.sh
 ```
 
+## VS Code Extension
+
+The VS Code extension in `editors` adds Snowflake SQL syntax highlighting **and formatting**. It
+registers a formatter for `snowflake-sql` files, so **Format Document**, **Format Selection**, and
+`editor.formatOnSave` all work with no external binary. Like the Chrome extension, it bundles the
+Rust formatter as WebAssembly and formats entirely on your machine.
+
+```sh
+./scripts/build-vscode-extension.sh
+```
+
+Then press <kbd>F5</kbd> in `editors/` (or install the packaged VSIX) and run **Format Document** on
+a `.sql` file. Formatting honors the `sqlDialectFmt.*` settings (dialect, line width, indent width,
+keyword casing).
+
 ## Development
 
 ```sh
