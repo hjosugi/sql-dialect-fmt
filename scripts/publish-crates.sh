@@ -13,6 +13,7 @@ CRATES=(
   sql-dialect-fmt-highlight
   sql-dialect-fmt-hover
   sql-dialect-fmt-encoding
+  sql-dialect-fmt-config
   sql-dialect-fmt
   sql-dialect-fmt-lsp
   sql-dialect-fmt-wasm
