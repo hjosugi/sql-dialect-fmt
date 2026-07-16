@@ -65,6 +65,44 @@ fn dash_reads_stdin_to_stdout() {
 }
 
 #[test]
+fn range_reformats_only_the_selected_statement() {
+    let tmp = TempDir::new().unwrap();
+    // Byte offsets 10..15 land in the second statement.
+    let src = "select 1;\nselect a,b from t;\n";
+    let (code, out, _err) = run(tmp.path(), &["--range", "10:15"], Some(src));
+    assert_eq!(code, 0);
+    assert_eq!(out, "select 1;\nSELECT a, b\nFROM t;\n");
+}
+
+#[test]
+fn range_with_file_path_is_usage_error() {
+    let tmp = TempDir::new().unwrap();
+    let path = write(tmp.path(), "q.sql", "select 1");
+    let (code, _out, err) = run(
+        tmp.path(),
+        &["--range", "0:5", path.to_str().unwrap()],
+        None,
+    );
+    assert_eq!(code, 2);
+    assert!(err.contains("--range"), "stderr: {err}");
+}
+
+#[test]
+fn range_with_check_is_usage_error() {
+    let tmp = TempDir::new().unwrap();
+    let (code, _out, err) = run(tmp.path(), &["--range", "0:5", "--check"], Some("select 1"));
+    assert_eq!(code, 2);
+    assert!(err.contains("--range"), "stderr: {err}");
+}
+
+#[test]
+fn malformed_range_is_usage_error() {
+    let tmp = TempDir::new().unwrap();
+    let (code, _out, _err) = run(tmp.path(), &["--range", "abc"], Some("select 1"));
+    assert_eq!(code, 2);
+}
+
+#[test]
 fn stdin_to_stdout_formats_databricks_when_requested() {
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(

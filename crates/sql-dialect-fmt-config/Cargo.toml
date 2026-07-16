@@ -1,0 +1,19 @@
+[package]
+name = "sql-dialect-fmt-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Shared sql-dialect-fmt.toml configuration model and discovery for the sql-dialect-fmt CLI and LSP."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+sql-dialect-fmt-formatter.workspace = true
+sql-dialect-fmt-parser.workspace = true
+toml = "1.1"

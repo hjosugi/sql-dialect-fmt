@@ -56,6 +56,7 @@ sql-dialect-fmt --check --diff query.sql  # show a unified diff for unformatted 
 cat query.sql | sql-dialect-fmt           # stdin to stdout
 cat query.sql | sql-dialect-fmt -         # explicitly read stdin with `-`
 sql-dialect-fmt --stdin-filepath src/query.sql < query.sql  # use a path for config discovery
+cat query.sql | sql-dialect-fmt --range 40:120  # reformat only statements in a byte range (stdin)
 
 # Options: --dialect snowflake|databricks / --line-width N / --indent-width N / --no-uppercase
 ```
@@ -90,6 +91,21 @@ Release packages for the Chrome extension and VS Code extension are built togeth
 ```sh
 ./scripts/package-extensions.sh
 ```
+
+## VS Code Extension
+
+The VS Code extension in `editors` adds Snowflake SQL syntax highlighting **and formatting**. It
+registers a formatter for `snowflake-sql` files, so **Format Document**, **Format Selection**, and
+`editor.formatOnSave` all work with no external binary. Like the Chrome extension, it bundles the
+Rust formatter as WebAssembly and formats entirely on your machine.
+
+```sh
+./scripts/build-vscode-extension.sh
+```
+
+Then press <kbd>F5</kbd> in `editors/` (or install the packaged VSIX) and run **Format Document** on
+a `.sql` file. Formatting honors the `sqlDialectFmt.*` settings (dialect, line width, indent width,
+keyword casing).
 
 ## Development
 
@@ -129,8 +145,10 @@ Databricks mode covers LATERAL VIEW, Delta DDL options,
 identifiers.
 
 The workspace also includes an LSP server, semantic tokens, hover text, a Tree-sitter grammar, a
-CLI, VS Code packaging, and the Chrome/WASM extension. The headline formatter feature is
-**magic trailing comma**. See [ROADMAP.md](ROADMAP.md) for the detailed coverage map.
+CLI, VS Code packaging, and the Chrome/WASM extension. The LSP server discovers and applies the same
+`sql-dialect-fmt.toml` as the CLI (with editor settings layered on top), so an editor formats
+consistently with CI. The headline formatter feature is **magic trailing comma**. See
+[ROADMAP.md](ROADMAP.md) for the detailed coverage map.
 
 ## Crates
 

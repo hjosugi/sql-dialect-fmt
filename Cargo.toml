@@ -16,6 +16,7 @@ keywords = ["snowflake", "sql", "formatter", "parser"]
 categories = ["development-tools", "parser-implementations"]
 
 [workspace.dependencies]
+sql-dialect-fmt-config = { path = "crates/sql-dialect-fmt-config", version = "1.13.0" }
 sql-dialect-fmt-encoding = { path = "crates/sql-dialect-fmt-encoding", version = "1.13.0" }
 sql-dialect-fmt-formatter = { path = "crates/sql-dialect-fmt-formatter", version = "1.13.0" }
 sql-dialect-fmt-highlight = { path = "crates/sql-dialect-fmt-highlight", version = "1.13.0" }

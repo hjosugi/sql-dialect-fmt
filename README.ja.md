@@ -82,6 +82,21 @@ Release 用の Chrome zip と VS Code VSIX はまとめて作れます。
 ./scripts/package-extensions.sh
 ```
 
+## VS Code 拡張
+
+`editors` の VS Code 拡張は Snowflake SQL のシンタックスハイライトに加えて**整形**にも対応しています。
+`snowflake-sql` 用のフォーマッタを登録するので、**Format Document**・**Format Selection**・
+`editor.formatOnSave` がそのまま使えます。Chrome 拡張と同じく Rust formatter を WebAssembly として
+同梱し、すべてローカルで整形します（ネットワーク送信なし）。
+
+```sh
+./scripts/build-vscode-extension.sh
+```
+
+`editors/` で <kbd>F5</kbd> を押す（または生成した VSIX をインストールする）と、`.sql` ファイルで
+**Format Document** が使えます。整形は `sqlDialectFmt.*` 設定（dialect・line width・indent width・
+keyword casing）に従います。
+
 ## 開発
 
 ```sh
