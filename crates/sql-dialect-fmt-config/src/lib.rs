@@ -1,11 +1,12 @@
 //! `sql-dialect-fmt.toml` configuration files.
 //!
-//! A config file maps onto the formatter's [`FormatOptions`] plus CLI-only file discovery knobs.
-//! Every key is optional, so a file may set only the knobs it cares about. Discovery walks up the
-//! directory tree from a start point (an input file's parent, or the current working directory) and
-//! uses the **nearest** `sql-dialect-fmt.toml` — the first one found on the way up — mirroring how
-//! `rustfmt`, `prettier`, and friends scope project configuration. Explicit CLI flags always win
-//! over formatter options from the file.
+//! Shared by the CLI and the language server so both discover and apply project configuration the
+//! same way. A config file maps onto the formatter's [`FormatOptions`] plus the CLI-only `exclude`
+//! file-discovery knob. Every key is optional, so a file may set only the knobs it cares about.
+//! Discovery walks up the directory tree from a start point (an input file's parent, or the current
+//! working directory) and uses the **nearest** `sql-dialect-fmt.toml` — the first one found on the
+//! way up — mirroring how `rustfmt`, `prettier`, and friends scope project configuration. Explicit
+//! overrides (CLI flags, or LSP editor settings) always win over formatter options from the file.
 
 use std::path::{Path, PathBuf};
 

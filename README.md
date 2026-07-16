@@ -144,8 +144,10 @@ Databricks mode covers LATERAL VIEW, Delta DDL options,
 identifiers.
 
 The workspace also includes an LSP server, semantic tokens, hover text, a Tree-sitter grammar, a
-CLI, VS Code packaging, and the Chrome/WASM extension. The headline formatter feature is
-**magic trailing comma**. See [ROADMAP.md](ROADMAP.md) for the detailed coverage map.
+CLI, VS Code packaging, and the Chrome/WASM extension. The LSP server discovers and applies the same
+`sql-dialect-fmt.toml` as the CLI (with editor settings layered on top), so an editor formats
+consistently with CI. The headline formatter feature is **magic trailing comma**. See
+[ROADMAP.md](ROADMAP.md) for the detailed coverage map.
 
 ## Crates
 

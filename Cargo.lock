@@ -2271,12 +2271,21 @@ dependencies = [
  "globset",
  "ignore",
  "rayon",
- "serde",
+ "sql-dialect-fmt-config",
  "sql-dialect-fmt-encoding",
  "sql-dialect-fmt-formatter",
  "sql-dialect-fmt-parser",
  "sql-dialect-fmt-text",
  "tempfile",
+]
+
+[[package]]
+name = "sql-dialect-fmt-config"
+version = "1.13.0"
+dependencies = [
+ "serde",
+ "sql-dialect-fmt-formatter",
+ "sql-dialect-fmt-parser",
  "toml",
 ]
 
@@ -2357,6 +2366,7 @@ dependencies = [
  "lsp-types",
  "serde",
  "serde_json",
+ "sql-dialect-fmt-config",
  "sql-dialect-fmt-formatter",
  "sql-dialect-fmt-highlight",
  "sql-dialect-fmt-hover",
@@ -2364,6 +2374,7 @@ dependencies = [
  "sql-dialect-fmt-parser",
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-text",
+ "tempfile",
 ]
 
 [[package]]

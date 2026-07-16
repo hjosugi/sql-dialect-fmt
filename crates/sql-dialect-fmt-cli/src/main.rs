@@ -17,8 +17,6 @@
 //   * `1` — `--check` only: at least one input would be reformatted,
 //   * `2` — a parse error, an I/O error, or a usage error.
 
-mod config;
-
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
@@ -35,7 +33,7 @@ use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_parser::{Dialect, ParseError};
 use sql_dialect_fmt_text::LineColumn;
 
-use config::Config;
+use sql_dialect_fmt_config::{self as config, Config};
 
 /// Process exit codes, kept in one place so their meaning is documented and consistent. Success
 /// (`0`) is expressed via [`ExitCode::SUCCESS`]; the two non-zero codes are named here.
