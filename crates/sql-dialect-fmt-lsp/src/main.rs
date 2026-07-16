@@ -786,6 +786,16 @@ mod tests {
         "file:///workspace/query.sql".parse().expect("valid URI")
     }
 
+    /// Build a `file://` URI from an absolute path, cross-platform. Windows drive paths use
+    /// backslashes and need `file:///C:/...`, so normalize separators and add the leading slash.
+    fn file_uri(path: &std::path::Path) -> Uri {
+        let mut text = path.display().to_string().replace('\\', "/");
+        if !text.starts_with('/') {
+            text.insert(0, '/');
+        }
+        format!("file://{text}").parse().expect("valid URI")
+    }
+
     fn test_state() -> ServerState {
         ServerState {
             editor: FormatterSettings::default(),
@@ -1015,10 +1025,7 @@ mod tests {
         .expect("write config");
         drop(file);
 
-        let doc_path = dir.path().join("query.sql");
-        let uri: Uri = format!("file://{}", doc_path.display())
-            .parse()
-            .expect("valid URI");
+        let uri = file_uri(&dir.path().join("query.sql"));
 
         // With no editor settings, the config file supplies dialect and widths.
         let mut state = test_state();
