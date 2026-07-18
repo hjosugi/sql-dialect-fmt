@@ -143,6 +143,47 @@ pub fn format_range_edits_with_encoding(
     }]
 }
 
+/// The edits to apply for `textDocument/onTypeFormatting`: after the user types `;` or a newline,
+/// reformat the statement that just ended.
+pub fn on_type_formatting_edits(
+    text: &str,
+    position: Position,
+    options: &FormatOptions,
+) -> Vec<TextEdit> {
+    on_type_formatting_edits_with_encoding(text, position, options, PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`on_type_formatting_edits`].
+///
+/// The trigger position is scanned backwards over whitespace to the completed statement's final
+/// non-whitespace byte, so both `;` (cursor right after the terminator) and newline (cursor at the
+/// start of the next line) resolve to the statement the user just finished. An already formatted
+/// statement yields no edits.
+pub fn on_type_formatting_edits_with_encoding(
+    text: &str,
+    position: Position,
+    options: &FormatOptions,
+    encoding: PositionEncoding,
+) -> Vec<TextEdit> {
+    let index = LineIndex::new(text);
+    let cursor = lsp_offset(&index, position, encoding);
+    let Some(last) = text[..cursor].rfind(|c: char| !c.is_whitespace()) else {
+        return Vec::new();
+    };
+    // `last..cursor` starts on a char boundary and covers the statement's final byte, so the
+    // statement intersects the range; the trailing whitespace bytes touch no other statement.
+    let Some(edit) = sql_dialect_fmt_formatter::format_range(text, last..cursor, options) else {
+        return Vec::new();
+    };
+    vec![TextEdit {
+        range: Range::new(
+            lsp_position(&index, edit.range.start, encoding),
+            lsp_position(&index, edit.range.end, encoding),
+        ),
+        new_text: edit.new_text,
+    }]
+}
+
 /// Diagnostics for `textDocument/publishDiagnostics`: both lexer and parser errors. Neither stage
 /// ever fails, so this is the set of *recovered* errors (empty for clean input).
 ///
@@ -879,6 +920,44 @@ mod tests {
         let text = "SELECT 1;\nSELECT a, b\nFROM t;\n";
         let range = Range::new(Position::new(0, 0), Position::new(0, 8));
         assert!(format_range_edits(text, range, &FormatOptions::default()).is_empty());
+    }
+
+    #[test]
+    fn on_type_formatting_after_semicolon_reformats_the_finished_statement() {
+        // Cursor right after the `;` the user just typed on line 1.
+        let text = "SELECT 1;\nselect a,b from t;\n";
+        let edits = on_type_formatting_edits(text, Position::new(1, 18), &FormatOptions::default());
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].new_text, "SELECT a, b\nFROM t;");
+        // Only the second statement is touched.
+        assert_eq!(edits[0].range.start, Position::new(1, 0));
+    }
+
+    #[test]
+    fn on_type_formatting_after_newline_reformats_the_previous_statement() {
+        // Cursor at the start of the line after the statement (the user just typed Enter).
+        let text = "select a,b from t;\n";
+        let edits = on_type_formatting_edits(text, Position::new(1, 0), &FormatOptions::default());
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].new_text, "SELECT a, b\nFROM t;");
+    }
+
+    #[test]
+    fn on_type_formatting_already_formatted_statement_yields_no_edits() {
+        let text = "SELECT a, b\nFROM t;\n";
+        assert!(
+            on_type_formatting_edits(text, Position::new(1, 7), &FormatOptions::default())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn on_type_formatting_in_leading_whitespace_yields_no_edits() {
+        let text = "\n\nselect 1;\n";
+        assert!(
+            on_type_formatting_edits(text, Position::new(1, 0), &FormatOptions::default())
+                .is_empty()
+        );
     }
 
     #[test]

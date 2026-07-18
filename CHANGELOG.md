@@ -9,8 +9,16 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Added `textDocument/onTypeFormatting` to the language server: typing `;` or a newline reformats
+  the statement that just ended, using the same statement-level range formatting engine, and leaves
+  already formatted statements untouched.
+
 ### Changed
 
+- Split the formatter's SQL lowering module into focused query/DML/DDL/scripting/expression
+  submodules so the statement-family rules no longer live in one large file.
 - Split the parser grammar module into focused per-family submodules (queries, expressions, DDL,
   access control, COPY INTO, scripting, MATCH_RECOGNIZE) so the grammar no longer lives in one
   large file.
