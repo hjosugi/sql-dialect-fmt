@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # Store submission assets
 
 This directory contains the reviewed, exact-size assets used for the Chrome Web Store and VS Code

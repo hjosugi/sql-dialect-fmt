@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # spec/ — Snowflake spec tracker (local, **not part of the build**)
 
 This directory records the Snowflake SQL surface sql-dialect-fmt targets and how it changes over time.

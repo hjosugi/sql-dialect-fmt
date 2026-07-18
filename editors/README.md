@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # Snowflake SQL
 
 Focused Snowflake SQL syntax highlighting **and formatting** for Visual Studio Code, backed by the
