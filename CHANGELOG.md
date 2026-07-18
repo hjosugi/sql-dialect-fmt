@@ -9,6 +9,19 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Added spec-driven rich hover (#92): keywords, clauses, and other constructs tracked in
+  `spec/seed/features.json` now hover with their syntax, GA/Preview status, parser coverage, and a
+  Snowflake docs link — including multi-word phrases such as `GROUP BY` or `LEFT OUTER JOIN`, and
+  `CREATE OR REPLACE ...` / `IS NOT NULL` forms.
+- Added `spec/seed/functions.json`, a curated function signature table (109 common Snowflake
+  functions), and hover for function calls: signature, return type, summary, and docs link.
+  Qualified names such as `SNOWFLAKE.CORTEX.SENTIMENT` and parenthesis-free context functions such
+  as `CURRENT_TIMESTAMP` are recognized.
+- Added `scripts/generate-hover-tables.py`, which generates the hover tables from the spec seeds
+  into `crates/sql-dialect-fmt-hover/src/generated.rs`; CI fails when the file is out of sync.
+
 ## [1.14.0] - 2026-07-16
 
 ### Added

@@ -1108,6 +1108,36 @@ mod tests {
     }
 
     #[test]
+    fn hover_describes_spec_features_with_a_docs_link() {
+        // Spec-driven hover: keyword features carry syntax plus a docs link.
+        let src = "select c from t qualify row_number() over (order by c) = 1";
+        let col = src.find("qualify").unwrap() as u32;
+        let hover = hover(src, Position::new(0, col)).expect("hover");
+        match hover.contents {
+            HoverContents::Markup(m) => {
+                assert!(m.value.contains("**QUALIFY**"));
+                assert!(m.value.contains("QUALIFY <expr>"));
+                assert!(m.value.contains("[Snowflake docs]("));
+            }
+            _ => panic!("expected markup"),
+        }
+    }
+
+    #[test]
+    fn hover_describes_function_signatures() {
+        let src = "select dateadd(day, 1, d) from t";
+        let col = src.find("dateadd").unwrap() as u32;
+        let hover = hover(src, Position::new(0, col)).expect("hover");
+        match hover.contents {
+            HoverContents::Markup(m) => {
+                assert!(m.value.contains("DATEADD( <date_or_time_part>"));
+                assert!(m.value.contains("[Snowflake docs]("));
+            }
+            _ => panic!("expected markup"),
+        }
+    }
+
+    #[test]
     fn apply_change_splices_an_incremental_edit() {
         // Replace "world" (line 1, cols 0..5) with "snow".
         let text = "hello\nworld\n";
