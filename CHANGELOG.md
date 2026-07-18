@@ -9,6 +9,22 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Structured parsing and formatting for the common `ALTER TABLE / VIEW / SESSION / WAREHOUSE /
+  TASK` (plus SCHEMA / DATABASE / MATERIALIZED VIEW / DYNAMIC TABLE) statements: the object head
+  and each action clause (`ADD/DROP/RENAME COLUMN`, `RENAME TO`, `SET`/`UNSET`,
+  `SUSPEND`/`RESUME`, `SWAP WITH`, …) are now CST nodes, so multiple actions stack one per line
+  and `ALTER SESSION SET` property lists wrap with proper keyword casing; unmodeled ALTER kinds
+  keep the lossless lenient token run.
+
+### Changed
+
+- Structured the bundled Tree-sitter grammar with coarse statement-kind nodes
+  (`select_statement`, `insert_statement`, `create_statement`, ..., with a lenient `statement`
+  fallback), improving editor folding, outlines, and text objects while keeping the tolerant
+  token-run parsing unchanged.
+
 ## [1.15.0] - 2026-07-18
 
 ### Added
@@ -23,12 +39,6 @@ The published crates share a single workspace version (see `RELEASING.md`).
   as `CURRENT_TIMESTAMP` are recognized.
 - Added `scripts/generate-hover-tables.py`, which generates the hover tables from the spec seeds
   into `crates/sql-dialect-fmt-hover/src/generated.rs`; CI fails when the file is out of sync.
-- Structured parsing and formatting for the common `ALTER TABLE / VIEW / SESSION / WAREHOUSE /
-  TASK` (plus SCHEMA / DATABASE / MATERIALIZED VIEW / DYNAMIC TABLE) statements: the object head
-  and each action clause (`ADD/DROP/RENAME COLUMN`, `RENAME TO`, `SET`/`UNSET`,
-  `SUSPEND`/`RESUME`, `SWAP WITH`, …) are now CST nodes, so multiple actions stack one per line
-  and `ALTER SESSION SET` property lists wrap with proper keyword casing; unmodeled ALTER kinds
-  keep the lossless lenient token run.
 - Added `textDocument/onTypeFormatting` to the language server: typing `;` or a newline reformats
   the statement that just ended, using the same statement-level range formatting engine, and leaves
   already formatted statements untouched.
@@ -45,10 +55,6 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Changed
 
-- Structured the bundled Tree-sitter grammar with coarse statement-kind nodes
-  (`select_statement`, `insert_statement`, `create_statement`, ..., with a lenient `statement`
-  fallback), improving editor folding, outlines, and text objects while keeping the tolerant
-  token-run parsing unchanged.
 - Split the formatter's SQL lowering module into focused query/DML/DDL/scripting/expression
   submodules so the statement-family rules no longer live in one large file.
 - Split the parser grammar module into focused per-family submodules (queries, expressions, DDL,
