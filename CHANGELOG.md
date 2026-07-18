@@ -9,6 +9,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- Split the parser grammar module into focused per-family submodules (queries, expressions, DDL,
+  access control, COPY INTO, scripting, MATCH_RECOGNIZE) so the grammar no longer lives in one
+  large file.
+
 ## [1.14.0] - 2026-07-16
 
 ### Added
