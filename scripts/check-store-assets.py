@@ -57,6 +57,12 @@ def validate_manifests() -> None:
     for required in ("images/icon.png", "images/syntax-highlighting.png"):
         if required not in packaged:
             raise ValueError(f"editors/package.json: files must include {required}")
+    # vsce filters every collected file — bundled npm dependencies included — through the `files`
+    # globs, so dropping this entry would silently ship a VSIX whose LSP client cannot load.
+    if "node_modules/**" not in packaged:
+        raise ValueError("editors/package.json: files must include node_modules/**")
+    if "vscode-languageclient" not in vscode.get("dependencies", {}):
+        raise ValueError("editors/package.json: dependencies must include vscode-languageclient")
 
     chrome = json.loads((ROOT / "extensions/chrome/manifest.json").read_text())
     expected_icons = {size: f"images/icon{size}.png" for size in ("16", "32", "48", "128")}

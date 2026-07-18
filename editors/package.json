@@ -48,10 +48,14 @@
     "LICENSE.md",
     "README.md",
     "language-configuration.json",
+    "node_modules/**",
     "package.json",
     "snowflake.tmLanguage.json",
     "vendor/sql_dialect_fmt_wasm.wasm"
   ],
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "contributes": {
     "configuration": {
       "title": "Snowflake SQL (sql-dialect-fmt)",
@@ -82,6 +86,21 @@
           "type": "boolean",
           "default": true,
           "description": "Upper-case SQL keywords when formatting."
+        },
+        "sqlDialectFmt.lsp.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Opt in to the `sql-dialect-fmt-lsp` language server for diagnostics, hover, completion, semantic tokens, document symbols, folding, and on-type formatting (install it with `cargo install sql-dialect-fmt-lsp`). When the server is running it also takes over formatting; when the binary is missing the extension silently falls back to the bundled WebAssembly formatter."
+        },
+        "sqlDialectFmt.lsp.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the `sql-dialect-fmt-lsp` executable. Leave empty to look it up on `PATH`."
+        },
+        "sqlDialectFmt.lint": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Lint diagnostic toggles forwarded to the `sql-dialect-fmt-lsp` language server, e.g. `{ \"enabled\": true, \"selectWildcard\": false, \"largeInListThreshold\": 32 }`. Only used while the LSP client is enabled and running."
         }
       }
     },
