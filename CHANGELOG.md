@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-07-18
+
 ### Added
 
 - Structured parsing and formatting for the common `ALTER TABLE / VIEW / SESSION / WAREHOUSE /
@@ -413,7 +415,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.1...v1.13.0

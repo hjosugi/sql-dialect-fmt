@@ -1,12 +1,13 @@
 <!-- i18n: language-switcher -->
-[English](README.md) | [日本語](README.ja.md)
+[English](https://github.com/hjosugi/sql-dialect-fmt/blob/main/editors/README.md) |
+[日本語](https://github.com/hjosugi/sql-dialect-fmt/blob/main/editors/README.ja.md)
 
 # Snowflake SQL
 
 Focused Snowflake SQL syntax highlighting **and formatting** for Visual Studio Code, backed by the
 same engine used by [sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt).
 
-![Snowflake SQL syntax highlighting](images/syntax-highlighting.png)
+![Snowflake SQL syntax highlighting](https://raw.githubusercontent.com/hjosugi/sql-dialect-fmt/main/editors/images/syntax-highlighting.png)
 
 ## Features
 
@@ -108,11 +109,11 @@ which also runs entirely on your machine. See the
 This directory also carries integrations for other editors, all driven by the same
 `sql-dialect-fmt-lsp` language server (`cargo install sql-dialect-fmt-lsp`):
 
-- [`nvim/`](nvim/) — a small Neovim plugin: `snowflake-sql` filetype, LSP setup, and
+- [`nvim/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/nvim) — a small Neovim plugin: `snowflake-sql` filetype, LSP setup, and
   conform.nvim/null-ls recipes for CLI-based formatting.
-- [`zed/`](zed/) — a Zed extension (dev install): Snowflake SQL language backed by the
+- [`zed/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/zed) — a Zed extension (dev install): Snowflake SQL language backed by the
   bundled tree-sitter grammar plus the language server.
-- [`helix/`](helix/) — a documented `languages.toml` snippet for Helix (no plugin system).
+- [`helix/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/helix) — a documented `languages.toml` snippet for Helix (no plugin system).
 
 ## Support and source
 

@@ -1,11 +1,12 @@
 <!-- i18n: language-switcher -->
-[English](README.md) | [日本語](README.ja.md)
+[English](https://github.com/hjosugi/sql-dialect-fmt/blob/main/editors/README.md) |
+[日本語](https://github.com/hjosugi/sql-dialect-fmt/blob/main/editors/README.ja.md)
 
 # Snowflake SQL
 
 Visual Studio Code 用の Snowflake SQL 構文ハイライト**とフォーマット**。[sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt) で使用されるのと同じエンジンに基づいています。
 
-![Snowflake SQL構文ハイライト](images/syntax-highlighting.png)
+![Snowflake SQL構文ハイライト](https://raw.githubusercontent.com/hjosugi/sql-dialect-fmt/main/editors/images/syntax-highlighting.png)
 
 ## 機能
 
@@ -94,11 +95,11 @@ stdio 上で LSP を話すローカルプロセスであり、ネットワーク
 このディレクトリには他のエディタ向けの統合もあります。いずれも同じ `sql-dialect-fmt-lsp`
 言語サーバー（`cargo install sql-dialect-fmt-lsp`）で動作します：
 
-- [`nvim/`](nvim/) — 小さな Neovim プラグイン：`snowflake-sql` ファイルタイプ、LSP セットアップ、
+- [`nvim/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/nvim) — 小さな Neovim プラグイン：`snowflake-sql` ファイルタイプ、LSP セットアップ、
   および CLI ベースのフォーマット用 conform.nvim / null-ls レシピ。
-- [`zed/`](zed/) — Zed 拡張機能（開発インストール）：バンドルされた tree-sitter 文法と
+- [`zed/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/zed) — Zed 拡張機能（開発インストール）：バンドルされた tree-sitter 文法と
   言語サーバーによる Snowflake SQL 言語。
-- [`helix/`](helix/) — Helix 用のドキュメント化された `languages.toml` スニペット
+- [`helix/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/helix) — Helix 用のドキュメント化された `languages.toml` スニペット
   （プラグインシステムなし）。
 
 ## サポートとソース

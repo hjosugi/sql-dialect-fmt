@@ -106,6 +106,34 @@ def update_json_versions(new: str, changed: list[pathlib.Path], check: bool) -> 
         write_if_changed(path, updated, changed, check)
 
 
+def update_editor_package_lock(
+    new: str,
+    changed: list[pathlib.Path],
+    check: bool,
+) -> None:
+    path = ROOT / "editors" / "package-lock.json"
+    text = read(path)
+    updated, top_level_count = re.subn(
+        r'^  "version": "[^"]+",$',
+        f'  "version": "{new}",',
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    updated, root_package_count = re.subn(
+        r'^      "version": "[^"]+",$',
+        f'      "version": "{new}",',
+        updated,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if top_level_count != 1 or root_package_count != 1:
+        raise ValueError(
+            "editors/package-lock.json must contain top-level and root package versions"
+        )
+    write_if_changed(path, updated, changed, check)
+
+
 def update_formula(new: str, changed: list[pathlib.Path], check: bool) -> None:
     path = ROOT / "Formula" / "sql-dialect-fmt.rb"
     text = read(path)
@@ -143,7 +171,8 @@ def update_changelog(
 ) -> None:
     path = ROOT / "CHANGELOG.md"
     text = read(path)
-    if f"## [{new}]" not in text:
+    release_is_new = f"## [{new}]" not in text
+    if release_is_new:
         text = text.replace("## [Unreleased]\n", f"## [Unreleased]\n\n## [{new}] - {date}\n", 1)
     text = re.sub(
         rf"\[Unreleased\]: https://github\.com/hjosugi/sql-dialect-fmt/compare/v{re.escape(old)}\.\.\.HEAD",
@@ -152,7 +181,7 @@ def update_changelog(
         count=1,
     )
     new_link = f"[{new}]: https://github.com/hjosugi/sql-dialect-fmt/compare/v{old}...v{new}"
-    if new_link not in text:
+    if release_is_new and new_link not in text:
         text = text.replace(
             f"[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v{new}...HEAD\n",
             f"[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v{new}...HEAD\n{new_link}\n",
@@ -193,6 +222,7 @@ def main() -> int:
     update_cargo_toml(old, new, changed, args.check)
     update_cargo_lock(new, changed, args.check)
     update_json_versions(new, changed, args.check)
+    update_editor_package_lock(new, changed, args.check)
     update_formula(new, changed, args.check)
     update_docs(old, new, changed, args.check)
     if args.changelog:
