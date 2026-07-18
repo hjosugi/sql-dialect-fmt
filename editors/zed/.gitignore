@@ -1,0 +1,5 @@
+# Build artifacts produced by `zed: install dev extension`.
+/target
+/grammars
+extension.wasm
+Cargo.lock

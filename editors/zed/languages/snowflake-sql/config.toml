@@ -1,0 +1,7 @@
+name = "Snowflake SQL"
+grammar = "snowflake"
+# Plain "sql" is intentionally not claimed so other SQL extensions keep it;
+# opt in from Zed settings with: "file_types": { "Snowflake SQL": ["sql"] }
+path_suffixes = ["snowsql", "sfsql"]
+line_comments = ["-- ", "// "]
+tab_size = 4

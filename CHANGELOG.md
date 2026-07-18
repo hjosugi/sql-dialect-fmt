@@ -21,6 +21,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 - Added a CLI `--lint` flag that lints inputs instead of formatting them, printing findings as
   `path:line:col: SDFxxx message` (1-based) and exiting `1` when any exist; it honors `--dialect`
   and `sql-dialect-fmt.toml` dialect discovery.
+- Added Neovim (`editors/nvim`, filetype + LSP plugin), Zed (`editors/zed`, dev-installable
+  extension), and Helix (`editors/helix`, documented `languages.toml` snippet) packaging for the
+  `sql-dialect-fmt-lsp` language server and the bundled tree-sitter grammar.
 
 ### Changed
 

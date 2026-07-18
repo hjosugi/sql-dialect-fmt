@@ -1,0 +1,46 @@
+# sql-dialect-fmt for Helix.
+#
+# Helix has no plugin system; copy the parts you want from this file into
+# ~/.config/helix/languages.toml (or your project's .helix/languages.toml).
+# See README.md in this directory for details.
+#
+# Requires the language server on PATH:
+#   cargo install sql-dialect-fmt-lsp --locked
+
+[language-server.sql-dialect-fmt-lsp]
+command = "sql-dialect-fmt-lsp"
+
+# Optional: editor-side settings, layered on top of the nearest
+# sql-dialect-fmt.toml the server discovers for each file.
+[language-server.sql-dialect-fmt-lsp.config.sqlDialectFmt]
+lineWidth = 100
+indentWidth = 4
+dialect = "snowflake"
+uppercaseKeywords = true
+
+# A dedicated Snowflake SQL language for *.snowsql / *.sfsql. Plain *.sql is
+# intentionally left to Helix's built-in `sql` language; see README.md to opt
+# in (add "sql" to file-types, or attach the server to the built-in language).
+[[language]]
+name = "snowflake-sql"
+scope = "source.snowflake-sql"
+injection-regex = "^(snowflake|snowflake-sql|sfsql)$"
+file-types = ["snowsql", "sfsql"]
+comment-tokens = ["--", "//"]
+block-comment-tokens = { start = "/*", end = "*/" }
+indent = { tab-width = 4, unit = "    " }
+roots = ["sql-dialect-fmt.toml"]
+language-servers = ["sql-dialect-fmt-lsp"]
+auto-format = true
+grammar = "snowflake"
+
+# Alternative to the language server if you only want formatting: the CLI
+# reads stdin and writes stdout (cargo install sql-dialect-fmt --locked).
+# formatter = { command = "sql-dialect-fmt" }
+
+# The tree-sitter grammar bundled in this repository. After adding it, run:
+#   hx --grammar fetch && hx --grammar build
+# and copy the highlight queries (see README.md).
+[[grammar]]
+name = "snowflake"
+source = { git = "https://github.com/hjosugi/sql-dialect-fmt", rev = "9cd8a8c0da6f937a9d6ce417d188772bdbd5637f", subpath = "tree-sitter-snowflake" }
