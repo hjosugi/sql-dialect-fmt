@@ -1,0 +1,17 @@
+[package]
+name = "zed-sql-dialect-fmt"
+version = "0.1.0"
+edition = "2021"
+license = "0BSD"
+publish = false
+
+# Standalone crate: Zed builds it to wasm on "install dev extension"; the empty
+# [workspace] table keeps it out of the repository's Rust workspace.
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+zed_extension_api = "0.7.0"
