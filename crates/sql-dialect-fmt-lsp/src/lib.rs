@@ -114,6 +114,35 @@ pub fn format_edits_with_encoding(
     }]
 }
 
+/// The edits to apply for `textDocument/rangeFormatting`: reformat only the statements the range
+/// touches, as one minimal replacement, or an empty list when nothing changes.
+pub fn format_range_edits(text: &str, range: Range, options: &FormatOptions) -> Vec<TextEdit> {
+    format_range_edits_with_encoding(text, range, options, PositionEncoding::Utf16)
+}
+
+/// Encoding-aware variant of [`format_range_edits`].
+pub fn format_range_edits_with_encoding(
+    text: &str,
+    range: Range,
+    options: &FormatOptions,
+    encoding: PositionEncoding,
+) -> Vec<TextEdit> {
+    let index = LineIndex::new(text);
+    let a = lsp_offset(&index, range.start, encoding);
+    let b = lsp_offset(&index, range.end, encoding);
+    let target = a.min(b)..a.max(b);
+    let Some(edit) = sql_dialect_fmt_formatter::format_range(text, target, options) else {
+        return Vec::new();
+    };
+    vec![TextEdit {
+        range: Range::new(
+            lsp_position(&index, edit.range.start, encoding),
+            lsp_position(&index, edit.range.end, encoding),
+        ),
+        new_text: edit.new_text,
+    }]
+}
+
 /// Diagnostics for `textDocument/publishDiagnostics`: both lexer and parser errors. Neither stage
 /// ever fails, so this is the set of *recovered* errors (empty for clean input).
 ///
@@ -831,6 +860,25 @@ mod tests {
     fn already_formatted_input_yields_no_edits() {
         let formatted = "SELECT a, b\nFROM t;\n";
         assert!(format_edits(formatted, &FormatOptions::default()).is_empty());
+    }
+
+    #[test]
+    fn range_formatting_reformats_only_the_selected_statement() {
+        let text = "select 1;\nselect a,b from t;\n";
+        // A range on line 1 — the second statement.
+        let range = Range::new(Position::new(1, 0), Position::new(1, 3));
+        let edits = format_range_edits(text, range, &FormatOptions::default());
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].new_text, "SELECT a, b\nFROM t;");
+        // The edit is scoped to the second statement, not the top of the document.
+        assert_eq!(edits[0].range.start, Position::new(1, 0));
+    }
+
+    #[test]
+    fn range_formatting_already_formatted_selection_yields_no_edits() {
+        let text = "SELECT 1;\nSELECT a, b\nFROM t;\n";
+        let range = Range::new(Position::new(0, 0), Position::new(0, 8));
+        assert!(format_range_edits(text, range, &FormatOptions::default()).is_empty());
     }
 
     #[test]

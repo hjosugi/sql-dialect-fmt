@@ -19,9 +19,10 @@ Published to crates.io (in dependency order):
 | 6 | `sql-dialect-fmt-highlight` | syntax, lexer, text |
 | 7 | `sql-dialect-fmt-hover` | syntax, lexer |
 | 8 | `sql-dialect-fmt-encoding` | — |
-| 9 | `sql-dialect-fmt` | encoding, formatter, parser, text |
-| 10 | `sql-dialect-fmt-lsp` | formatter, highlight, hover, parser, text |
-| 11 | `sql-dialect-fmt-wasm` | formatter |
+| 9 | `sql-dialect-fmt-config` | formatter, parser |
+| 10 | `sql-dialect-fmt` | config, encoding, formatter, parser, text |
+| 11 | `sql-dialect-fmt-lsp` | config, formatter, highlight, hover, lexer, parser, syntax, text |
+| 12 | `sql-dialect-fmt-wasm` | formatter |
 
 **Not published** (`publish = false`):
 
@@ -108,8 +109,8 @@ Published to crates.io (in dependency order):
    ```
 
    The canonical order is **syntax → text → lexer → parser → formatter → highlight → hover →
-   cli / lsp / wasm** (with `encoding` published any time before `cli`, and `wasm`
-   any time after `formatter`).
+   config → cli / lsp / wasm** (with `encoding` published any time before `cli`, `config` any
+   time after `formatter` but before `cli` and `lsp`, and `wasm` any time after `formatter`).
 
    For automatic publication from future `v*.*.*` tag pushes, create a crates.io API token,
    export it locally, and let the helper store it without printing the value:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.0
+
+- Added a local document and selection formatter for `snowflake-sql` files, powered by the bundled
+  `sql-dialect-fmt` WebAssembly engine. **Format Document**, **Format Selection**, and
+  `editor.formatOnSave` now work with no external binary or network access.
+- Added `sqlDialectFmt.dialect`, `sqlDialectFmt.lineWidth`, `sqlDialectFmt.indentWidth`, and
+  `sqlDialectFmt.uppercaseKeywords` settings.
+
 ## 1.13.0
 
 - Reworked the Marketplace page around user-facing features and installation guidance.

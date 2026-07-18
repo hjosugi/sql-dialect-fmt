@@ -17,6 +17,14 @@ updates:
       cargo:
         patterns:
           - "*"
+        exclude-patterns:
+          - "biome_*"
+    # The biome_* crates are pinned with `=` and must move in lockstep: they are
+    # versioned independently on crates.io, so "latest of each" is not a coherent
+    # set (e.g. biome_rowan 0.5.8 breaks biome_json_syntax 0.5.7). Bump them
+    # manually to a single tested version set instead.
+    ignore:
+      - dependency-name: "biome_*"
 
   - package-ecosystem: "npm"
     directory: "/tree-sitter-snowflake"

@@ -9,6 +9,32 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-07-16
+
+### Added
+
+- Added a local document and selection formatter to the VS Code extension, powered by the bundled
+  `sql-dialect-fmt` WebAssembly engine, so **Format Document**, **Format Selection**, and
+  `editor.formatOnSave` work with no external binary and no network access.
+- Added `sqlDialectFmt.dialect`, `sqlDialectFmt.lineWidth`, `sqlDialectFmt.indentWidth`, and
+  `sqlDialectFmt.uppercaseKeywords` settings to the VS Code extension.
+- Added `sql-dialect-fmt.toml` discovery to the language server, which now layers configuration as
+  defaults → `sql-dialect-fmt.toml` → editor settings, so an editor formats consistently with CI.
+- Added `sql-dialect-fmt-config`, a published crate holding the shared `sql-dialect-fmt.toml`
+  model and discovery used by both the CLI and the language server.
+- Added statement-level range formatting: `sql_dialect_fmt_formatter::format_range` reformats only
+  the statements intersecting a byte range and leaves the rest of the document byte-identical,
+  preserving leading blank lines and same-line trailing comments.
+- Added `textDocument/rangeFormatting` to the language server, backing **Format Selection** in
+  LSP-driven editors.
+- Added a CLI `--range START:END` flag that reformats only the statements intersecting a byte
+  range when reading from stdin.
+
+### Changed
+
+- Added `sql-dialect-fmt-config` to the ordered crates.io publish list and the version updater, so
+  releases publish it before the dependent CLI and LSP crates.
+
 ## [1.13.0] - 2026-07-11
 
 ### Added
@@ -325,7 +351,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.11.0...v1.12.0

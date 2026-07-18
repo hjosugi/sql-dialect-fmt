@@ -20,8 +20,11 @@ only when the user runs the formatter from the extension button, the browser act
 extension and is written back to the active editor. The extension does not send SQL text to any
 external server.
 
-The VS Code extension contributes Snowflake SQL language metadata and TextMate grammar files. It
-does not include telemetry, analytics, network upload, or remote formatting.
+The VS Code extension contributes Snowflake SQL language metadata, TextMate grammar files, and a
+local formatter. When the user runs Format Document, Format Selection, or format on save, the SQL is
+formatted locally by the WebAssembly module bundled with the extension and written back to the
+editor. It does not include telemetry, analytics, network upload, or remote formatting, and does not
+store SQL text.
 
 ## Permissions
 

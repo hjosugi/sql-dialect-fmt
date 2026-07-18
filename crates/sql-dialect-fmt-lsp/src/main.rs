@@ -11,6 +11,7 @@
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::path::PathBuf;
 
 use lsp_server::{Connection, ExtractError, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::{
@@ -19,31 +20,32 @@ use lsp_types::notification::{
 };
 use lsp_types::request::{
     CodeActionRequest, Completion, DocumentSymbolRequest, FoldingRangeRequest, Formatting,
-    HoverRequest, Request as _, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
-    SemanticTokensRangeRequest,
+    HoverRequest, RangeFormatting, Request as _, SemanticTokensFullDeltaRequest,
+    SemanticTokensFullRequest, SemanticTokensRangeRequest,
 };
 use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOptions, CodeActionOrCommand, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CompletionOptions, CompletionParams,
     CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
-    DocumentSymbolOptions, DocumentSymbolParams, DocumentSymbolResponse, FoldingRange,
-    FoldingRangeParams, Hover, HoverParams, HoverProviderCapability, InitializeParams, OneOf,
-    Position, PositionEncodingKind, PublishDiagnosticsParams, Range, SemanticTokens,
-    SemanticTokensDeltaParams, SemanticTokensFullDeltaResult, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensParams, SemanticTokensRangeParams,
-    SemanticTokensRangeResult, SemanticTokensServerCapabilities, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
-    WorkspaceEdit,
+    DocumentRangeFormattingParams, DocumentSymbolOptions, DocumentSymbolParams,
+    DocumentSymbolResponse, FoldingRange, FoldingRangeParams, Hover, HoverParams,
+    HoverProviderCapability, InitializeParams, OneOf, Position, PositionEncodingKind,
+    PublishDiagnosticsParams, Range, SemanticTokens, SemanticTokensDeltaParams,
+    SemanticTokensFullDeltaResult, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensParams, SemanticTokensRangeParams, SemanticTokensRangeResult,
+    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use serde::Deserialize;
+use sql_dialect_fmt_config::Config;
 use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
 use sql_dialect_fmt_lsp::{
     apply_change_with_encoding, completion_items, diagnostic_lint_code,
     diagnostics_with_lint_options, document_symbols_with_encoding, folding_ranges,
-    format_edits_with_encoding, hover_with_encoding, semantic_tokens_range_with_encoding,
-    semantic_tokens_with_encoding, token_modifiers, token_types, LintOptions,
-    PositionEncoding as NegotiatedPositionEncoding,
+    format_edits_with_encoding, format_range_edits_with_encoding, hover_with_encoding,
+    semantic_tokens_range_with_encoding, semantic_tokens_with_encoding, token_modifiers,
+    token_types, LintOptions, PositionEncoding as NegotiatedPositionEncoding,
 };
 use sql_dialect_fmt_parser::Dialect;
 
@@ -55,10 +57,18 @@ struct Document {
 
 type Docs = HashMap<Uri, Document>;
 
+/// Keys under which a client may nest the `sql-dialect-fmt` settings block.
+const SETTINGS_SECTION_KEYS: [&str; 3] = ["sqlDialectFmt", "sql-dialect-fmt", "sql_dialect_fmt"];
+
+/// Server state: the editor-provided settings overlay plus protocol bookkeeping.
+///
+/// Effective [`FormatOptions`] are resolved per request as **formatter defaults → the nearest
+/// `sql-dialect-fmt.toml` for the document → these editor settings**. Editor settings win, mirroring
+/// how the CLI lets explicit flags override the config file. Keeping the editor overlay as a partial
+/// (rather than pre-merged options) is what lets a project's config file layer underneath it.
 #[derive(Clone, Debug)]
 struct ServerState {
-    options: FormatOptions,
-    lint_options: LintOptions,
+    editor: FormatterSettings,
     position_encoding: NegotiatedPositionEncoding,
     semantic_result_seq: u64,
 }
@@ -66,8 +76,7 @@ struct ServerState {
 impl ServerState {
     fn from_initialize(params: &InitializeParams) -> Self {
         let mut state = Self {
-            options: FormatOptions::default(),
-            lint_options: LintOptions::default(),
+            editor: FormatterSettings::default(),
             position_encoding: position_encoding_from_client(params),
             semantic_result_seq: 0,
         };
@@ -77,21 +86,43 @@ impl ServerState {
         state
     }
 
+    /// Merge an `initializationOptions` / `didChangeConfiguration` payload into the editor overlay.
+    ///
+    /// Accepts the settings at the top level and under the `sqlDialectFmt` (and legacy) keys, with
+    /// or without a wrapping `settings` object, so it works across client shapes.
     fn apply_settings(&mut self, settings: &serde_json::Value) {
-        apply_settings_value(&mut self.options, &mut self.lint_options, settings);
-        for key in ["sqlDialectFmt", "sql-dialect-fmt", "sql_dialect_fmt"] {
+        merge_settings_value(&mut self.editor, settings);
+        for key in SETTINGS_SECTION_KEYS {
             if let Some(nested) = settings.get(key) {
-                apply_settings_value(&mut self.options, &mut self.lint_options, nested);
+                merge_settings_value(&mut self.editor, nested);
             }
         }
         if let Some(nested) = settings.get("settings") {
-            apply_settings_value(&mut self.options, &mut self.lint_options, nested);
-            for key in ["sqlDialectFmt", "sql-dialect-fmt", "sql_dialect_fmt"] {
+            merge_settings_value(&mut self.editor, nested);
+            for key in SETTINGS_SECTION_KEYS {
                 if let Some(section) = nested.get(key) {
-                    apply_settings_value(&mut self.options, &mut self.lint_options, section);
+                    merge_settings_value(&mut self.editor, section);
                 }
             }
         }
+    }
+
+    /// Resolve effective format options for `uri`: defaults → nearest config file → editor overlay.
+    fn effective_options(&self, uri: &Uri) -> FormatOptions {
+        let mut options = FormatOptions::default();
+        if let Some(config) = discover_config(uri) {
+            config.apply_to(&mut options);
+        }
+        apply_editor_format(&mut options, &self.editor);
+        options
+    }
+
+    /// Resolve effective lint options. Config files carry no lint keys, so these come from the
+    /// editor overlay only.
+    fn effective_lint(&self) -> LintOptions {
+        let mut lint = LintOptions::default();
+        apply_editor_lint(&mut lint, &self.editor.lint);
+        lint
     }
 
     fn next_semantic_result_id(&mut self) -> String {
@@ -132,6 +163,51 @@ struct LintSettings {
     large_in_list_threshold: Option<usize>,
 }
 
+impl FormatterSettings {
+    /// Overlay the fields `other` actually set onto `self`; later notifications win field-by-field.
+    fn merge_from(&mut self, other: &FormatterSettings) {
+        if other.line_width.is_some() {
+            self.line_width = other.line_width;
+        }
+        if other.indent_width.is_some() {
+            self.indent_width = other.indent_width;
+        }
+        if other.uppercase_keywords.is_some() {
+            self.uppercase_keywords = other.uppercase_keywords;
+        }
+        if other.keyword_case.is_some() {
+            self.keyword_case = other.keyword_case.clone();
+        }
+        if other.line_ending.is_some() {
+            self.line_ending = other.line_ending.clone();
+        }
+        if other.dialect.is_some() {
+            self.dialect = other.dialect.clone();
+        }
+        self.lint.merge_from(&other.lint);
+    }
+}
+
+impl LintSettings {
+    fn merge_from(&mut self, other: &LintSettings) {
+        if other.enabled.is_some() {
+            self.enabled = other.enabled;
+        }
+        if other.select_wildcard.is_some() {
+            self.select_wildcard = other.select_wildcard;
+        }
+        if other.large_in_list.is_some() {
+            self.large_in_list = other.large_in_list;
+        }
+        if other.unsupported_embedded_language.is_some() {
+            self.unsupported_embedded_language = other.unsupported_embedded_language;
+        }
+        if other.large_in_list_threshold.is_some() {
+            self.large_in_list_threshold = other.large_in_list_threshold;
+        }
+    }
+}
+
 fn position_encoding_from_client(params: &InitializeParams) -> NegotiatedPositionEncoding {
     let Some(encodings) = params
         .capabilities
@@ -151,14 +227,13 @@ fn position_encoding_from_client(params: &InitializeParams) -> NegotiatedPositio
     }
 }
 
-fn apply_settings_value(
-    options: &mut FormatOptions,
-    lint_options: &mut LintOptions,
-    value: &serde_json::Value,
-) {
-    let Ok(settings) = serde_json::from_value::<FormatterSettings>(value.clone()) else {
-        return;
-    };
+fn merge_settings_value(editor: &mut FormatterSettings, value: &serde_json::Value) {
+    if let Ok(incoming) = serde_json::from_value::<FormatterSettings>(value.clone()) {
+        editor.merge_from(&incoming);
+    }
+}
+
+fn apply_editor_format(options: &mut FormatOptions, settings: &FormatterSettings) {
     if let Some(line_width) = settings.line_width {
         options.line_width = line_width;
     }
@@ -181,10 +256,9 @@ fn apply_settings_value(
     if let Some(dialect) = settings.dialect.as_deref().and_then(parse_dialect) {
         options.dialect = dialect;
     }
-    apply_lint_settings(lint_options, &settings.lint);
 }
 
-fn apply_lint_settings(options: &mut LintOptions, settings: &LintSettings) {
+fn apply_editor_lint(options: &mut LintOptions, settings: &LintSettings) {
     if let Some(enabled) = settings.enabled {
         options.select_wildcard = enabled;
         options.large_in_list = enabled;
@@ -201,6 +275,69 @@ fn apply_lint_settings(options: &mut LintOptions, settings: &LintSettings) {
     }
     if let Some(threshold) = settings.large_in_list_threshold {
         options.large_in_list_threshold = threshold;
+    }
+}
+
+/// Discover and load the nearest `sql-dialect-fmt.toml` for a document, if any.
+///
+/// A malformed config file is ignored (the document just falls back to defaults + editor settings)
+/// rather than surfaced as an error — the editor should keep working regardless.
+fn discover_config(uri: &Uri) -> Option<Config> {
+    let path = uri_to_path(uri)?;
+    let config_path = sql_dialect_fmt_config::discover(&path)?;
+    Config::load(&config_path).ok()
+}
+
+/// Best-effort `file://` URI → filesystem path. Returns `None` for non-file URIs (e.g. `untitled:`),
+/// so those documents simply fall back to defaults + editor settings.
+fn uri_to_path(uri: &Uri) -> Option<PathBuf> {
+    let after_scheme = uri.as_str().strip_prefix("file://")?;
+    // Drop an optional authority component: `file://host/p` → `/p`; `file:///p` → `/p`.
+    let path_part = match after_scheme.find('/') {
+        Some(0) => after_scheme,
+        Some(index) => &after_scheme[index..],
+        None => return None,
+    };
+    let decoded = percent_decode(path_part);
+    #[cfg(windows)]
+    {
+        // `file:///C:/dir` decodes to `/C:/dir`; drop the leading slash before the drive letter.
+        let bytes = decoded.as_bytes();
+        if bytes.first() == Some(&b'/')
+            && bytes.get(1).is_some_and(u8::is_ascii_alphabetic)
+            && bytes.get(2) == Some(&b':')
+        {
+            return Some(PathBuf::from(&decoded[1..]));
+        }
+    }
+    Some(PathBuf::from(decoded))
+}
+
+/// Decode `%XX` escapes in a URI path component. Unrecognized escapes are left verbatim.
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(hi), Some(lo)) = (hex_value(bytes[i + 1]), hex_value(bytes[i + 2])) {
+                out.push((hi << 4) | lo);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
     }
 }
 
@@ -256,6 +393,7 @@ fn server_capabilities(position_encoding: NegotiatedPositionEncoding) -> ServerC
             TextDocumentSyncKind::INCREMENTAL,
         )),
         document_formatting_provider: Some(OneOf::Left(true)),
+        document_range_formatting_provider: Some(OneOf::Left(true)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
         document_symbol_provider: Some(OneOf::Right(DocumentSymbolOptions {
@@ -316,6 +454,10 @@ fn handle_request(request: Request, docs: &Docs, state: &mut ServerState) -> Res
             Ok((id, params)) => ok(id, formatting(params, docs, state)),
             Err(response) => *response,
         },
+        RangeFormatting::METHOD => match cast::<RangeFormatting>(request) {
+            Ok((id, params)) => ok(id, range_formatting(params, docs, state)),
+            Err(response) => *response,
+        },
         SemanticTokensFullRequest::METHOD => match cast::<SemanticTokensFullRequest>(request) {
             Ok((id, params)) => ok(id, semantic_tokens_full(params, docs, state)),
             Err(response) => *response,
@@ -366,11 +508,31 @@ fn formatting(
     let Some(document) = docs.get(&params.text_document.uri) else {
         return Vec::new();
     };
-    let mut options = state.options;
+    let mut options = state.effective_options(&params.text_document.uri);
     if params.options.insert_spaces {
         options.indent_width = (params.options.tab_size as usize).max(1);
     }
     format_edits_with_encoding(&document.text, &options, state.position_encoding)
+}
+
+fn range_formatting(
+    params: DocumentRangeFormattingParams,
+    docs: &Docs,
+    state: &ServerState,
+) -> Vec<lsp_types::TextEdit> {
+    let Some(document) = docs.get(&params.text_document.uri) else {
+        return Vec::new();
+    };
+    let mut options = state.effective_options(&params.text_document.uri);
+    if params.options.insert_spaces {
+        options.indent_width = (params.options.tab_size as usize).max(1);
+    }
+    format_range_edits_with_encoding(
+        &document.text,
+        params.range,
+        &options,
+        state.position_encoding,
+    )
 }
 
 fn semantic_tokens_full(
@@ -435,7 +597,8 @@ fn document_symbol_request(
     state: &ServerState,
 ) -> Option<DocumentSymbolResponse> {
     let text = &docs.get(&params.text_document.uri)?.text;
-    Some(document_symbols_with_encoding(text, &state.options, state.position_encoding).into())
+    let options = state.effective_options(&params.text_document.uri);
+    Some(document_symbols_with_encoding(text, &options, state.position_encoding).into())
 }
 
 fn completion_request(_params: CompletionParams) -> Option<CompletionResponse> {
@@ -583,8 +746,8 @@ fn publish_diagnostics(
         .map(|document| {
             diagnostics_with_lint_options(
                 &document.text,
-                &state.options,
-                state.lint_options,
+                &state.effective_options(uri),
+                state.effective_lint(),
                 state.position_encoding,
             )
         })
@@ -648,10 +811,19 @@ mod tests {
         "file:///workspace/query.sql".parse().expect("valid URI")
     }
 
+    /// Build a `file://` URI from an absolute path, cross-platform. Windows drive paths use
+    /// backslashes and need `file:///C:/...`, so normalize separators and add the leading slash.
+    fn file_uri(path: &std::path::Path) -> Uri {
+        let mut text = path.display().to_string().replace('\\', "/");
+        if !text.starts_with('/') {
+            text.insert(0, '/');
+        }
+        format!("file://{text}").parse().expect("valid URI")
+    }
+
     fn test_state() -> ServerState {
         ServerState {
-            options: FormatOptions::default(),
-            lint_options: LintOptions::default(),
+            editor: FormatterSettings::default(),
             position_encoding: NegotiatedPositionEncoding::Utf16,
             semantic_result_seq: 0,
         }
@@ -794,9 +966,10 @@ mod tests {
         handle_notification(&server, notification, &mut docs, &mut state)
             .expect("handle didChangeConfiguration");
 
-        assert_eq!(state.options.dialect, Dialect::Databricks);
-        assert_eq!(state.options.keyword_case, KeywordCase::Lower);
-        assert_eq!(state.options.line_ending, LineEnding::Crlf);
+        let options = state.effective_options(&uri);
+        assert_eq!(options.dialect, Dialect::Databricks);
+        assert_eq!(options.keyword_case, KeywordCase::Lower);
+        assert_eq!(options.line_ending, LineEnding::Crlf);
         let params = recv_diagnostics(&client);
         assert_eq!(params.uri, uri);
         assert_eq!(params.version, Some(4));
@@ -836,12 +1009,62 @@ mod tests {
         handle_notification(&server, notification, &mut docs, &mut state)
             .expect("handle didChangeConfiguration");
 
-        assert!(!state.lint_options.large_in_list);
-        assert_eq!(state.lint_options.large_in_list_threshold, 2);
+        let lint = state.effective_lint();
+        assert!(!lint.large_in_list);
+        assert_eq!(lint.large_in_list_threshold, 2);
         let params = recv_diagnostics(&client);
         assert!(params.diagnostics.iter().all(|diagnostic| {
             diagnostic.code != Some(lsp_types::NumberOrString::String("SDF002".to_string()))
         }));
+    }
+
+    #[test]
+    fn uri_to_path_decodes_file_uris() {
+        let plain: Uri = "file:///home/u/query.sql".parse().expect("valid URI");
+        assert_eq!(
+            uri_to_path(&plain),
+            Some(PathBuf::from("/home/u/query.sql"))
+        );
+
+        let escaped: Uri = "file:///home/a%20b/q.sql".parse().expect("valid URI");
+        assert_eq!(
+            uri_to_path(&escaped),
+            Some(PathBuf::from("/home/a b/q.sql"))
+        );
+
+        let non_file: Uri = "untitled:Untitled-1".parse().expect("valid URI");
+        assert_eq!(uri_to_path(&non_file), None);
+    }
+
+    #[test]
+    fn config_file_layers_under_editor_settings() {
+        use std::io::Write;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut file =
+            std::fs::File::create(dir.path().join("sql-dialect-fmt.toml")).expect("create config");
+        writeln!(
+            file,
+            "dialect = \"databricks\"\nline_width = 40\nindent_width = 8"
+        )
+        .expect("write config");
+        drop(file);
+
+        let uri = file_uri(&dir.path().join("query.sql"));
+
+        // With no editor settings, the config file supplies dialect and widths.
+        let mut state = test_state();
+        let options = state.effective_options(&uri);
+        assert_eq!(options.dialect, Dialect::Databricks);
+        assert_eq!(options.line_width, 40);
+        assert_eq!(options.indent_width, 8);
+
+        // Editor settings win over the config file, field by field.
+        state.apply_settings(&serde_json::json!({ "sqlDialectFmt": { "lineWidth": 120 } }));
+        let options = state.effective_options(&uri);
+        assert_eq!(options.line_width, 120); // editor override
+        assert_eq!(options.indent_width, 8); // still from the config file
+        assert_eq!(options.dialect, Dialect::Databricks); // still from the config file
     }
 
     #[test]

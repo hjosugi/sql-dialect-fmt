@@ -47,6 +47,7 @@ pre-commit run --all-files
 - `sql-dialect-fmt-parser`: resilient CST parser. Parsing should not panic on broken SQL.
 - `sql-dialect-fmt-highlight`: lexical highlight classification.
 - `sql-dialect-fmt-hover`: editor/LSP-ready hover strings for Snowflake concepts.
+- `sql-dialect-fmt-config`: shared `sql-dialect-fmt.toml` model and discovery for the CLI and LSP.
 - `sql-dialect-fmt-tree-sitter`: Rust bindings for the generated Tree-sitter grammar.
 - `tree-sitter-snowflake`: grammar package and editor queries.
 

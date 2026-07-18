@@ -12,6 +12,8 @@ rm -f \
 
 rustup target add wasm32-unknown-unknown >/dev/null
 "$ROOT_DIR/scripts/build-chrome-extension.sh"
+# Reuses the cached wasm build above and vendors it into editors/ for the VSIX.
+"$ROOT_DIR/scripts/build-vscode-extension.sh"
 
 (
   cd "$ROOT_DIR/extensions/chrome"

@@ -2,7 +2,7 @@
   "name": "snowflake-sql-sql-dialect-fmt",
   "displayName": "Snowflake SQL (sql-dialect-fmt)",
   "description": "Snowflake SQL syntax highlighting for worksheets, scripts, stages, variables, and embedded routine bodies.",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "publisher": "sql-dialect-fmt",
   "license": "0BSD",
   "repository": {
@@ -24,7 +24,12 @@
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Formatters"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:snowflake-sql"
   ],
   "keywords": [
     "snowflake",
@@ -37,15 +42,49 @@
   ],
   "files": [
     "CHANGELOG.md",
+    "extension.js",
     "images/icon.png",
     "images/syntax-highlighting.png",
     "LICENSE.md",
     "README.md",
     "language-configuration.json",
     "package.json",
-    "snowflake.tmLanguage.json"
+    "snowflake.tmLanguage.json",
+    "vendor/sql_dialect_fmt_wasm.wasm"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Snowflake SQL (sql-dialect-fmt)",
+      "properties": {
+        "sqlDialectFmt.dialect": {
+          "type": "string",
+          "enum": [
+            "snowflake",
+            "databricks"
+          ],
+          "default": "snowflake",
+          "markdownDescription": "SQL dialect used when formatting `snowflake-sql` documents."
+        },
+        "sqlDialectFmt.lineWidth": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "description": "Target line width the formatter tries to stay within before wrapping."
+        },
+        "sqlDialectFmt.indentWidth": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 16,
+          "description": "Number of spaces per indentation level."
+        },
+        "sqlDialectFmt.uppercaseKeywords": {
+          "type": "boolean",
+          "default": true,
+          "description": "Upper-case SQL keywords when formatting."
+        }
+      }
+    },
     "languages": [
       {
         "id": "snowflake-sql",

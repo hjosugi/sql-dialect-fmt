@@ -25,6 +25,7 @@ JSON_VERSION_FILES = [
 ]
 LOCKED_WORKSPACE_PACKAGES = {
     "sql-dialect-fmt",
+    "sql-dialect-fmt-config",
     "sql-dialect-fmt-encoding",
     "sql-dialect-fmt-formatter",
     "sql-dialect-fmt-highlight",
