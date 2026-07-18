@@ -19,6 +19,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 - Split the formatter's SQL lowering module into focused query/DML/DDL/scripting/expression
   submodules so the statement-family rules no longer live in one large file.
+- Split the parser grammar module into focused per-family submodules (queries, expressions, DDL,
+  access control, COPY INTO, scripting, MATCH_RECOGNIZE) so the grammar no longer lives in one
+  large file.
 
 ## [1.14.0] - 2026-07-16
 
