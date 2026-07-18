@@ -28,7 +28,9 @@ rustup target add wasm32-unknown-unknown >/dev/null
 
 (
   cd "$ROOT_DIR/editors"
-  npx --yes @vscode/vsce package --no-dependencies \
+  # Dependency mode (no --no-dependencies): vsce walks the npm production dependencies installed
+  # by build-vscode-extension.sh so vscode-languageclient is bundled and the VSIX works offline.
+  npx --yes @vscode/vsce package \
     --out "$DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
 )
 

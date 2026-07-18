@@ -17,6 +17,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
   `SUSPEND`/`RESUME`, `SWAP WITH`, …) are now CST nodes, so multiple actions stack one per line
   and `ALTER SESSION SET` property lists wrap with proper keyword casing; unmodeled ALTER kinds
   keep the lossless lenient token run.
+- Added an opt-in LSP client to the VS Code extension (#82): with `sqlDialectFmt.lsp.enabled` set
+  and the `sql-dialect-fmt-lsp` binary installed (`sqlDialectFmt.lsp.path` or `PATH`),
+  `snowflake-sql` documents get lint diagnostics, hover, completion, semantic tokens, document
+  symbols, folding, and on-type formatting, and the server takes over formatting from the bundled
+  WebAssembly engine; when the binary is missing the extension logs and falls back to wasm-only,
+  so the Marketplace package keeps working offline with no external dependency.
 
 ### Changed
 

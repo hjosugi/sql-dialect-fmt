@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: editors/package.json
+          cache-dependency-path: editors/package-lock.json
       - name: Resolve version
         id: version
         run: |

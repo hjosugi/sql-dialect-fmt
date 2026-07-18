@@ -11,6 +11,8 @@ same engine used by [sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt
 ## Features
 
 - Document and selection formatting (**Format Document** / **Format Selection**), with format-on-save
+- optional, opt-in language server integration — diagnostics, hover, completion, semantic
+  highlighting, outline, folding (see [Language server](#language-server-optional))
 - Snowflake SQL keywords and built-in types
 - Snowflake Scripting and `$$ ... $$` routine bodies
 - line (`--`, `//`) and block (`/* ... */`) comments
@@ -50,11 +52,36 @@ To make it the default formatter for these files, add to your settings:
 | `sqlDialectFmt.lineWidth` | `100` | Target line width before wrapping. |
 | `sqlDialectFmt.indentWidth` | `4` | Spaces per indent level. |
 | `sqlDialectFmt.uppercaseKeywords` | `true` | Upper-case SQL keywords. |
+| `sqlDialectFmt.lsp.enabled` | `false` | Opt in to the `sql-dialect-fmt-lsp` language server (see below). |
+| `sqlDialectFmt.lsp.path` | `""` | Path to `sql-dialect-fmt-lsp`; empty looks it up on `PATH`. |
 
 The keyword and type word lists are kept in lock-step with the formatter's own
 lexer/highlighter by tests in `sql-dialect-fmt-highlight` (`tests/textmate.rs`): every word the
 grammar scopes as a keyword or type must be classified the same way by
 `sql_dialect_fmt_highlight::classify`, so the grammar can't drift from the rest of the toolchain.
+
+## Language server (optional)
+
+Everything above works out of the box with no external binary. For the features beyond
+formatting — lint diagnostics, hover documentation, completion, semantic highlighting, document
+symbols (outline), folding ranges, and on-type formatting — the extension can also drive the
+[`sql-dialect-fmt-lsp`](https://crates.io/crates/sql-dialect-fmt-lsp) language server. This is
+opt-in and off by default:
+
+1. Install the server: `cargo install sql-dialect-fmt-lsp`.
+2. Set `"sqlDialectFmt.lsp.enabled": true`. If the binary is not on `PATH`, point
+   `sqlDialectFmt.lsp.path` at it.
+
+While the server is running it also serves **Format Document** / **Format Selection** / format on
+save (layering the nearest `sql-dialect-fmt.toml` under your editor settings), and the built-in
+WebAssembly formatter is unregistered so the two never compete. If the server is enabled but the
+binary is missing or fails to start, the extension logs the reason to the **sql-dialect-fmt**
+output channel and quietly keeps the bundled WebAssembly formatter — installing the binary is
+never required for the extension to work.
+
+The `sqlDialectFmt.*` settings are forwarded to the server, which additionally honors the
+`sqlDialectFmt.lint.*` toggles for individual diagnostics. Like the bundled formatter, the server
+is a local process speaking LSP over stdio; it never touches the network.
 
 ## Use
 
@@ -71,8 +98,9 @@ integrations, see the [main project README](https://github.com/hjosugi/sql-diale
 
 The extension runs no telemetry or analytics, makes no network requests, and performs no remote
 formatting. Formatting is done locally by a bundled WebAssembly module; your SQL never leaves the
-machine. The extension only contributes static language configuration, a TextMate grammar, and the
-local formatter. See the
+machine. The extension only contributes static language configuration, a TextMate grammar, the
+local formatter, and — only if you opt in — a client for the local `sql-dialect-fmt-lsp` process,
+which also runs entirely on your machine. See the
 [privacy policy](https://github.com/hjosugi/sql-dialect-fmt/blob/main/docs/PRIVACY.md).
 
 ## Other editors
