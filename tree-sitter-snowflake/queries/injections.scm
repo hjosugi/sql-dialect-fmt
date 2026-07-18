@@ -3,9 +3,11 @@
 ; The grammar keeps `$$ ... $$` as a single `dollar_string` token for robustness.
 ; These queries add context from the surrounding statement where Snowflake exposes
 ; it: routine bodies declare `LANGUAGE <name> ... AS $$...$$`, while dynamic SQL
-; commonly appears as `EXECUTE IMMEDIATE $$...$$`.
+; commonly appears as `EXECUTE IMMEDIATE $$...$$`. The patterns match on a
+; wildcard parent so they cover every statement-kind node (`create_statement`,
+; the lenient `statement` fallback, ...).
 
-((statement
+((_
   (keyword) @_language
   .
   (keyword) @_javascript
@@ -18,7 +20,7 @@
   (#match? @_as "^[Aa][Ss]$")
   (#set! injection.language "javascript"))
 
-((statement
+((_
   (keyword) @_language
   .
   (keyword) @_python
@@ -31,7 +33,7 @@
   (#match? @_as "^[Aa][Ss]$")
   (#set! injection.language "python"))
 
-((statement
+((_
   (keyword) @_language
   .
   (keyword) @_java
@@ -44,7 +46,7 @@
   (#match? @_as "^[Aa][Ss]$")
   (#set! injection.language "java"))
 
-((statement
+((_
   (keyword) @_language
   .
   (keyword) @_scala
@@ -57,7 +59,7 @@
   (#match? @_as "^[Aa][Ss]$")
   (#set! injection.language "scala"))
 
-((statement
+((_
   (keyword) @_language
   .
   (keyword) @_sql
@@ -70,7 +72,7 @@
   (#match? @_as "^[Aa][Ss]$")
   (#set! injection.language "sql"))
 
-((statement
+((_
   (keyword) @_execute
   .
   (keyword) @_immediate

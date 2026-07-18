@@ -17,6 +17,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Changed
 
+- Structured the bundled Tree-sitter grammar with coarse statement-kind nodes
+  (`select_statement`, `insert_statement`, `create_statement`, ..., with a lenient `statement`
+  fallback), improving editor folding, outlines, and text objects while keeping the tolerant
+  token-run parsing unchanged.
 - Split the formatter's SQL lowering module into focused query/DML/DDL/scripting/expression
   submodules so the statement-family rules no longer live in one large file.
 - Split the parser grammar module into focused per-family submodules (queries, expressions, DDL,
