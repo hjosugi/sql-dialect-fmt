@@ -19,12 +19,17 @@ updates:
           - "*"
         exclude-patterns:
           - "biome_*"
+          - "ruff_*"
     # The biome_* crates are pinned with `=` and must move in lockstep: they are
     # versioned independently on crates.io, so "latest of each" is not a coherent
     # set (e.g. biome_rowan 0.5.8 breaks biome_json_syntax 0.5.7). Bump them
     # manually to a single tested version set instead.
+    # The ruff_* crates are likewise pinned with `=` and move in lockstep, and
+    # newer sets can raise the required rustc above the workspace MSRV
+    # (ruff_* 0.0.5 needs rustc 1.95 vs MSRV 1.94.0, see #142).
     ignore:
       - dependency-name: "biome_*"
+      - dependency-name: "ruff_*"
 
   - package-ecosystem: "npm"
     directory: "/tree-sitter-snowflake"
