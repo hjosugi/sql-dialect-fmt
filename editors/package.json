@@ -2,7 +2,7 @@
   "name": "snowflake-sql-sql-dialect-fmt",
   "displayName": "Snowflake SQL (sql-dialect-fmt)",
   "description": "Snowflake SQL syntax highlighting for worksheets, scripts, stages, variables, and embedded routine bodies.",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "publisher": "sql-dialect-fmt",
   "license": "0BSD",
   "repository": {
