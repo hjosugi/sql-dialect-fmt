@@ -15,6 +15,11 @@ The published crates share a single workspace version (see `RELEASING.md`).
   the statement that just ended, using the same statement-level range formatting engine, and leaves
   already formatted statements untouched.
 
+### Changed
+
+- Split the formatter's SQL lowering module into focused query/DML/DDL/scripting/expression
+  submodules so the statement-family rules no longer live in one large file.
+
 ## [1.14.0] - 2026-07-16
 
 ### Added
