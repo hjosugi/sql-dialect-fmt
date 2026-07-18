@@ -3,12 +3,13 @@
 
 # Snowflake SQL
 
-Visual Studio Code用のSnowflake SQL構文ハイライト。これは、[sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt)で使用されるのと同じキーワードと型定義に基づいています。
+Visual Studio Code 用の Snowflake SQL 構文ハイライト**とフォーマット**。[sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt) で使用されるのと同じエンジンに基づいています。
 
 ![Snowflake SQL構文ハイライト](images/syntax-highlighting.png)
 
 ## 機能
 
+- ドキュメント・選択範囲のフォーマット（**Format Document** / **Format Selection**）、保存時フォーマット対応
 - Snowflake SQLキーワードと組み込み型
 - Snowflakeスクリプティングと`$$ ... $$`ルーチン本体
 - 行コメント（`--`, `//`）とブロックコメント（`/* ... */`）
@@ -21,6 +22,30 @@ Visual Studio Code用のSnowflake SQL構文ハイライト。これは、[sql-di
 - **スコープ名:** `source.snowflake-sql`
 - **ファイルタイプ:** `.sql`、`.snowsql`、`.sfsql`
 
+## フォーマット
+
+この拡張機能は `snowflake-sql` ドキュメント用のフォーマッタを登録するため、**Format Document**、**Format Selection**、および `"editor.formatOnSave"` がそのまま動作します。フォーマットは完全にローカルで実行されます。バンドルされた WebAssembly ビルドのフォーマッタは、CLI と Snowsight ブラウザ拡張機能を動かしているのと同じエンジンです。ネットワークには何も送信されません。
+
+フォーマットは機械的に**ロスレスかつ冪等**です — パースできない入力は変更されずにそのまま通過し、`format(format(x)) == format(x)` が成り立ちます。
+
+これらのファイルのデフォルトフォーマッタにするには、設定に以下を追加してください：
+
+```json
+"[snowflake-sql]": {
+  "editor.defaultFormatter": "sql-dialect-fmt.snowflake-sql-sql-dialect-fmt",
+  "editor.formatOnSave": true
+}
+```
+
+### 設定
+
+| 設定 | デフォルト | 説明 |
+| --- | --- | --- |
+| `sqlDialectFmt.dialect` | `snowflake` | SQLダイアレクト（`snowflake` または `databricks`）。 |
+| `sqlDialectFmt.lineWidth` | `100` | 折り返し前の目標行幅。 |
+| `sqlDialectFmt.indentWidth` | `4` | インデントレベルあたりのスペース数。 |
+| `sqlDialectFmt.uppercaseKeywords` | `true` | SQLキーワードを大文字化する。 |
+
 キーワードと型の単語リストは、`sql-dialect-fmt-highlight`のテスト（`tests/textmate.rs`）によってフォーマッタのレクサー/ハイライターと連動して維持されています。文法がキーワードまたは型としてスコープするすべての単語は、`sql_dialect_fmt_highlight::classify`によって同じように分類されなければならないため、文法はツールチェーンの他の部分から逸脱することはできません。
 
 ## 使用方法
@@ -28,12 +53,13 @@ Visual Studio Code用のSnowflake SQL構文ハイライト。これは、[sql-di
 1. 拡張機能をインストールします。
 2. `.sql`、`.snowsql`、または`.sfsql`ファイルを開きます。
 3. 必要に応じて、**言語モードの変更**を選択し、**Snowflake SQL**を選択します。
+4. **Format Document**（`Shift+Alt+F`）または **Format Selection** を実行します。
 
-この拡張機能は構文ハイライトと言語メタデータを提供します。SQLを実行したり、Snowflakeに接続したり、ブラウザフォーマッタを含んだりすることはありません。CLIフォーマッティングやその他の統合については、[メインプロジェクトのREADME](https://github.com/hjosugi/sql-dialect-fmt#readme)を参照してください。
+この拡張機能は構文ハイライト、言語メタデータ、およびローカルフォーマッタを提供します。SQLをSnowflakeに対して実行したり、アカウントに接続したりすることはありません。CLIフォーマッティングやその他の統合については、[メインプロジェクトのREADME](https://github.com/hjosugi/sql-dialect-fmt#readme)を参照してください。
 
 ## プライバシー
 
-この拡張機能には、ランタイムコード、テレメトリー、分析、ネットワークリクエスト、またはリモートフォーマッティングは含まれていません。静的な言語設定とTextMate文法ファイルのみを提供します。プライバシーポリシーについては、[プライバシーポリシー](https://github.com/hjosugi/sql-dialect-fmt/blob/main/docs/PRIVACY.md)を参照してください。
+この拡張機能は、テレメトリーや分析を実行せず、ネットワークリクエストを行わず、リモートフォーマッティングも行いません。フォーマットはバンドルされた WebAssembly モジュールによってローカルで実行され、SQL がマシンの外に出ることはありません。この拡張機能は、静的な言語設定、TextMate文法、およびローカルフォーマッタのみを提供します。[プライバシーポリシー](https://github.com/hjosugi/sql-dialect-fmt/blob/main/docs/PRIVACY.md)を参照してください。
 
 ## サポートとソース
 
