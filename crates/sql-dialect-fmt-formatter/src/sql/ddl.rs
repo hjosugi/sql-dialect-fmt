@@ -12,7 +12,7 @@ use super::routine_body::{
     format_embedded_body_token, is_create_routine, is_routine_header_word, routine_body_language,
     RoutineBodyLanguage,
 };
-use super::Lowerer;
+use super::{rendered_source, Lowerer, PreparedRoutineBodies};
 
 impl Lowerer {
     /// `CREATE [OR REPLACE] ... TABLE/VIEW ...`: the header inline (a column-def list expanded in
@@ -22,7 +22,7 @@ impl Lowerer {
     /// their own indented line; a `TASK`/`DYNAMIC TABLE` body after `AS` is laid out structurally.
     pub(super) fn lower_create(&mut self, node: &SyntaxNode) -> Doc {
         if is_create_routine(node) {
-            return self.lower_create_routine(node);
+            return self.lower_create_routine(node, None);
         }
         // Properties / clauses that stack one-per-line, indented under the CREATE header.
         let has_props = node.children().any(|c| {
@@ -49,7 +49,19 @@ impl Lowerer {
     /// `CREATE PROCEDURE/FUNCTION ... AS <body>`: keep the signature inline, format supported
     /// dollar-quoted bodies through their language formatter, and lower unquoted Snowflake
     /// Scripting blocks structurally. Unknown languages stay verbatim.
-    fn lower_create_routine(&mut self, node: &SyntaxNode) -> Doc {
+    pub(super) fn lower_create_routine_prepared(
+        &mut self,
+        node: &SyntaxNode,
+        prepared: &mut PreparedRoutineBodies,
+    ) -> Doc {
+        self.lower_create_routine(node, Some(prepared))
+    }
+
+    fn lower_create_routine(
+        &mut self,
+        node: &SyntaxNode,
+        mut prepared: Option<&mut PreparedRoutineBodies>,
+    ) -> Doc {
         let body_language = routine_body_language(node).unwrap_or(RoutineBodyLanguage::Sql);
         let mut parts = Vec::new();
         let mut prev_sig = None;
@@ -59,10 +71,14 @@ impl Lowerer {
                     continue;
                 }
                 if matches!(token.kind(), DOLLAR_STRING | STRING) && prev_sig == Some(AS_KW) {
-                    if let Some(formatted) =
-                        format_embedded_body_token(token.text(), body_language, self.ctx)
-                    {
-                        parts.push(self.token_rendered(token, text(formatted)));
+                    let formatted = prepared
+                        .as_mut()
+                        .and_then(|prepared| prepared.take(token))
+                        .or_else(|| {
+                            format_embedded_body_token(token.text(), body_language, self.ctx)
+                        });
+                    if let Some(formatted) = formatted {
+                        parts.push(self.token_rendered(token, rendered_source(formatted)));
                         prev_sig = Some(token.kind());
                         continue;
                     }
@@ -147,7 +163,7 @@ impl Lowerer {
             return None;
         }
         format_embedded_body_token(token.text(), RoutineBodyLanguage::Sql, self.ctx)
-            .map(|formatted| self.token_rendered(&token, text(formatted)))
+            .map(|formatted| self.token_rendered(&token, rendered_source(formatted)))
     }
 
     /// Object DDL with a property region: the `CREATE <kind> <name> [(cols)]` header stays inline,

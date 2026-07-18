@@ -16,7 +16,9 @@
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind, SyntaxNode, SyntaxToken};
 use SyntaxKind::*;
 
-use crate::doc::{break_parent, concat, empty, hard_line, line_suffix, space, text, Doc};
+use crate::doc::{
+    break_parent, concat, empty, hard_line, line_suffix, source_code_slice, space, text, Doc,
+};
 use crate::KeywordCase;
 
 mod comments;
@@ -31,7 +33,16 @@ mod scripting;
 mod spacing;
 
 use comments::{directive_comment_same_line_after_stmt, CommentInfo, Comments};
+pub(crate) use routine_body::{prepare_routine_bodies_with_trailing_space, PreparedRoutineBodies};
 use spacing::{is_value_end, must_separate_to_preserve_tokens, needs_space};
+
+fn rendered_source(text_value: String) -> Doc {
+    if text_value.contains('\n') || text_value.contains('\r') {
+        source_code_slice(text_value)
+    } else {
+        text(text_value)
+    }
+}
 
 /// Formatting context.
 #[derive(Clone, Copy)]
@@ -52,6 +63,22 @@ pub(crate) struct Ctx {
 /// statement lowering. Trivia trailing the final statement — including a comment-only file — lands
 /// as direct token children of the root; those comments are re-emitted here so nothing is dropped.
 pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
+    lower_source_impl(root, ctx, None)
+}
+
+pub(crate) fn lower_source_with_prepared(
+    root: &SyntaxNode,
+    ctx: Ctx,
+    prepared_routine_bodies: PreparedRoutineBodies,
+) -> Doc {
+    lower_source_impl(root, ctx, Some(prepared_routine_bodies))
+}
+
+fn lower_source_impl(
+    root: &SyntaxNode,
+    ctx: Ctx,
+    mut prepared_routine_bodies: Option<PreparedRoutineBodies>,
+) -> Doc {
     let mut parts = Vec::new();
     let mut emitted = false;
     let mut last_stmt_end: Option<usize> = None;
@@ -62,7 +89,10 @@ pub(crate) fn lower_source(root: &SyntaxNode, ctx: Ctx) -> Doc {
                 parts.push(hard_line());
             }
         }
-        let lowered = lower_stmt(&stmt, ctx);
+        let statement_bodies = prepared_routine_bodies
+            .as_mut()
+            .map(|prepared| prepared.take_for_node(&stmt));
+        let lowered = lower_stmt(&stmt, ctx, statement_bodies);
         parts.push(lowered.body);
         parts.push(text(";"));
         for comment in lowered.end_comments {
@@ -127,15 +157,22 @@ fn statement_has_leading_blank_line(stmt: &SyntaxNode) -> bool {
 /// Lower one statement. Builds its comment attachment, lowers structurally, and — if any comment
 /// could not be placed onto an emitted token — falls back to the statement text with surrounding
 /// whitespace trimmed so statement separators remain idempotent.
-fn lower_stmt(stmt: &SyntaxNode, ctx: Ctx) -> LoweredStmt {
+fn lower_stmt(
+    stmt: &SyntaxNode,
+    ctx: Ctx,
+    prepared_routine_bodies: Option<PreparedRoutineBodies>,
+) -> LoweredStmt {
     let mut comments = Comments::build(stmt);
     let end_comments = comments.take_statement_end_comments(stmt);
     let mut low = Lowerer::new(ctx, comments);
     // Hoist the statement's own leading comments above its first group, so a banner comment does
     // not force the first construct (e.g. the SELECT list) to explode.
     let prefix = low.statement_leading(stmt);
-    let body = match stmt.kind() {
-        SELECT_STMT => low.lower_select(stmt),
+    let body = match (stmt.kind(), prepared_routine_bodies) {
+        (CREATE_STMT, Some(mut prepared)) if routine_body::is_create_routine(stmt) => {
+            low.lower_create_routine_prepared(stmt, &mut prepared)
+        }
+        (SELECT_STMT, _) => low.lower_select(stmt),
         _ => low.lower_node(stmt),
     };
     let body = if low.comments.all_placed() {

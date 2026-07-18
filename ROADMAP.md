@@ -137,19 +137,25 @@
 - ✅ エディタ拡張（VS Code）パッケージング（`editors/` を extension root とする `package.json` + `language-configuration.json`）
 - ✅ Snowsight/Chrome 拡張（`sql-dialect-fmt-wasm` を `wasm32-unknown-unknown` でビルドして同梱、worksheet editor 上のボタン/拡張アイコン/`Alt+Shift+F` から整形）… [sql-dialect-fmt-wasm](crates/sql-dialect-fmt-wasm/) / [extensions/chrome](extensions/chrome/) / [build script](scripts/build-chrome-extension.sh)
 - ✅ GitHub Release asset: CLI tarball + sha256、Chrome zip、VS Code VSIX を `v*.*.*` release に同梱。旧 `snow-fmt-*` asset は除去済み
-- ✅ VS Code Marketplace / Chrome Web Store publish workflow: tag push で package artifact を作成し、repo variable で opt-in すれば store publish まで自動実行。VS Code は `VSCE_PAT` または Entra ID workload identity、Chrome は Web Store API OAuth credentials を使用。repo secret/variable は [configure-extension-publishing.sh](scripts/configure-extension-publishing.sh) で投入可。初回 listing/審査情報入力だけは各 store 側の管理画面で完了させる
+- ✅ VS Code Marketplace / Chrome Web Store publish workflow: tag push で package artifact を作成し、repo variable で opt-in すれば store publish まで自動実行。VS Code Marketplace は初回 listing と v1.16.0 への更新を完了し、`VSCE_PAT` + `VSCODE_MARKETPLACE_AUTO_PUBLISH=true` を設定済み。Chrome は Web Store API OAuth credentials と初回 listing/審査が未完了。repo secret/variable は [configure-extension-publishing.sh](scripts/configure-extension-publishing.sh) で投入可
 - ✅ 公式仕様由来の conformance generator（Future Tech Blog の `uroborosql-fmt` / `postgresql-cst-parser` 型の発想を Snowflake 向けに翻訳）: local path / archive から `.sql` と SQL fenced block を抽出し、外部 corpus harness に流して parser/formatter conformance report を生成。将来、機械可読な公式 grammar が得られるなら Pure Rust CST parser 生成の候補にする … [scripts/conformance-report.py](scripts/conformance-report.py)
 
 ---
 
-### 現状サマリ（2026-07-10）
-**v1.9.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。Formatter の Biome/Ruff 依存は Cargo feature で切り離し可能で、Java/Scala の簡易 brace body formatting は opt-in。
+### 現状サマリ（2026-07-18）
+**v1.16.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。Formatter の Biome/Ruff 依存は Cargo feature で切り離し可能で、Java/Scala の簡易 brace body formatting は opt-in。
 
 **継続タスク（個別 issue で追跡）**:
-1. **Store 運用**: Chrome Web Store / VS Code Marketplace は workflow 済み。初回 listing・審査・publisher 権限を済ませ、OAuth/PAT または Entra ID 設定を helper で repo に入れたら tag push で本公開できる。
+1. **Store 運用**: VS Code Marketplace は listing・PAT・自動更新を設定済み。Chrome Web Store は初回 item/listing・YouTube Unlisted の実 URL・審査・OAuth credentials・自動更新を完了させる。
 2. **仕様追随**: Snowflake Preview option / Semantic View / Cortex-AISQL の追加は conformance generator と外部 corpus の継続運用で追う。
 3. **Formatter polish**: コメント配置、未構造化 DDL、balanced-paren 構文などは小さな issue 単位で進める。
 4. **LSP / editor polish**: 設定 reload、VS Code integration、store listing を個別 issue で完了させる（rich hover は #92 で spec 連携済み。識別子の別名解決への拡張が次段）。
-5. **研究開発**: もし機械可読な公式 grammar が得られた場合のみ、Pure Rust CST parser 生成の feasibility を再評価する。
+5. **研究開発**: Snowflake/Databricks が実装と同一の公式 grammar source（PostgreSQL の `gram.y` 相当）を公開した場合のみ、Pure Rust CST parser 用の専用 generator を再評価する。公式 ANTLR grammar の公開だけでは、lossless CST・エラー回復・contextual keyword の移行条件を満たさない。
 
-回帰ゲートは `cargo test --workspace`（golden=insta、full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）＋ `cargo clippy --workspace --all-targets -- -D warnings` ＋ `cargo fmt --all -- --check`。release 時は `scripts/package-extensions.sh`、formatter bench smoke、external corpus sample、conformance report、GitHub Actions の Release / CI / Docs / Corpus も確認する。
+回帰ゲートは `cargo test --workspace`（実例の厳密な期待出力、full/sql-only fixture の
+べき等・無破壊、lexer/parser recovery、lexical highlight、LSP stdio、WASM ABI、
+Tree-sitter）＋ `cargo clippy --workspace --all-targets -- -D warnings` ＋
+`cargo fmt --all -- --check`。VS Code 拡張は実 TextMate engine と bundle→WASM formatter
+provider の統合テスト、さらに VSIX 内容検査まで CI で行う。release 時は
+`scripts/package-extensions.sh`、formatter bench smoke、external corpus sample、
+conformance report、GitHub Actions の Release / CI / Docs / Corpus も確認する。

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed JavaScript stored-procedure highlighting by injecting VS Code's JavaScript grammar inside
+  `LANGUAGE JAVASCRIPT ... $$ ... $$` bodies.
+- Fixed formatting of JavaScript procedures containing whitespace-only lines; these previously
+  caused the bundled formatter to return the complete document unchanged.
+- Bundled the extension host and language client into one file, reducing the VSIX from hundreds of
+  JavaScript/dependency files to one JavaScript bundle.
+
 ## 1.16.0
 
 - Added an opt-in LSP client (`sqlDialectFmt.lsp.enabled`, default off): when the

@@ -24,6 +24,65 @@ use crate::doc::{print, PrintOptions};
 
 use super::{lower_source, Ctx};
 
+/// Embedded routine bodies formatted during the multiline-token safety pass. Lowering consumes
+/// these values instead of running the embedded formatter a second time.
+#[derive(Default)]
+pub(crate) struct PreparedRoutineBodies {
+    bodies: Vec<(usize, String)>,
+}
+
+impl PreparedRoutineBodies {
+    pub(super) fn take_for_node(&mut self, node: &SyntaxNode) -> Self {
+        let range = node.text_range();
+        let start = usize::from(range.start());
+        let end = usize::from(range.end());
+        let mut inside = Vec::new();
+        let mut outside = Vec::new();
+        for body in self.bodies.drain(..) {
+            if (start..end).contains(&body.0) {
+                inside.push(body);
+            } else {
+                outside.push(body);
+            }
+        }
+        self.bodies = outside;
+        Self { bodies: inside }
+    }
+
+    pub(super) fn take(&mut self, token: &SyntaxToken) -> Option<String> {
+        let offset = usize::from(token.text_range().start());
+        let index = self
+            .bodies
+            .iter()
+            .position(|(candidate, _)| *candidate == offset)?;
+        Some(self.bodies.swap_remove(index).1)
+    }
+}
+
+/// Prepare every multiline token whose trailing whitespace would otherwise be exposed to the
+/// generic printer. Unsupported or invalid token shapes return `None`, requiring byte-verbatim
+/// fallback. Supported routine bodies are formatted once and cached for the lowering pass.
+pub(crate) fn prepare_routine_bodies_with_trailing_space(
+    root: &SyntaxNode,
+    ctx: Ctx,
+) -> Option<PreparedRoutineBodies> {
+    let mut prepared = PreparedRoutineBodies::default();
+    for token in root
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| {
+            !token.kind().is_trivia()
+                && crate::multiline_token_has_line_trailing_space(token.text())
+        })
+    {
+        let formatted = format_token_with_trailing_space(&token, ctx)?;
+        prepared
+            .bodies
+            .push((usize::from(token.text_range().start()), formatted));
+    }
+    Some(prepared)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RoutineBodyLanguage {
     Sql,
@@ -522,4 +581,37 @@ fn is_sql_scripting_body(source: &str) -> bool {
     source.split_whitespace().next().is_some_and(|word| {
         word.eq_ignore_ascii_case("begin") || word.eq_ignore_ascii_case("declare")
     })
+}
+
+/// Format a multiline token with trailing whitespace only when it is the body of a supported
+/// routine and the declared language formatter accepts it. The caller caches the returned body so
+/// the safety pass and lowering pass share one embedded-formatter invocation.
+fn format_token_with_trailing_space(token: &SyntaxToken, ctx: Ctx) -> Option<String> {
+    if !matches!(token.kind(), DOLLAR_STRING | STRING) {
+        return None;
+    }
+    let parent = token.parent()?;
+    if parent.kind() != CREATE_STMT || !is_create_routine(&parent) {
+        return None;
+    }
+
+    let mut previous = None;
+    for child in parent.children_with_tokens() {
+        let Some(candidate) = child.as_token() else {
+            previous = None;
+            continue;
+        };
+        if candidate.kind().is_trivia() {
+            continue;
+        }
+        if candidate == token {
+            if previous != Some(AS_KW) {
+                return None;
+            }
+            let language = routine_body_language(&parent).unwrap_or(RoutineBodyLanguage::Sql);
+            return format_embedded_body_token(token.text(), language, ctx);
+        }
+        previous = Some(candidate.kind());
+    }
+    None
 }

@@ -9,6 +9,9 @@ use std::io::{ErrorKind, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use sql_dialect_fmt_test_fixtures::{
+    javascript_routine_trailing_whitespace_input, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED,
+};
 use tempfile::TempDir;
 
 /// Run the binary with `args`, optional `stdin`, in working directory `cwd`. Returns
@@ -54,6 +57,17 @@ fn stdin_to_stdout_formats() {
     let (code, out, _err) = run(tmp.path(), &[], Some("select a,b from t"));
     assert_eq!(code, 0);
     assert_eq!(out, "SELECT a, b\nFROM t;\n");
+}
+
+#[test]
+fn stdin_formats_realistic_javascript_routine_instead_of_silently_passing_it_through() {
+    let tmp = TempDir::new().unwrap();
+    let input = javascript_routine_trailing_whitespace_input();
+    let (code, out, err) = run(tmp.path(), &[], Some(&input));
+
+    assert_eq!(code, 0, "stderr: {err}");
+    assert_ne!(out, input, "CLI silently returned the unformatted input");
+    assert_eq!(out, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED);
 }
 
 #[test]

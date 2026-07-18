@@ -228,14 +228,24 @@ fn format_plain_with_diagnostics(
     if base_offset > 0 {
         adjust_parse_errors(&mut parse_errors, base_offset);
     }
-    if has_lex_errors || has_multiline_trailing_space || !parse_errors.is_empty() {
+    if has_lex_errors || !parse_errors.is_empty() {
         return FormatResult {
             formatted: source.to_string(),
             parse_errors,
         };
     }
     let root = parse.syntax();
-    let doc = sql::lower_source(&root, ctx);
+    let doc = if has_multiline_trailing_space {
+        let Some(prepared) = sql::prepare_routine_bodies_with_trailing_space(&root, ctx) else {
+            return FormatResult {
+                formatted: source.to_string(),
+                parse_errors,
+            };
+        };
+        sql::lower_source_with_prepared(&root, ctx, prepared)
+    } else {
+        sql::lower_source(&root, ctx)
+    };
     let printed = print(&doc, &options.print_options());
     FormatResult {
         formatted: apply_line_ending(&printed, source, options.line_ending),

@@ -111,6 +111,20 @@ pub const EASY_CASES: &[GoldenCase] = &[
 
 pub const MINIMUM_EMBEDDED_EASY_CASES: usize = 46;
 
+/// Realistic regression for a Snowflake JavaScript procedure whose body contains whitespace-only
+/// lines. The placeholder keeps the committed fixture free of invisible trailing whitespace while
+/// [`javascript_routine_trailing_whitespace_input`] materializes the exact failure shape.
+pub const JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_TEMPLATE: &str =
+    include_str!("../fixtures/regressions/javascript_routine_trailing_whitespace/input.sql");
+
+pub const JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED: &str =
+    include_str!("../fixtures/regressions/javascript_routine_trailing_whitespace/expected.sql");
+
+pub fn javascript_routine_trailing_whitespace_input() -> String {
+    JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_TEMPLATE
+        .replace("__SQL_DIALECT_FMT_TRAILING_WHITESPACE__", "   \n\t\n   ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,5 +140,13 @@ mod tests {
                 assert!(sql_only.ends_with('\n'));
             }
         }
+    }
+
+    #[test]
+    fn javascript_trailing_whitespace_regression_materializes_invisibly_bad_lines() {
+        let input = javascript_routine_trailing_whitespace_input();
+        assert!(!input.contains("__SQL_DIALECT_FMT_TRAILING_WHITESPACE__"));
+        assert!(input.contains("   \n\t\n   \n"));
+        assert!(!JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED.contains(" \n"));
     }
 }
