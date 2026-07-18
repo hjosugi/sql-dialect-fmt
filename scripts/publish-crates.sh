@@ -9,6 +9,7 @@ CRATES=(
   sql-dialect-fmt-text
   sql-dialect-fmt-lexer
   sql-dialect-fmt-parser
+  sql-dialect-fmt-lint
   sql-dialect-fmt-formatter
   sql-dialect-fmt-highlight
   sql-dialect-fmt-hover
