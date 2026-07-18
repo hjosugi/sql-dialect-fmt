@@ -11,6 +11,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Structured parsing and formatting for the common `ALTER TABLE / VIEW / SESSION / WAREHOUSE /
+  TASK` (plus SCHEMA / DATABASE / MATERIALIZED VIEW / DYNAMIC TABLE) statements: the object head
+  and each action clause (`ADD/DROP/RENAME COLUMN`, `RENAME TO`, `SET`/`UNSET`,
+  `SUSPEND`/`RESUME`, `SWAP WITH`, …) are now CST nodes, so multiple actions stack one per line
+  and `ALTER SESSION SET` property lists wrap with proper keyword casing; unmodeled ALTER kinds
+  keep the lossless lenient token run.
 - Added `textDocument/onTypeFormatting` to the language server: typing `;` or a newline reformats
   the statement that just ended, using the same statement-level range formatting engine, and leaves
   already formatted statements untouched.

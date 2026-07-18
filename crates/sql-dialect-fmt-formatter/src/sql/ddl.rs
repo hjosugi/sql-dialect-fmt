@@ -4,9 +4,9 @@
 use sql_dialect_fmt_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use SyntaxKind::*;
 
-use crate::doc::{concat, empty, hard_line, indent, join, space, text, Doc};
+use crate::doc::{concat, empty, group, hard_line, indent, join, line, space, text, Doc};
 
-use super::expr::{bracketed, paren_list_has_trailing_comma};
+use super::expr::{bracketed, item_sep, paren_list_has_trailing_comma};
 use super::options::{is_option_flag, is_option_key};
 use super::routine_body::{
     format_embedded_body_token, is_create_routine, is_routine_header_word, routine_body_language,
@@ -187,6 +187,110 @@ impl Lowerer {
         concat(vec![concat(head), indent(concat(clauses))])
     }
 
+    /// A structured `ALTER <kind> [IF EXISTS] <name> <action> [, <action>]*` (issue #30): the
+    /// `ALTER … <name>` header stays inline; a single action rides on the header line, while
+    /// multiple actions each get their own indented line with the separating comma at the line
+    /// end. An ALTER without structured actions (an unmodeled object kind) keeps the historical
+    /// inline keyword-run lowering.
+    pub(super) fn lower_alter(&mut self, node: &SyntaxNode) -> Doc {
+        let n_actions = node.children().filter(|c| c.kind() == ALTER_ACTION).count();
+        if n_actions == 0 {
+            return self.lower_lenient_stmt(node);
+        }
+        let multi = n_actions > 1;
+        let mut head = Vec::new();
+        let mut clauses = Vec::new();
+        let mut actions_seen = 0usize;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if token.kind() == COMMA && actions_seen > 0 && actions_seen < n_actions {
+                    continue; // the separator between actions; re-synthesized below
+                }
+                if actions_seen == 0 {
+                    head.push(self.token(token));
+                } else {
+                    clauses.push(self.token(token)); // a lossless tail after the last action
+                }
+            } else if let Some(child) = child.into_node() {
+                if child.kind() == ALTER_ACTION {
+                    actions_seen += 1;
+                    if multi {
+                        if actions_seen > 1 {
+                            clauses.push(text(","));
+                        }
+                        clauses.push(hard_line());
+                        self.reset();
+                    }
+                    clauses.push(self.lower_node(&child));
+                } else if actions_seen == 0 {
+                    head.push(self.lower_node(&child)); // the object name
+                } else {
+                    clauses.push(self.lower_node(&child));
+                }
+            }
+        }
+        if multi {
+            concat(vec![concat(head), indent(concat(clauses))])
+        } else {
+            concat(vec![concat(head), concat(clauses)])
+        }
+    }
+
+    /// One ALTER action. A `SET` action whose `key = value` pairs were structured as
+    /// [`OBJECT_PROPERTY`] children lays them out like a keyword item list — inline while they
+    /// fit, one per line when they overflow (`ALTER SESSION SET` / `ALTER WAREHOUSE … SET`). Every
+    /// other action is an inline keyword run (`ADD COLUMN …`, `RENAME TO …`, `SWAP WITH …`).
+    pub(super) fn lower_alter_action(&mut self, node: &SyntaxNode) -> Doc {
+        if !node.children().any(|c| c.kind() == OBJECT_PROPERTY) {
+            return self.lower_lenient_stmt(node);
+        }
+        let mut head = Vec::new();
+        let mut items = Vec::new();
+        let mut tail = Vec::new();
+        let mut seen_prop = false;
+        let mut pending_comma = false;
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if token.kind() == COMMA && comma_separates_properties(token) {
+                    pending_comma = true; // re-synthesized with the separator below
+                    continue;
+                }
+                if seen_prop {
+                    tail.push(self.token(token));
+                } else {
+                    head.push(self.token(token));
+                }
+            } else if let Some(child) = child.into_node() {
+                if child.kind() == OBJECT_PROPERTY {
+                    if seen_prop {
+                        // Preserve the author's separator: Snowflake allows both the
+                        // comma-separated (`ALTER SESSION SET a = 1, b = 2`) and the
+                        // space-separated (`ALTER TASK t SET a = 1 b = 2`) property lists.
+                        items.push(if pending_comma { item_sep() } else { line() });
+                    }
+                    seen_prop = true;
+                    pending_comma = false;
+                    self.reset();
+                    items.push(self.lower_node(&child));
+                } else if seen_prop {
+                    tail.push(self.lower_node(&child));
+                } else {
+                    head.push(self.lower_node(&child));
+                }
+            }
+        }
+        // A lossless (unmodeled) tail rides after the last property, on its line.
+        items.extend(tail);
+        let body = indent(concat(vec![line(), concat(items)]));
+        group(concat(vec![concat(head), body]))
+    }
+
     /// `GRANT <privs> ON <object> TO [ROLE] r [WITH GRANT OPTION]` /
     /// `REVOKE [GRANT OPTION FOR] <privs> ON <object> FROM [ROLE] r [CASCADE|RESTRICT]`: the keyword
     /// and privilege list on the header line, the `ON …` securable and the `TO|FROM …` grantee each
@@ -363,4 +467,21 @@ impl Lowerer {
         };
         concat(vec![concat(head), space(), body])
     }
+}
+
+/// Whether a comma inside an ALTER `SET` action separates two structured [`OBJECT_PROPERTY`]
+/// pairs (its next significant sibling is another property). Only those separators are
+/// re-synthesized by the property join; any other comma is an ordinary token of the lossless run.
+fn comma_separates_properties(token: &SyntaxToken) -> bool {
+    let mut next = token.next_sibling_or_token();
+    while let Some(element) = next {
+        if let Some(node) = element.as_node() {
+            return node.kind() == OBJECT_PROPERTY;
+        }
+        next = match element.into_token() {
+            Some(t) if t.kind().is_trivia() => t.next_sibling_or_token(),
+            _ => return false,
+        };
+    }
+    false
 }

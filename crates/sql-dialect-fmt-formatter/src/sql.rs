@@ -336,8 +336,10 @@ impl Lowerer {
             | MSCK_REPAIR_STMT => self.lower_children(node),
             CREATE_STMT => self.lower_create(node),
             EXECUTE_STMT => self.lower_execute(node),
-            ALTER_STMT | USE_STMT | SHOW_STMT | DESCRIBE_STMT | TRUNCATE_STMT
-            | TRANSACTION_STMT | UNDROP_STMT | COMMENT_STMT => self.lower_lenient_stmt(node),
+            ALTER_STMT => self.lower_alter(node),
+            ALTER_ACTION => self.lower_alter_action(node),
+            USE_STMT | SHOW_STMT | DESCRIBE_STMT | TRUNCATE_STMT | TRANSACTION_STMT
+            | UNDROP_STMT | COMMENT_STMT => self.lower_lenient_stmt(node),
             GRANT_STMT | REVOKE_STMT => self.lower_grant(node),
             COPY_STMT => self.lower_copy(node),
             STAGE_FILE_STMT => self.lower_children(node),

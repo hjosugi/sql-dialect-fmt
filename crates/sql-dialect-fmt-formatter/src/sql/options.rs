@@ -122,6 +122,7 @@ const OPTION_KEYS: &[&str] = &[
     "propagate",
     "purge",
     "query_acceleration_max_scale_factor",
+    "query_tag",
     "record_delimiter",
     "refresh_mode",
     "refresh_on_create",
@@ -158,6 +159,8 @@ const OPTION_KEYS: &[&str] = &[
     "task_auto_retry_attempts",
     "time_format",
     "timestamp_format",
+    "timestamp_output_format",
+    "timezone",
     "trace_level",
     "trim_space",
     "truncatecolumns",
@@ -172,6 +175,7 @@ const OPTION_KEYS: &[&str] = &[
     "warehouse",
     "warehouse_size",
     "warehouse_type",
+    "week_start",
 ];
 
 /// No-value option flag words, lower-cased and kept sorted.
