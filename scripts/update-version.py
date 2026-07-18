@@ -31,6 +31,7 @@ LOCKED_WORKSPACE_PACKAGES = {
     "sql-dialect-fmt-highlight",
     "sql-dialect-fmt-hover",
     "sql-dialect-fmt-lexer",
+    "sql-dialect-fmt-lint",
     "sql-dialect-fmt-lsp",
     "sql-dialect-fmt-parser",
     "sql-dialect-fmt-syntax",

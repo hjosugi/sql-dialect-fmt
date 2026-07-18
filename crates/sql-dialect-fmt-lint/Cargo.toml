@@ -1,0 +1,19 @@
+[package]
+name = "sql-dialect-fmt-lint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Editor-independent SQL lint rules (SDF001-SDF007) with suppression comments, shared by the sql-dialect-fmt CLI and language server."
+
+[dependencies]
+sql-dialect-fmt-lexer.workspace = true
+sql-dialect-fmt-parser.workspace = true
+sql-dialect-fmt-syntax = { workspace = true, features = ["rowan"] }
+sql-dialect-fmt-text.workspace = true

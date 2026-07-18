@@ -235,7 +235,6 @@ pub fn diagnostics_with_lint_options(
     let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(text, options.dialect);
     let lex_errors = lexed.errors.clone();
     let parse = sql_dialect_fmt_parser::parse_lexed(text, options.dialect, lexed);
-    let highlighted = sql_dialect_fmt_highlight::highlight(text);
     let mut diagnostics: Vec<_> = lex_errors
         .iter()
         .map(|err| make(to_range(err.range()), err.message.clone()))
@@ -248,7 +247,7 @@ pub fn diagnostics_with_lint_options(
         .collect();
     diagnostics.extend(lint::diagnostics_with_encoding(
         text,
-        &highlighted.tokens,
+        options.dialect,
         &index,
         lint_options,
         encoding,
@@ -1182,6 +1181,36 @@ mod tests {
         assert!(hover.range.is_some());
         match hover.contents {
             HoverContents::Markup(m) => assert!(m.value.to_lowercase().contains("varchar")),
+            _ => panic!("expected markup"),
+        }
+    }
+
+    #[test]
+    fn hover_describes_spec_features_with_a_docs_link() {
+        // Spec-driven hover: keyword features carry syntax plus a docs link.
+        let src = "select c from t qualify row_number() over (order by c) = 1";
+        let col = src.find("qualify").unwrap() as u32;
+        let hover = hover(src, Position::new(0, col)).expect("hover");
+        match hover.contents {
+            HoverContents::Markup(m) => {
+                assert!(m.value.contains("**QUALIFY**"));
+                assert!(m.value.contains("QUALIFY <expr>"));
+                assert!(m.value.contains("[Snowflake docs]("));
+            }
+            _ => panic!("expected markup"),
+        }
+    }
+
+    #[test]
+    fn hover_describes_function_signatures() {
+        let src = "select dateadd(day, 1, d) from t";
+        let col = src.find("dateadd").unwrap() as u32;
+        let hover = hover(src, Position::new(0, col)).expect("hover");
+        match hover.contents {
+            HoverContents::Markup(m) => {
+                assert!(m.value.contains("DATEADD( <date_or_time_part>"));
+                assert!(m.value.contains("[Snowflake docs]("));
+            }
             _ => panic!("expected markup"),
         }
     }

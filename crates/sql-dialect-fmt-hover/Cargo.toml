@@ -10,7 +10,7 @@ readme.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "LSP/editor-ready hover information for Snowflake SQL types, procedures, and tasks."
+description = "LSP/editor-ready hover information for Snowflake SQL keywords, functions, types, procedures, and tasks."
 [dependencies]
 sql-dialect-fmt-lexer.workspace = true
 sql-dialect-fmt-syntax.workspace = true

@@ -1,0 +1,19 @@
+id = "sql-dialect-fmt"
+name = "Snowflake SQL (sql-dialect-fmt)"
+version = "0.1.0"
+schema_version = 1
+authors = ["hjosugi <hirosugi41@gmail.com>"]
+description = "Snowflake SQL language support powered by the sql-dialect-fmt language server."
+repository = "https://github.com/hjosugi/sql-dialect-fmt"
+
+[language_servers.sql-dialect-fmt-lsp]
+name = "sql-dialect-fmt-lsp"
+languages = ["Snowflake SQL"]
+
+# The tree-sitter grammar bundled in this repository. `rev` pins the release
+# commit; point `repository` at a local checkout (file:// URL) for grammar
+# development. Bump `rev` when the grammar changes.
+[grammars.snowflake]
+repository = "https://github.com/hjosugi/sql-dialect-fmt"
+rev = "9cd8a8c0da6f937a9d6ce417d188772bdbd5637f"
+path = "tree-sitter-snowflake"

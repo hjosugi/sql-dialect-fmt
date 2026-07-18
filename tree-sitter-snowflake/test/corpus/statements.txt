@@ -1,0 +1,352 @@
+==================
+Select statement with a WITH-led query
+==================
+
+WITH x AS (SELECT 1)
+SELECT * FROM x;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (identifier)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (keyword)
+        (number)))
+    (keyword)
+    (operator)
+    (keyword)
+    (identifier)))
+
+==================
+Insert statement
+==================
+
+INSERT INTO t (id) VALUES (1);
+
+---
+
+(source_file
+  (insert_statement
+    (keyword)
+    (type)
+    (identifier)
+    (identifier)
+    (expression
+      (parenthesized_expression
+        (identifier)))
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (number)))))
+
+==================
+Update statement
+==================
+
+UPDATE t SET v = 2 WHERE id = 1;
+
+---
+
+(source_file
+  (update_statement
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (operator)
+    (number)
+    (keyword)
+    (identifier)
+    (operator)
+    (number)))
+
+==================
+Delete statement
+==================
+
+DELETE FROM t WHERE id = 1;
+
+---
+
+(source_file
+  (delete_statement
+    (keyword)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (operator)
+    (number)))
+
+==================
+Merge statement keeps UPDATE and INSERT arms inline
+==================
+
+MERGE INTO dst USING src ON dst.id = src.id
+WHEN MATCHED THEN UPDATE SET v = src.v
+WHEN NOT MATCHED THEN INSERT (id) VALUES (src.id);
+
+---
+
+(source_file
+  (merge_statement
+    (keyword)
+    (type)
+    (identifier)
+    (identifier)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (punctuation)
+    (identifier)
+    (operator)
+    (identifier)
+    (punctuation)
+    (identifier)
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (identifier)
+    (operator)
+    (identifier)
+    (punctuation)
+    (identifier)
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (identifier)))
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (identifier)
+        (punctuation)
+        (identifier)))))
+
+==================
+Create statement with AS SELECT stays one statement
+==================
+
+CREATE TABLE t AS SELECT 1;
+
+---
+
+(source_file
+  (create_statement
+    (keyword)
+    (keyword)
+    (identifier)
+    (keyword)
+    (keyword)
+    (number)))
+
+==================
+Drop statement
+==================
+
+DROP TABLE IF EXISTS t;
+
+---
+
+(source_file
+  (drop_statement
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (identifier)))
+
+==================
+Alter statement
+==================
+
+ALTER TABLE t SET COMMENT = 'c';
+
+---
+
+(source_file
+  (alter_statement
+    (keyword)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (operator)
+    (string)))
+
+==================
+Grant statement keeps SELECT inline
+==================
+
+GRANT SELECT ON TABLE t TO ROLE r;
+
+---
+
+(source_file
+  (grant_statement
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (identifier)
+    (identifier)
+    (identifier)
+    (identifier)))
+
+==================
+Revoke statement
+==================
+
+REVOKE SELECT ON TABLE t FROM ROLE r;
+
+---
+
+(source_file
+  (revoke_statement
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (identifier)))
+
+==================
+Copy statement into a stage
+==================
+
+COPY INTO @stage/path FROM t;
+
+---
+
+(source_file
+  (copy_statement
+    (keyword)
+    (type)
+    (identifier)
+    (stage_reference)
+    (keyword)
+    (identifier)))
+
+==================
+Use statement
+==================
+
+USE DATABASE d;
+
+---
+
+(source_file
+  (use_statement
+    (keyword)
+    (keyword)
+    (identifier)))
+
+==================
+Set statement
+==================
+
+SET v = 1;
+
+---
+
+(source_file
+  (set_statement
+    (keyword)
+    (identifier)
+    (operator)
+    (number)))
+
+==================
+Show statement feeding a flow pipe stays one statement
+==================
+
+SHOW TABLES IN SCHEMA db.s ->> SELECT "name" FROM $1;
+
+---
+
+(source_file
+  (show_statement
+    (keyword)
+    (identifier)
+    (keyword)
+    (keyword)
+    (identifier)
+    (punctuation)
+    (identifier)
+    (operator)
+    (keyword)
+    (quoted_identifier)
+    (keyword)
+    (variable)))
+
+==================
+Describe statement and its DESC abbreviation
+==================
+
+DESCRIBE TABLE t;
+DESC TABLE t;
+
+---
+
+(source_file
+  (describe_statement
+    (keyword)
+    (keyword)
+    (identifier))
+  (describe_statement
+    (keyword)
+    (keyword)
+    (identifier)))
+
+==================
+Fallback statement for other commands
+==================
+
+TRUNCATE TABLE t;
+CALL refresh_proc();
+EXECUTE IMMEDIATE $$ SELECT 1 $$;
+
+---
+
+(source_file
+  (statement
+    (keyword)
+    (keyword)
+    (identifier))
+  (statement
+    (keyword)
+    (expression
+      (call_expression
+        (identifier)
+        (argument_list))))
+  (statement
+    (keyword)
+    (keyword)
+    (dollar_string)))
+
+==================
+Statement kinds without terminators and an empty statement
+==================
+
+;
+SELECT 1
+
+---
+
+(source_file
+  (statement)
+  (select_statement
+    (keyword)
+    (number)))

@@ -75,6 +75,17 @@ machine. The extension only contributes static language configuration, a TextMat
 local formatter. See the
 [privacy policy](https://github.com/hjosugi/sql-dialect-fmt/blob/main/docs/PRIVACY.md).
 
+## Other editors
+
+This directory also carries integrations for other editors, all driven by the same
+`sql-dialect-fmt-lsp` language server (`cargo install sql-dialect-fmt-lsp`):
+
+- [`nvim/`](nvim/) — a small Neovim plugin: `snowflake-sql` filetype, LSP setup, and
+  conform.nvim/null-ls recipes for CLI-based formatting.
+- [`zed/`](zed/) — a Zed extension (dev install): Snowflake SQL language backed by the
+  bundled tree-sitter grammar plus the language server.
+- [`helix/`](helix/) — a documented `languages.toml` snippet for Helix (no plugin system).
+
 ## Support and source
 
 - [Report an issue](https://github.com/hjosugi/sql-dialect-fmt/issues)

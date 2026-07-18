@@ -14,7 +14,9 @@ Over that flat token stream the grammar adds two editor-oriented structural
 layers:
 
 - each top-level statement (a run of tokens up to its `;`) is grouped into a
-  `statement` node for folding and navigation;
+  coarse statement-kind node keyed on its first keyword (`select_statement`,
+  `insert_statement`, `create_statement`, ..., with a lenient `statement`
+  fallback for everything else) for folding, outline, and navigation;
 - balanced parentheses and immediate function-call syntax are grouped under
   lightweight `expression` nodes (`call_expression`, `parenthesized_expression`).
 

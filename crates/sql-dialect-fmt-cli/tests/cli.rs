@@ -579,3 +579,100 @@ fn already_formatted_directory_check_succeeds() {
     assert_eq!(code, 0);
     assert!(err.contains("already formatted"), "summary: {err}");
 }
+
+#[test]
+fn lint_stdin_reports_findings_with_one_based_positions_and_exit_1() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, _err) = run(tmp.path(), &["--lint"], Some("SELECT * FROM t;"));
+    assert_eq!(code, 1, "findings must exit 1");
+    // `*` is at 1-based line 1, column 8.
+    assert!(
+        out.contains("<stdin>:1:8: SDF001 avoid SELECT *"),
+        "stdout: {out}"
+    );
+}
+
+#[test]
+fn lint_clean_stdin_exits_0_with_no_output() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, _err) = run(tmp.path(), &["--lint"], Some("SELECT a FROM t;\n"));
+    assert_eq!(code, 0);
+    assert!(out.is_empty(), "stdout: {out}");
+}
+
+#[test]
+fn lint_file_names_the_path_and_reports_new_rules() {
+    let tmp = TempDir::new().unwrap();
+    let f = write(
+        tmp.path(),
+        "q.sql",
+        "DELETE FROM t;\nUPDATE t SET a = 1;\nSELECT a FROM t1, t2 ORDER BY 1;\n",
+    );
+    let (code, out, _err) = run(tmp.path(), &["--lint", f.to_str().unwrap()], None);
+    assert_eq!(code, 1);
+    let path = f.display().to_string();
+    assert!(
+        out.contains(&format!("{path}:1:1: SDF004")),
+        "stdout: {out}"
+    );
+    assert!(
+        out.contains(&format!("{path}:2:1: SDF005")),
+        "stdout: {out}"
+    );
+    assert!(
+        out.contains(&format!("{path}:3:17: SDF006")),
+        "stdout: {out}"
+    );
+    assert!(
+        out.contains(&format!("{path}:3:31: SDF007")),
+        "stdout: {out}"
+    );
+}
+
+#[test]
+fn lint_directory_recurses_and_finds_offenders() {
+    let tmp = TempDir::new().unwrap();
+    write(tmp.path(), "clean.sql", "SELECT a FROM t;\n");
+    write(tmp.path(), "nested/bad.sql", "DELETE FROM t;\n");
+    let (code, out, _err) = run(tmp.path(), &["--lint", "."], None);
+    assert_eq!(code, 1);
+    assert!(out.contains("bad.sql"), "stdout: {out}");
+    assert!(out.contains("SDF004"), "stdout: {out}");
+    assert!(!out.contains("clean.sql"), "stdout: {out}");
+}
+
+#[test]
+fn lint_respects_suppression_comments() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, _err) = run(
+        tmp.path(),
+        &["--lint"],
+        Some("-- sql-dialect-fmt: disable-next-line SDF004\nDELETE FROM t;\n"),
+    );
+    assert_eq!(code, 0, "suppressed finding must not fail: {out}");
+    assert!(out.is_empty(), "stdout: {out}");
+}
+
+#[test]
+fn lint_honors_the_dialect_flag() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, _err) = run(
+        tmp.path(),
+        &["--lint", "--dialect", "databricks"],
+        Some("DELETE FROM `my schema`.`t`;"),
+    );
+    assert_eq!(code, 1);
+    assert!(out.contains("<stdin>:1:1: SDF004"), "stdout: {out}");
+}
+
+#[test]
+fn lint_cannot_be_combined_with_write_or_check() {
+    let tmp = TempDir::new().unwrap();
+    let (code_w, _out, err_w) = run(tmp.path(), &["--lint", "--write"], Some("SELECT 1;"));
+    assert_eq!(code_w, 2);
+    assert!(err_w.contains("--lint"), "stderr: {err_w}");
+
+    let (code_c, _out, err_c) = run(tmp.path(), &["--lint", "--check"], Some("SELECT 1;"));
+    assert_eq!(code_c, 2);
+    assert!(err_c.contains("--lint"), "stderr: {err_c}");
+}

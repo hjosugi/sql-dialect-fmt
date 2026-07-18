@@ -203,6 +203,36 @@ const BODY_DELIMITER_RULES = [
   dollarQuotedBody,
 ];
 
+// Coarse statement families, keyed by the keyword(s) that can start them. A top-level statement
+// beginning with one of these words becomes the matching `<kind>_statement` node; every other
+// statement stays a plain `statement`. The body of every family is the same tolerant token run,
+// so unknown or newer Snowflake syntax keeps parsing \u2014 only the node name changes.
+const STATEMENT_KINDS = [
+  ['select_statement', ['select', 'with']],
+  ['insert_statement', ['insert']],
+  ['update_statement', ['update']],
+  ['delete_statement', ['delete']],
+  ['merge_statement', ['merge']],
+  ['create_statement', ['create']],
+  ['drop_statement', ['drop']],
+  ['alter_statement', ['alter']],
+  ['grant_statement', ['grant']],
+  ['revoke_statement', ['revoke']],
+  ['copy_statement', ['copy']],
+  ['use_statement', ['use']],
+  ['set_statement', ['set']],
+  ['show_statement', ['show']],
+  ['describe_statement', ['describe', 'desc']],
+];
+
+// Statement-leading keywords lex as dedicated (hidden) tokens so the parser can pick a statement
+// family from the first word. They are always aliased back to `keyword` in the tree, keeping the
+// token stream \u2014 and every highlight/injection query over it \u2014 unchanged. KEYWORDS above remains
+// the single source of truth that the Rust keyword-sync tests check.
+const STATEMENT_LEADING_KEYWORDS = [...new Set(STATEMENT_KINDS.flatMap(([, words]) => words))];
+
+const GENERAL_KEYWORDS = KEYWORDS.filter(word => !STATEMENT_LEADING_KEYWORDS.includes(word));
+
 module.exports = grammar({
   name: 'snowflake',
 
@@ -214,21 +244,46 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   rules: {
-    source_file: $ => repeat($.statement),
+    source_file: $ => repeat($._statement),
+
+    _statement: $ => choice(
+      ...STATEMENT_KINDS.map(([kind]) => $[kind]),
+      $.statement,
+    ),
 
     // A top-level statement: a tolerant run of tokens up to (and including) its `;` terminator. The
     // last statement in a script may omit the terminator, and a bare `;` is an empty statement.
     // Inside the run we opportunistically group balanced parentheses and immediate call syntax into
     // expression nodes. The grammar remains deliberately permissive: the rowan CST parser is still
     // the formatter source of truth.
+    //
+    // `statement` is the lenient fallback for anything that does not start with a statement-leading
+    // keyword (scripting blocks, CALL, TRUNCATE, EXECUTE IMMEDIATE, ...). Its first token excludes
+    // the leading keywords so that those always open their dedicated `<kind>_statement` node;
+    // mid-statement occurrences (subqueries, `UPDATE ... SET`, `GRANT SELECT`, ...) stay inside the
+    // current statement via the same right-associative "keep consuming" rule used before.
     statement: $ => choice(
-      prec.right(seq(repeat1($._statement_item), optional(';'))),
+      prec.right(seq($._non_leading_item, repeat($._statement_item), optional(';'))),
       ';',
     ),
+
+    ...Object.fromEntries(STATEMENT_KINDS.map(([kind, words]) => [
+      kind,
+      $ => prec.right(seq(
+        choice(...words.map(value => alias($[leadingTokenName(value)], $.keyword))),
+        repeat($._statement_item),
+        optional(';'),
+      )),
+    ])),
 
     _statement_item: $ => choice(
       $.expression,
       $._token,
+    ),
+
+    _non_leading_item: $ => choice(
+      $.expression,
+      $._non_leading_token,
     ),
 
     expression: $ => choice(
@@ -261,6 +316,11 @@ module.exports = grammar({
     ),
 
     _token: $ => choice(
+      $._non_leading_token,
+      $._leading_keyword,
+    ),
+
+    _non_leading_token: $ => choice(
       $.stage_reference,
       $.keyword,
       $.type,
@@ -273,6 +333,17 @@ module.exports = grammar({
       $.operator,
       $.punctuation,
     ),
+
+    // Statement-leading keywords appearing mid-statement (or inside parentheses) surface as plain
+    // `keyword` nodes, exactly as before the statement families were introduced.
+    _leading_keyword: $ => choice(
+      ...STATEMENT_LEADING_KEYWORDS.map(value => alias($[leadingTokenName(value)], $.keyword)),
+    ),
+
+    ...Object.fromEntries(STATEMENT_LEADING_KEYWORDS.map(value => [
+      leadingTokenName(value),
+      _ => token(prec(2, word(value))),
+    ])),
 
     comment: _ => token(prec(10, choice(
       seq('--', /[^\r\n]*/),
@@ -288,7 +359,7 @@ module.exports = grammar({
       )),
     ))),
 
-    keyword: _ => token(prec(2, choice(...KEYWORDS.map(word)))),
+    keyword: _ => token(prec(2, choice(...GENERAL_KEYWORDS.map(word)))),
 
     type: _ => token(prec(2, choice(...TYPES.map(word)))),
 
@@ -363,6 +434,10 @@ module.exports = grammar({
 function word(value) {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(escaped.replace(/[A-Za-z]/g, char => `[${char.toLowerCase()}${char.toUpperCase()}]`));
+}
+
+function leadingTokenName(value) {
+  return `_${value}_leading_keyword`;
 }
 
 function dollarQuotedBody() {

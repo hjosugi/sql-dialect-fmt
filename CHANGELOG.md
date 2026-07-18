@@ -9,8 +9,20 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-07-18
+
 ### Added
 
+- Added spec-driven rich hover (#92): keywords, clauses, and other constructs tracked in
+  `spec/seed/features.json` now hover with their syntax, GA/Preview status, parser coverage, and a
+  Snowflake docs link — including multi-word phrases such as `GROUP BY` or `LEFT OUTER JOIN`, and
+  `CREATE OR REPLACE ...` / `IS NOT NULL` forms.
+- Added `spec/seed/functions.json`, a curated function signature table (109 common Snowflake
+  functions), and hover for function calls: signature, return type, summary, and docs link.
+  Qualified names such as `SNOWFLAKE.CORTEX.SENTIMENT` and parenthesis-free context functions such
+  as `CURRENT_TIMESTAMP` are recognized.
+- Added `scripts/generate-hover-tables.py`, which generates the hover tables from the spec seeds
+  into `crates/sql-dialect-fmt-hover/src/generated.rs`; CI fails when the file is out of sync.
 - Structured parsing and formatting for the common `ALTER TABLE / VIEW / SESSION / WAREHOUSE /
   TASK` (plus SCHEMA / DATABASE / MATERIALIZED VIEW / DYNAMIC TABLE) statements: the object head
   and each action clause (`ADD/DROP/RENAME COLUMN`, `RENAME TO`, `SET`/`UNSET`,
@@ -20,14 +32,32 @@ The published crates share a single workspace version (see `RELEASING.md`).
 - Added `textDocument/onTypeFormatting` to the language server: typing `;` or a newline reformats
   the statement that just ended, using the same statement-level range formatting engine, and leaves
   already formatted statements untouched.
+- Added four lint rules, each individually toggleable and suppressible with
+  `-- sql-dialect-fmt: disable-next-line SDFxxx`: `DELETE` without `WHERE` (SDF004), `UPDATE`
+  without `WHERE` (SDF005), comma join in `FROM` — implicit cross join, with the Snowflake
+  `, LATERAL ...` / `, TABLE(...)` idioms exempt (SDF006), and `ORDER BY` ordinal (SDF007).
+- Added a CLI `--lint` flag that lints inputs instead of formatting them, printing findings as
+  `path:line:col: SDFxxx message` (1-based) and exiting `1` when any exist; it honors `--dialect`
+  and `sql-dialect-fmt.toml` dialect discovery.
+- Added Neovim (`editors/nvim`, filetype + LSP plugin), Zed (`editors/zed`, dev-installable
+  extension), and Helix (`editors/helix`, documented `languages.toml` snippet) packaging for the
+  `sql-dialect-fmt-lsp` language server and the bundled tree-sitter grammar.
 
 ### Changed
 
+- Structured the bundled Tree-sitter grammar with coarse statement-kind nodes
+  (`select_statement`, `insert_statement`, `create_statement`, ..., with a lenient `statement`
+  fallback), improving editor folding, outlines, and text objects while keeping the tolerant
+  token-run parsing unchanged.
 - Split the formatter's SQL lowering module into focused query/DML/DDL/scripting/expression
   submodules so the statement-family rules no longer live in one large file.
 - Split the parser grammar module into focused per-family submodules (queries, expressions, DDL,
   access control, COPY INTO, scripting, MATCH_RECOGNIZE) so the grammar no longer lives in one
   large file.
+- Extracted the lint engine into a published, LSP-independent `sql-dialect-fmt-lint` crate
+  (byte-ranged diagnostics; publishes after `parser`, before the CLI and LSP crates). The LSP
+  crate keeps its public lint API (`LintOptions`, `LintCode`, `diagnostic_lint_code`, …) as a
+  thin adapter over the new crate.
 
 ## [1.14.0] - 2026-07-16
 
@@ -371,7 +401,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.12.0...v1.12.1

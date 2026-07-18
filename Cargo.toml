@@ -4,7 +4,7 @@ members = ["crates/*"]
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "1.14.0"
+version = "1.15.0"
 edition = "2021"
 rust-version = "1.94"
 license = "0BSD"
@@ -16,17 +16,18 @@ keywords = ["snowflake", "sql", "formatter", "parser"]
 categories = ["development-tools", "parser-implementations"]
 
 [workspace.dependencies]
-sql-dialect-fmt-config = { path = "crates/sql-dialect-fmt-config", version = "1.14.0" }
-sql-dialect-fmt-encoding = { path = "crates/sql-dialect-fmt-encoding", version = "1.14.0" }
-sql-dialect-fmt-formatter = { path = "crates/sql-dialect-fmt-formatter", version = "1.14.0" }
-sql-dialect-fmt-highlight = { path = "crates/sql-dialect-fmt-highlight", version = "1.14.0" }
-sql-dialect-fmt-hover = { path = "crates/sql-dialect-fmt-hover", version = "1.14.0" }
-sql-dialect-fmt-lexer = { path = "crates/sql-dialect-fmt-lexer", version = "1.14.0" }
-sql-dialect-fmt-parser = { path = "crates/sql-dialect-fmt-parser", version = "1.14.0" }
-sql-dialect-fmt-syntax = { path = "crates/sql-dialect-fmt-syntax", version = "1.14.0" }
-sql-dialect-fmt-test-fixtures = { path = "crates/sql-dialect-fmt-test-fixtures", version = "1.14.0" }
-sql-dialect-fmt-test-support = { path = "crates/sql-dialect-fmt-test-support", version = "1.14.0" }
-sql-dialect-fmt-text = { path = "crates/sql-dialect-fmt-text", version = "1.14.0" }
+sql-dialect-fmt-config = { path = "crates/sql-dialect-fmt-config", version = "1.15.0" }
+sql-dialect-fmt-encoding = { path = "crates/sql-dialect-fmt-encoding", version = "1.15.0" }
+sql-dialect-fmt-formatter = { path = "crates/sql-dialect-fmt-formatter", version = "1.15.0" }
+sql-dialect-fmt-highlight = { path = "crates/sql-dialect-fmt-highlight", version = "1.15.0" }
+sql-dialect-fmt-hover = { path = "crates/sql-dialect-fmt-hover", version = "1.15.0" }
+sql-dialect-fmt-lexer = { path = "crates/sql-dialect-fmt-lexer", version = "1.15.0" }
+sql-dialect-fmt-lint = { path = "crates/sql-dialect-fmt-lint", version = "1.15.0" }
+sql-dialect-fmt-parser = { path = "crates/sql-dialect-fmt-parser", version = "1.15.0" }
+sql-dialect-fmt-syntax = { path = "crates/sql-dialect-fmt-syntax", version = "1.15.0" }
+sql-dialect-fmt-test-fixtures = { path = "crates/sql-dialect-fmt-test-fixtures", version = "1.15.0" }
+sql-dialect-fmt-test-support = { path = "crates/sql-dialect-fmt-test-support", version = "1.15.0" }
+sql-dialect-fmt-text = { path = "crates/sql-dialect-fmt-text", version = "1.15.0" }
 
 # Optimize release builds for the "fast by default" goal.
 [profile.release]

@@ -4,6 +4,27 @@ use tree_sitter::{InputEdit, Point, Query, QueryCursor, StreamingIterator};
 
 const GRAMMAR_JS: &str = include_str!("../../../tree-sitter-snowflake/grammar.js");
 
+/// Every node kind the grammar can produce for a top-level statement: the coarse
+/// statement families plus the lenient `statement` fallback.
+const STATEMENT_NODE_KINDS: &[&str] = &[
+    "select_statement",
+    "insert_statement",
+    "update_statement",
+    "delete_statement",
+    "merge_statement",
+    "create_statement",
+    "drop_statement",
+    "alter_statement",
+    "grant_statement",
+    "revoke_statement",
+    "copy_statement",
+    "use_statement",
+    "set_statement",
+    "show_statement",
+    "describe_statement",
+    "statement",
+];
+
 struct SqlCase {
     name: &'static str,
     sql: &'static str,
@@ -200,11 +221,11 @@ fn assert_parse_ok_named(name: &str, sql: &str) {
         "{name} contains Tree-sitter errors: {}",
         root.to_sexp()
     );
-    // The structural layer: every top-level named child is a `statement` (or a free-standing
-    // `comment`, which the grammar attaches to the root as an extra).
+    // The structural layer: every top-level named child is a statement-kind node (or a
+    // free-standing `comment`, which the grammar attaches to the root as an extra).
     for child in root.named_children(&mut root.walk()) {
         assert!(
-            matches!(child.kind(), "statement" | "comment"),
+            child.kind() == "comment" || STATEMENT_NODE_KINDS.contains(&child.kind()),
             "{name} has an unexpected top-level node `{}`: {}",
             child.kind(),
             root.to_sexp()
@@ -387,6 +408,85 @@ fn highlight_query_captures_expected_tokens() {
                 case.name
             );
         }
+    }
+}
+
+#[test]
+fn statement_kind_nodes_classify_top_level_statements() {
+    let sql = "SELECT 1; WITH x AS (SELECT 1) SELECT * FROM x; INSERT INTO t VALUES (1); \
+               UPDATE t SET a = 1; DELETE FROM t; \
+               MERGE INTO d USING s ON d.i = s.i WHEN MATCHED THEN UPDATE SET v = s.v; \
+               CREATE TABLE t AS SELECT 1; DROP TABLE t; ALTER TABLE t SET COMMENT = 'c'; \
+               GRANT SELECT ON t TO ROLE r; REVOKE SELECT ON t FROM ROLE r; \
+               COPY INTO @s FROM t; USE DATABASE d; SET v = 1; SHOW TABLES; \
+               DESCRIBE TABLE t; DESC TABLE t; TRUNCATE TABLE t; CALL p();";
+    let tree = parse(sql);
+    let root = tree.root_node();
+    assert!(!root.has_error(), "{}", root.to_sexp());
+
+    let kinds: Vec<&str> = root
+        .named_children(&mut root.walk())
+        .map(|child| child.kind())
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "select_statement",
+            "select_statement",
+            "insert_statement",
+            "update_statement",
+            "delete_statement",
+            "merge_statement",
+            "create_statement",
+            "drop_statement",
+            "alter_statement",
+            "grant_statement",
+            "revoke_statement",
+            "copy_statement",
+            "use_statement",
+            "set_statement",
+            "show_statement",
+            "describe_statement",
+            "describe_statement",
+            "statement",
+            "statement",
+        ],
+        "{}",
+        root.to_sexp()
+    );
+}
+
+#[test]
+fn statement_leading_keywords_stay_keywords_mid_statement() {
+    // Statement-leading words appearing inside a statement (subqueries, `UPDATE ... SET`,
+    // `GRANT SELECT`, ...) must stay plain `keyword` tokens of the surrounding statement.
+    for (sql, expected_kind, expected_statements) in [
+        ("CREATE TABLE t AS SELECT 1 FROM s;", "create_statement", 1),
+        ("GRANT SELECT ON t TO ROLE r;", "grant_statement", 1),
+        ("INSERT INTO t SELECT * FROM s;", "insert_statement", 1),
+        ("SELECT * FROM (SELECT 1);", "select_statement", 1),
+    ] {
+        let tree = parse(sql);
+        let root = tree.root_node();
+        assert!(!root.has_error(), "{sql}: {}", root.to_sexp());
+        assert_eq!(
+            root.named_child_count(),
+            expected_statements,
+            "{sql}: {}",
+            root.to_sexp()
+        );
+        let statement = root.named_child(0).expect("statement node");
+        assert_eq!(statement.kind(), expected_kind, "{sql}: {}", root.to_sexp());
+    }
+}
+
+#[test]
+fn node_types_expose_statement_kinds() {
+    for kind in STATEMENT_NODE_KINDS {
+        assert!(
+            sql_dialect_fmt_tree_sitter::NODE_TYPES.contains(&format!("\"{kind}\"")),
+            "node-types.json is missing `{kind}`"
+        );
     }
 }
 
