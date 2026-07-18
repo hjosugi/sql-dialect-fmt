@@ -2,7 +2,7 @@
   "name": "snowflake-sql-sql-dialect-fmt",
   "displayName": "Snowflake SQL (sql-dialect-fmt)",
   "description": "Local Snowflake and Databricks SQL formatting, syntax highlighting, and optional LSP diagnostics, hover, and completion.",
-  "version": "1.16.0",
+  "version": "1.16.1",
   "publisher": "sql-dialect-fmt",
   "license": "0BSD",
   "repository": {
