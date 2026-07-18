@@ -9,9 +9,21 @@ It lives **outside the Cargo workspace** (it is not a `crates/*` member), so it 
 
 ## Files
 - `seed/features.json` — the curated, diffable feature inventory (**edit this**; it's the source of truth).
+- `seed/functions.json` — the curated function signature table (name, signature, returns, status,
+  docs URL) that powers function hover.
 - `snowflake_spec.py` — stdlib-only CLI: `init` / `import` / `coverage` / `changes` / `snapshot`.
 - `CHANGELOG.md` — human notes on notable periodic Snowflake changes.
 - `snowflake_spec.db` — local SQLite store (git-ignored, regenerate with `init` + `import`).
+
+## Editor hover is generated from these seeds
+`sql-dialect-fmt-hover` serves rich hover (syntax, GA/Preview status, parser coverage, docs links)
+from static tables generated out of `seed/features.json` and `seed/functions.json`. Because `spec/`
+is not packaged with the published crates, the tables are checked in at
+`crates/sql-dialect-fmt-hover/src/generated.rs`. After editing either seed, run:
+```sh
+python3 scripts/generate-hover-tables.py
+```
+CI runs the same script with `--check` and fails when the generated file is out of sync.
 
 ## Periodic workflow (manual — responding to changes is **not** automated)
 1. Refresh `seed/features.json` from <https://docs.snowflake.com/en/sql-reference>: add new
@@ -25,6 +37,7 @@ It lives **outside the Cargo workspace** (it is not a `crates/*` member), so it 
 3. Review what moved: `python3 spec/snowflake_spec.py changes` — note anything important in `CHANGELOG.md`.
 4. Pick the next work: `python3 spec/snowflake_spec.py coverage` (parsed/total per category).
 5. Update the parser + `ROADMAP.md` by hand for the changes that matter.
+6. Regenerate the hover tables: `python3 scripts/generate-hover-tables.py`.
 
 ## Quick start
 ```sh

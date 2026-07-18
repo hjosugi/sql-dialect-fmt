@@ -118,6 +118,7 @@
 ## Phase 9 — ハイライト + LSP ✅
 - ✅ Lexical highlight 基盤（keyword/type/string/comment/operator/punctuation/range、内蔵 easy fixture 全 SQL でロスレス検証） … [crates/sql-dialect-fmt-highlight/](crates/sql-dialect-fmt-highlight/)
 - ✅ Hover 基盤（Snowflake 型、`CREATE PROCEDURE` の signature/returns/language、`CREATE TASK` の compute/schedule/when、procedure/task property 説明） … [crates/sql-dialect-fmt-hover/](crates/sql-dialect-fmt-hover/)
+- ✅ Rich hover（spec トラッカー連携）: `spec/seed/features.json` のキーワード/句（syntax・GA/Preview status・parse coverage・docs URL）と新設 `spec/seed/functions.json` の関数シグネチャ表（`SNOWFLAKE.CORTEX.*` の qualified 名や括弧なし context 関数を含む）を `scripts/generate-hover-tables.py` で静的テーブル生成し `textDocument/hover` へ配線（#92） … [crates/sql-dialect-fmt-hover/](crates/sql-dialect-fmt-hover/) `generated.rs`/`spec.rs`
 - ✅ Tree-sitter grammar baseline（Neovim/Zed/GitHub 向け token grammar、highlight/locals/injections queries、Rust wrapper、内蔵 easy fixture 全 SQL + LF/CRLF/CR/mixed 改行で cargo test 統合） … [tree-sitter-snowflake/](tree-sitter-snowflake/) / [crates/sql-dialect-fmt-tree-sitter/](crates/sql-dialect-fmt-tree-sitter/)
 - ✅ CST → セマンティックトークン（highlighter から LSP legend へ、UTF-16 桁・複数行トークン分割・デルタ符号化） … [crates/sql-dialect-fmt-lsp/](crates/sql-dialect-fmt-lsp/) `semantic_tokens`
 - ✅ **LSP サーバ `sql-dialect-fmt-lsp`**（stdio・`lsp-server`/`lsp-types`、同期。`formatting`＝全文整形、`semanticTokens/full`、`publishDiagnostics`＝パースエラー、`hover`＝キーワード/型/シンボル説明（`sql-dialect-fmt-hover` 配線）、`foldingRange`＝文単位。**インクリメンタル同期**（範囲編集を splice）・初期化/シャットダウン。純粋関数はユニットテスト、サーバは stdio エンドツーエンド検証） … [crates/sql-dialect-fmt-lsp/](crates/sql-dialect-fmt-lsp/)
@@ -148,7 +149,7 @@
 1. **Store 運用**: Chrome Web Store / VS Code Marketplace は workflow 済み。初回 listing・審査・publisher 権限を済ませ、OAuth/PAT または Entra ID 設定を helper で repo に入れたら tag push で本公開できる。
 2. **仕様追随**: Snowflake Preview option / Semantic View / Cortex-AISQL の追加は conformance generator と外部 corpus の継続運用で追う。
 3. **Formatter polish**: コメント配置、未構造化 DDL、balanced-paren 構文などは小さな issue 単位で進める。
-4. **LSP / editor polish**: rich hover、設定 reload、VS Code integration、store listing を個別 issue で完了させる。
+4. **LSP / editor polish**: 設定 reload、VS Code integration、store listing を個別 issue で完了させる（rich hover は #92 で spec 連携済み。識別子の別名解決への拡張が次段）。
 5. **研究開発**: もし機械可読な公式 grammar が得られた場合のみ、Pure Rust CST parser 生成の feasibility を再評価する。
 
 回帰ゲートは `cargo test --workspace`（golden=insta、full/sql-only、lexer/parser recovery、lexical highlight、Tree-sitter、formatter べき等/ラウンドトリップ）＋ `cargo clippy --workspace --all-targets -- -D warnings` ＋ `cargo fmt --all -- --check`。release 時は `scripts/package-extensions.sh`、formatter bench smoke、external corpus sample、conformance report、GitHub Actions の Release / CI / Docs / Corpus も確認する。

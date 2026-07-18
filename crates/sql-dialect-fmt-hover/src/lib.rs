@@ -3,12 +3,19 @@
 //! This crate is intentionally LSP-agnostic. LSP, Tree-sitter adapters, and CLI
 //! diagnostics can all call [`hover_at`] and translate the result into their own
 //! wire format.
+//!
+//! Besides the hand-written type/procedure/task descriptions, hover covers the
+//! Snowflake feature inventory and function signature table maintained in
+//! `spec/seed/*.json`. Those tables are checked in as `generated.rs` and
+//! refreshed with `python3 scripts/generate-hover-tables.py`.
 
 use sql_dialect_fmt_syntax::SyntaxKind;
 use std::ops::Range;
 
 mod data;
+mod generated;
 mod scan;
+mod spec;
 
 use data::{
     keyword_template, language_template, property_template, type_info, StaticHover,
@@ -35,6 +42,11 @@ pub enum HoverKind {
     Task,
     Language,
     Property,
+    /// A spec-tracker feature (statement, clause, predicate, ...) with its
+    /// syntax, Snowflake status, and parser coverage.
+    Feature,
+    /// A function signature from the spec function table.
+    Function,
 }
 
 /// Return hover information for the token at `offset`.
@@ -61,7 +73,13 @@ pub fn hover_at(source: &str, offset: usize) -> Option<Hover> {
     if let Some(hover) = property_hover(&token) {
         return Some(hover);
     }
-    keyword_hover(&token)
+    if let Some(hover) = spec::function_call_hover(&tokens, index) {
+        return Some(hover);
+    }
+    if let Some(hover) = keyword_hover(&token) {
+        return Some(hover);
+    }
+    spec::feature_hover(&tokens, index)
 }
 
 fn procedure_symbol_hover(

@@ -1,0 +1,892 @@
+{
+  "snowflake_spec_version": "2026-07 local sync (curated common-function signatures; refresh from docs.snowflake.com)",
+  "source_base": "https://docs.snowflake.com/en/sql-reference/functions",
+  "signature_legend": {
+    "signature": "call shape with <placeholders>; [] marks optional parts",
+    "returns": "result type as documented, simplified to the common case",
+    "parenless": "true when Snowflake also accepts the function without parentheses"
+  },
+  "functions": [
+    {
+      "name": "COUNT",
+      "category": "aggregate",
+      "signature": "COUNT( [DISTINCT] <expr> | * )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Counts rows (*) or non-NULL values; also usable as a window function with OVER."
+    },
+    {
+      "name": "COUNT_IF",
+      "category": "aggregate",
+      "signature": "COUNT_IF( <condition> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Counts the rows where the boolean condition is TRUE."
+    },
+    {
+      "name": "SUM",
+      "category": "aggregate",
+      "signature": "SUM( [DISTINCT] <expr> )",
+      "returns": "NUMBER | FLOAT",
+      "status": "GA",
+      "summary": "Adds the non-NULL input values; returns NULL for an empty or all-NULL group."
+    },
+    {
+      "name": "AVG",
+      "category": "aggregate",
+      "signature": "AVG( [DISTINCT] <expr> )",
+      "returns": "NUMBER | FLOAT",
+      "status": "GA",
+      "summary": "Arithmetic mean of the non-NULL input values."
+    },
+    {
+      "name": "MIN",
+      "category": "aggregate",
+      "signature": "MIN( <expr> )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Smallest non-NULL value in the group; NULLs are ignored."
+    },
+    {
+      "name": "MAX",
+      "category": "aggregate",
+      "signature": "MAX( <expr> )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Largest non-NULL value in the group; NULLs are ignored."
+    },
+    {
+      "name": "MEDIAN",
+      "category": "aggregate",
+      "signature": "MEDIAN( <expr> )",
+      "returns": "NUMBER | FLOAT",
+      "status": "GA",
+      "summary": "Median of the non-NULL values; interpolates between the two middle values."
+    },
+    {
+      "name": "ANY_VALUE",
+      "category": "aggregate",
+      "signature": "ANY_VALUE( <expr> )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Returns an arbitrary value from the group; cheap way to carry a column through GROUP BY."
+    },
+    {
+      "name": "LISTAGG",
+      "category": "aggregate",
+      "signature": "LISTAGG( [DISTINCT] <expr> [, <delimiter>] ) [ WITHIN GROUP ( ORDER BY ... ) ]",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Concatenates non-NULL values into one string, optionally ordered and delimited."
+    },
+    {
+      "name": "ARRAY_AGG",
+      "category": "aggregate",
+      "signature": "ARRAY_AGG( [DISTINCT] <expr> ) [ WITHIN GROUP ( ORDER BY ... ) ]",
+      "returns": "ARRAY",
+      "status": "GA",
+      "summary": "Collects the non-NULL input values into an ARRAY, optionally ordered."
+    },
+    {
+      "name": "OBJECT_AGG",
+      "category": "aggregate",
+      "signature": "OBJECT_AGG( <key>, <value> )",
+      "returns": "OBJECT",
+      "status": "GA",
+      "summary": "Builds one OBJECT per group from key/value pairs; keys must be unique and non-NULL."
+    },
+    {
+      "name": "APPROX_COUNT_DISTINCT",
+      "category": "aggregate",
+      "signature": "APPROX_COUNT_DISTINCT( <expr> [, ...] )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "HyperLogLog estimate of the number of distinct values (alias HLL); much cheaper than COUNT(DISTINCT ...)."
+    },
+    {
+      "name": "PERCENTILE_CONT",
+      "category": "aggregate",
+      "signature": "PERCENTILE_CONT( <fraction> ) WITHIN GROUP ( ORDER BY <expr> )",
+      "returns": "FLOAT",
+      "status": "GA",
+      "summary": "Continuous percentile: interpolates the value at the given fraction of the ordered group."
+    },
+    {
+      "name": "STDDEV",
+      "category": "aggregate",
+      "signature": "STDDEV( [DISTINCT] <expr> )",
+      "returns": "FLOAT",
+      "status": "GA",
+      "summary": "Sample standard deviation (alias STDDEV_SAMP); use STDDEV_POP for the population form."
+    },
+    {
+      "name": "ROW_NUMBER",
+      "category": "window",
+      "signature": "ROW_NUMBER() OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Unique 1-based row number within each partition in ORDER BY order."
+    },
+    {
+      "name": "RANK",
+      "category": "window",
+      "signature": "RANK() OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Rank with gaps: ties share a rank and the next rank skips ahead."
+    },
+    {
+      "name": "DENSE_RANK",
+      "category": "window",
+      "signature": "DENSE_RANK() OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Rank without gaps: ties share a rank and the next distinct value gets the next rank."
+    },
+    {
+      "name": "NTILE",
+      "category": "window",
+      "signature": "NTILE( <n> ) OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Splits each partition into <n> ordered buckets and returns the bucket number."
+    },
+    {
+      "name": "LAG",
+      "category": "window",
+      "signature": "LAG( <expr> [, <offset> [, <default>]] ) OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Value from a preceding row in the partition; <default> replaces the out-of-window NULL."
+    },
+    {
+      "name": "LEAD",
+      "category": "window",
+      "signature": "LEAD( <expr> [, <offset> [, <default>]] ) OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Value from a following row in the partition; <default> replaces the out-of-window NULL."
+    },
+    {
+      "name": "FIRST_VALUE",
+      "category": "window",
+      "signature": "FIRST_VALUE( <expr> ) [ IGNORE NULLS ] OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "First value of the ordered window frame; IGNORE NULLS skips leading NULLs."
+    },
+    {
+      "name": "LAST_VALUE",
+      "category": "window",
+      "signature": "LAST_VALUE( <expr> ) [ IGNORE NULLS ] OVER ( [PARTITION BY ...] ORDER BY ... )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Last value of the ordered window frame; mind the default frame end of CURRENT ROW."
+    },
+    {
+      "name": "RATIO_TO_REPORT",
+      "category": "window",
+      "signature": "RATIO_TO_REPORT( <expr> ) OVER ( [PARTITION BY ...] )",
+      "returns": "FLOAT",
+      "status": "GA",
+      "summary": "Each row's share of the partition total: value / SUM(value) OVER (...)."
+    },
+    {
+      "name": "CONCAT",
+      "category": "string",
+      "signature": "CONCAT( <expr1>, <expr2> [, ...] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Concatenates strings; equivalent to the || operator, and NULL if any input is NULL."
+    },
+    {
+      "name": "CONCAT_WS",
+      "category": "string",
+      "signature": "CONCAT_WS( <separator>, <expr1> [, ...] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Concatenates with a separator between the inputs; NULL if any input is NULL."
+    },
+    {
+      "name": "SUBSTR",
+      "category": "string",
+      "signature": "SUBSTR( <string>, <start> [, <length>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Substring from 1-based <start> (alias SUBSTRING); a negative start counts from the end."
+    },
+    {
+      "name": "SPLIT",
+      "category": "string",
+      "signature": "SPLIT( <string>, <separator> )",
+      "returns": "ARRAY",
+      "status": "GA",
+      "summary": "Splits a string on the literal separator into an ARRAY of strings."
+    },
+    {
+      "name": "SPLIT_PART",
+      "category": "string",
+      "signature": "SPLIT_PART( <string>, <delimiter>, <part_number> )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Returns the 1-based Nth piece after splitting; a negative index counts from the end."
+    },
+    {
+      "name": "TRIM",
+      "category": "string",
+      "signature": "TRIM( <expr> [, <characters>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Removes leading and trailing whitespace, or any of the given characters."
+    },
+    {
+      "name": "LPAD",
+      "category": "string",
+      "signature": "LPAD( <base>, <length> [, <pad>] )",
+      "returns": "VARCHAR | BINARY",
+      "status": "GA",
+      "summary": "Pads (or truncates) the string on the left to <length> using <pad>, default blanks."
+    },
+    {
+      "name": "RPAD",
+      "category": "string",
+      "signature": "RPAD( <base>, <length> [, <pad>] )",
+      "returns": "VARCHAR | BINARY",
+      "status": "GA",
+      "summary": "Pads (or truncates) the string on the right to <length> using <pad>, default blanks."
+    },
+    {
+      "name": "UPPER",
+      "category": "string",
+      "signature": "UPPER( <expr> )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Uppercases the string."
+    },
+    {
+      "name": "LOWER",
+      "category": "string",
+      "signature": "LOWER( <expr> )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Lowercases the string."
+    },
+    {
+      "name": "INITCAP",
+      "category": "string",
+      "signature": "INITCAP( <expr> [, <delimiters>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Capitalizes the first letter of each word; <delimiters> overrides the word separators."
+    },
+    {
+      "name": "LENGTH",
+      "category": "string",
+      "signature": "LENGTH( <expr> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Length in characters for strings (alias LEN); bytes for BINARY."
+    },
+    {
+      "name": "REPLACE",
+      "category": "string",
+      "signature": "REPLACE( <subject>, <pattern> [, <replacement>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Replaces every occurrence of the literal pattern; omitting <replacement> deletes it."
+    },
+    {
+      "name": "POSITION",
+      "category": "string",
+      "signature": "POSITION( <needle>, <haystack> [, <start>] ) | POSITION( <needle> IN <haystack> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "1-based position of the first occurrence, or 0 when not found (alias CHARINDEX with swapped args)."
+    },
+    {
+      "name": "STARTSWITH",
+      "category": "string",
+      "signature": "STARTSWITH( <string>, <prefix> )",
+      "returns": "BOOLEAN",
+      "status": "GA",
+      "summary": "TRUE when the string starts with the prefix (case-sensitive)."
+    },
+    {
+      "name": "ENDSWITH",
+      "category": "string",
+      "signature": "ENDSWITH( <string>, <suffix> )",
+      "returns": "BOOLEAN",
+      "status": "GA",
+      "summary": "TRUE when the string ends with the suffix (case-sensitive)."
+    },
+    {
+      "name": "CONTAINS",
+      "category": "string",
+      "signature": "CONTAINS( <haystack>, <needle> )",
+      "returns": "BOOLEAN",
+      "status": "GA",
+      "summary": "TRUE when the first argument contains the second (case-sensitive)."
+    },
+    {
+      "name": "REGEXP_REPLACE",
+      "category": "string",
+      "signature": "REGEXP_REPLACE( <subject>, <pattern> [, <replacement>, <position>, <occurrence>, <parameters>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Regex replace; the default empty <replacement> deletes matches, and backslashes must be doubled in string literals."
+    },
+    {
+      "name": "REGEXP_SUBSTR",
+      "category": "string",
+      "signature": "REGEXP_SUBSTR( <subject>, <pattern> [, <position>, <occurrence>, <parameters>, <group_num>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Returns the matching substring (or capture group) for the Nth regex match, or NULL."
+    },
+    {
+      "name": "COALESCE",
+      "category": "conditional",
+      "signature": "COALESCE( <expr1>, <expr2> [, ...] )",
+      "returns": "first non-NULL argument",
+      "status": "GA",
+      "summary": "First non-NULL argument, evaluated left to right."
+    },
+    {
+      "name": "NULLIF",
+      "category": "conditional",
+      "signature": "NULLIF( <expr1>, <expr2> )",
+      "returns": "same as first input",
+      "status": "GA",
+      "summary": "NULL when both arguments are equal, otherwise the first argument."
+    },
+    {
+      "name": "IFF",
+      "category": "conditional",
+      "signature": "IFF( <condition>, <true_result>, <false_result> )",
+      "returns": "result type",
+      "status": "GA",
+      "summary": "Single-branch if/then/else; NULL conditions fall through to <false_result>."
+    },
+    {
+      "name": "IFNULL",
+      "category": "conditional",
+      "signature": "IFNULL( <expr1>, <expr2> )",
+      "returns": "result type",
+      "status": "GA",
+      "summary": "Second argument when the first is NULL (alias NVL)."
+    },
+    {
+      "name": "NVL",
+      "category": "conditional",
+      "signature": "NVL( <expr1>, <expr2> )",
+      "returns": "result type",
+      "status": "GA",
+      "summary": "Second argument when the first is NULL (alias of IFNULL)."
+    },
+    {
+      "name": "NVL2",
+      "category": "conditional",
+      "signature": "NVL2( <expr1>, <not_null_result>, <null_result> )",
+      "returns": "result type",
+      "status": "GA",
+      "summary": "Returns the second argument when the first is not NULL, otherwise the third."
+    },
+    {
+      "name": "ZEROIFNULL",
+      "category": "conditional",
+      "signature": "ZEROIFNULL( <expr> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "0 when the input is NULL, otherwise the input."
+    },
+    {
+      "name": "DECODE",
+      "category": "conditional",
+      "signature": "DECODE( <expr>, <search1>, <result1> [, <search2>, <result2>, ...] [, <default>] )",
+      "returns": "result type",
+      "status": "GA",
+      "summary": "Compares against each search value (NULL matches NULL) and returns the paired result."
+    },
+    {
+      "name": "GREATEST",
+      "category": "conditional",
+      "signature": "GREATEST( <expr1> [, ...] )",
+      "returns": "largest argument",
+      "status": "GA",
+      "summary": "Largest argument; NULL if any argument is NULL (see GREATEST_IGNORE_NULLS)."
+    },
+    {
+      "name": "LEAST",
+      "category": "conditional",
+      "signature": "LEAST( <expr1> [, ...] )",
+      "returns": "smallest argument",
+      "status": "GA",
+      "summary": "Smallest argument; NULL if any argument is NULL (see LEAST_IGNORE_NULLS)."
+    },
+    {
+      "name": "EQUAL_NULL",
+      "category": "conditional",
+      "signature": "EQUAL_NULL( <expr1>, <expr2> )",
+      "returns": "BOOLEAN",
+      "status": "GA",
+      "summary": "NULL-safe equality: TRUE when both are equal or both are NULL."
+    },
+    {
+      "name": "ABS",
+      "category": "numeric",
+      "signature": "ABS( <expr> )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Absolute value."
+    },
+    {
+      "name": "CEIL",
+      "category": "numeric",
+      "signature": "CEIL( <expr> [, <scale>] )",
+      "returns": "NUMBER | FLOAT",
+      "status": "GA",
+      "summary": "Rounds up (toward positive infinity) to the given scale, default 0 digits."
+    },
+    {
+      "name": "FLOOR",
+      "category": "numeric",
+      "signature": "FLOOR( <expr> [, <scale>] )",
+      "returns": "NUMBER | FLOAT",
+      "status": "GA",
+      "summary": "Rounds down (toward negative infinity) to the given scale, default 0 digits."
+    },
+    {
+      "name": "ROUND",
+      "category": "numeric",
+      "signature": "ROUND( <expr> [, <scale>] [, <rounding_mode>] )",
+      "returns": "NUMBER | FLOAT",
+      "status": "GA",
+      "summary": "Rounds half away from zero by default; HALF_TO_EVEN is available as the rounding mode."
+    },
+    {
+      "name": "TRUNC",
+      "category": "numeric",
+      "signature": "TRUNC( <expr> [, <scale>] ) | TRUNC( <date_or_time_expr>, <date_part> )",
+      "returns": "NUMBER | DATE/TIMESTAMP",
+      "status": "GA",
+      "summary": "Truncates toward zero at the given scale; the two-argument date form works like DATE_TRUNC."
+    },
+    {
+      "name": "MOD",
+      "category": "numeric",
+      "signature": "MOD( <dividend>, <divisor> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Remainder with the sign of the dividend; also available as the % operator."
+    },
+    {
+      "name": "POWER",
+      "category": "numeric",
+      "signature": "POWER( <base>, <exponent> )",
+      "returns": "FLOAT",
+      "status": "GA",
+      "summary": "Raises the base to the exponent (alias POW)."
+    },
+    {
+      "name": "SQRT",
+      "category": "numeric",
+      "signature": "SQRT( <expr> )",
+      "returns": "FLOAT",
+      "status": "GA",
+      "summary": "Square root; errors on negative input."
+    },
+    {
+      "name": "RANDOM",
+      "category": "numeric",
+      "signature": "RANDOM( [<seed>] )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Pseudo-random 64-bit integer per row; a seed makes the sequence repeatable within a query."
+    },
+    {
+      "name": "UNIFORM",
+      "category": "numeric",
+      "signature": "UNIFORM( <min>, <max>, <gen> )",
+      "returns": "NUMBER | FLOAT",
+      "status": "GA",
+      "summary": "Uniformly distributed value in [min, max]; pass RANDOM() as the generator."
+    },
+    {
+      "name": "CURRENT_DATE",
+      "category": "context",
+      "signature": "CURRENT_DATE[()]",
+      "returns": "DATE",
+      "status": "GA",
+      "parenless": true,
+      "summary": "Current date in the session time zone."
+    },
+    {
+      "name": "CURRENT_TIMESTAMP",
+      "category": "context",
+      "signature": "CURRENT_TIMESTAMP[( [<fract_sec_precision>] )]",
+      "returns": "TIMESTAMP_LTZ",
+      "status": "GA",
+      "parenless": true,
+      "summary": "Current timestamp in the session time zone."
+    },
+    {
+      "name": "SYSDATE",
+      "category": "context",
+      "signature": "SYSDATE()",
+      "returns": "TIMESTAMP_NTZ",
+      "status": "GA",
+      "summary": "Current timestamp in UTC, independent of the session time zone."
+    },
+    {
+      "name": "CURRENT_USER",
+      "category": "context",
+      "signature": "CURRENT_USER[()]",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "parenless": true,
+      "summary": "Name of the user who is running the session."
+    },
+    {
+      "name": "CURRENT_ROLE",
+      "category": "context",
+      "signature": "CURRENT_ROLE[()]",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "parenless": true,
+      "summary": "Primary role active in the session, or NULL when only secondary roles are active."
+    },
+    {
+      "name": "CURRENT_WAREHOUSE",
+      "category": "context",
+      "signature": "CURRENT_WAREHOUSE()",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Name of the warehouse in use for the session."
+    },
+    {
+      "name": "CURRENT_DATABASE",
+      "category": "context",
+      "signature": "CURRENT_DATABASE()",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Database in use for the session, or NULL when none is selected."
+    },
+    {
+      "name": "CURRENT_SCHEMA",
+      "category": "context",
+      "signature": "CURRENT_SCHEMA()",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Schema in use for the session, or NULL when none is selected."
+    },
+    {
+      "name": "DATEADD",
+      "category": "datetime",
+      "signature": "DATEADD( <date_or_time_part>, <value>, <date_or_time_expr> )",
+      "returns": "DATE | TIME | TIMESTAMP",
+      "status": "GA",
+      "summary": "Adds the signed value of the given part (day, month, hour, ...) to a date/time."
+    },
+    {
+      "name": "DATEDIFF",
+      "category": "datetime",
+      "signature": "DATEDIFF( <date_or_time_part>, <start>, <end> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Counts part boundaries crossed between start and end (not elapsed time): end minus start."
+    },
+    {
+      "name": "DATE_TRUNC",
+      "category": "datetime",
+      "signature": "DATE_TRUNC( <date_or_time_part>, <expr> )",
+      "returns": "same as input",
+      "status": "GA",
+      "summary": "Truncates a date/time down to the start of the given part (year, month, day, hour, ...)."
+    },
+    {
+      "name": "DATE_PART",
+      "category": "datetime",
+      "signature": "DATE_PART( <date_or_time_part>, <expr> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Extracts the numeric value of the given part; EXTRACT(<part> FROM <expr>) is equivalent."
+    },
+    {
+      "name": "EXTRACT",
+      "category": "datetime",
+      "signature": "EXTRACT( <date_or_time_part> FROM <expr> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "SQL-standard spelling of DATE_PART."
+    },
+    {
+      "name": "LAST_DAY",
+      "category": "datetime",
+      "signature": "LAST_DAY( <date_or_time_expr> [, <date_part>] )",
+      "returns": "DATE",
+      "status": "GA",
+      "summary": "Last day of the month (default) or of the given part, e.g. year or quarter."
+    },
+    {
+      "name": "CONVERT_TIMEZONE",
+      "category": "datetime",
+      "signature": "CONVERT_TIMEZONE( [<source_tz>,] <target_tz>, <timestamp> )",
+      "returns": "TIMESTAMP_NTZ | TIMESTAMP_TZ",
+      "status": "GA",
+      "summary": "Converts between IANA time zones; the two-argument form treats the input as TIMESTAMP_LTZ."
+    },
+    {
+      "name": "TO_VARCHAR",
+      "category": "conversion",
+      "signature": "TO_VARCHAR( <expr> [, <format>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Converts to text, optionally with a number or date/time format model (alias TO_CHAR)."
+    },
+    {
+      "name": "TO_NUMBER",
+      "category": "conversion",
+      "signature": "TO_NUMBER( <expr> [, <format>] [, <precision>, <scale>] )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Converts to a fixed-point number (alias TO_DECIMAL); errors on invalid input, see TRY_TO_NUMBER."
+    },
+    {
+      "name": "TO_DATE",
+      "category": "conversion",
+      "signature": "TO_DATE( <expr> [, <format>] )",
+      "returns": "DATE",
+      "status": "GA",
+      "summary": "Converts strings, timestamps, or epoch numbers to DATE; errors on invalid input, see TRY_TO_DATE."
+    },
+    {
+      "name": "TO_TIMESTAMP",
+      "category": "conversion",
+      "signature": "TO_TIMESTAMP( <expr> [, <format> | <scale>] )",
+      "returns": "TIMESTAMP_NTZ",
+      "status": "GA",
+      "summary": "Converts to a timestamp; _NTZ/_LTZ/_TZ variants pick the time zone flavor explicitly."
+    },
+    {
+      "name": "TRY_TO_NUMBER",
+      "category": "conversion",
+      "signature": "TRY_TO_NUMBER( <string> [, <format>] [, <precision>, <scale>] )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Like TO_NUMBER but returns NULL instead of erroring on unparsable input."
+    },
+    {
+      "name": "TRY_TO_DATE",
+      "category": "conversion",
+      "signature": "TRY_TO_DATE( <string> [, <format>] )",
+      "returns": "DATE",
+      "status": "GA",
+      "summary": "Like TO_DATE but returns NULL instead of erroring on unparsable input."
+    },
+    {
+      "name": "TRY_TO_TIMESTAMP",
+      "category": "conversion",
+      "signature": "TRY_TO_TIMESTAMP( <string> [, <format>] )",
+      "returns": "TIMESTAMP_NTZ",
+      "status": "GA",
+      "summary": "Like TO_TIMESTAMP but returns NULL instead of erroring on unparsable input."
+    },
+    {
+      "name": "TO_JSON",
+      "category": "conversion",
+      "signature": "TO_JSON( <variant_expr> )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Serializes a VARIANT value to a JSON string; inverse of PARSE_JSON."
+    },
+    {
+      "name": "PARSE_JSON",
+      "category": "conversion",
+      "signature": "PARSE_JSON( <string> )",
+      "returns": "VARIANT",
+      "status": "GA",
+      "summary": "Parses JSON text into a VARIANT; errors on invalid JSON, see TRY_PARSE_JSON."
+    },
+    {
+      "name": "TRY_PARSE_JSON",
+      "category": "conversion",
+      "signature": "TRY_PARSE_JSON( <string> )",
+      "returns": "VARIANT",
+      "status": "GA",
+      "summary": "Like PARSE_JSON but returns NULL instead of erroring on invalid JSON."
+    },
+    {
+      "name": "FLATTEN",
+      "category": "table",
+      "signature": "FLATTEN( [INPUT =>] <expr> [, PATH => <path>] [, OUTER => TRUE|FALSE] [, RECURSIVE => TRUE|FALSE] [, MODE => 'OBJECT'|'ARRAY'|'BOTH'] )",
+      "returns": "rows: SEQ, KEY, PATH, INDEX, VALUE, THIS",
+      "status": "GA",
+      "summary": "Table function that explodes an ARRAY/OBJECT into rows; use with LATERAL or TABLE(...)."
+    },
+    {
+      "name": "GENERATOR",
+      "category": "table",
+      "signature": "GENERATOR( ROWCOUNT => <n> [, TIMELIMIT => <seconds>] )",
+      "returns": "rows with no columns",
+      "status": "GA",
+      "summary": "Table function producing synthetic rows; pair with SEQ4()/RANDOM() inside TABLE(...)."
+    },
+    {
+      "name": "SEQ4",
+      "category": "table",
+      "signature": "SEQ4( [0|1] )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Sequence of 4-byte integers for generated rowsets (also SEQ1/SEQ2/SEQ8); may contain gaps — use ROW_NUMBER for gap-free numbering."
+    },
+    {
+      "name": "GET",
+      "category": "semistructured",
+      "signature": "GET( <object_or_array>, <key_or_index> )",
+      "returns": "VARIANT",
+      "status": "GA",
+      "summary": "Element by object key or 0-based array index; NULL when absent. Bracket/colon syntax compiles to this."
+    },
+    {
+      "name": "GET_PATH",
+      "category": "semistructured",
+      "signature": "GET_PATH( <variant>, <path_string> )",
+      "returns": "VARIANT",
+      "status": "GA",
+      "summary": "Extracts a nested element by path such as 'a.b[0].c'; the : path operator is shorthand for this."
+    },
+    {
+      "name": "OBJECT_CONSTRUCT",
+      "category": "semistructured",
+      "signature": "OBJECT_CONSTRUCT( [<key1>, <value1> [, ...]] | * )",
+      "returns": "OBJECT",
+      "status": "GA",
+      "summary": "Builds an OBJECT from key/value pairs or all columns (*); pairs with NULL key or value are dropped (see OBJECT_CONSTRUCT_KEEP_NULL)."
+    },
+    {
+      "name": "OBJECT_KEYS",
+      "category": "semistructured",
+      "signature": "OBJECT_KEYS( <object> )",
+      "returns": "ARRAY",
+      "status": "GA",
+      "summary": "Top-level keys of an OBJECT (or object-typed VARIANT) as an array of strings."
+    },
+    {
+      "name": "ARRAY_CONSTRUCT",
+      "category": "semistructured",
+      "signature": "ARRAY_CONSTRUCT( [<expr> [, ...]] )",
+      "returns": "ARRAY",
+      "status": "GA",
+      "summary": "Builds an ARRAY from the arguments; [a, b, c] literal syntax is equivalent."
+    },
+    {
+      "name": "ARRAY_SIZE",
+      "category": "semistructured",
+      "signature": "ARRAY_SIZE( <array> )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Number of elements in an ARRAY (or array-typed VARIANT); NULL for non-arrays."
+    },
+    {
+      "name": "ARRAY_CONTAINS",
+      "category": "semistructured",
+      "signature": "ARRAY_CONTAINS( <value>, <array> )",
+      "returns": "BOOLEAN",
+      "status": "GA",
+      "summary": "TRUE when the array contains the value; note the value comes first."
+    },
+    {
+      "name": "ARRAY_TO_STRING",
+      "category": "semistructured",
+      "signature": "ARRAY_TO_STRING( <array>, <separator> )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Joins array elements into one string with the separator; NULL elements become empty strings."
+    },
+    {
+      "name": "TYPEOF",
+      "category": "semistructured",
+      "signature": "TYPEOF( <variant_expr> )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Type of the value stored in a VARIANT, e.g. 'VARCHAR', 'INTEGER', 'OBJECT', 'ARRAY', 'NULL_VALUE'."
+    },
+    {
+      "name": "HASH",
+      "category": "misc",
+      "signature": "HASH( <expr> [, ...] )",
+      "returns": "NUMBER",
+      "status": "GA",
+      "summary": "Stable (non-cryptographic) 64-bit signed hash of the arguments; do not use for security."
+    },
+    {
+      "name": "MD5",
+      "category": "misc",
+      "signature": "MD5( <message> )",
+      "returns": "VARCHAR(32)",
+      "status": "GA",
+      "summary": "MD5 digest as 32 hex characters."
+    },
+    {
+      "name": "SHA2",
+      "category": "misc",
+      "signature": "SHA2( <message> [, <digest_size>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "SHA-2 digest as hex; digest size 224, 256 (default), 384, or 512."
+    },
+    {
+      "name": "UUID_STRING",
+      "category": "misc",
+      "signature": "UUID_STRING( [<uuid_namespace>, <name>] )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "summary": "Random version-4 UUID, or a deterministic version-5 UUID from a namespace and name."
+    },
+    {
+      "name": "SYSTEM$STREAM_HAS_DATA",
+      "category": "misc",
+      "signature": "SYSTEM$STREAM_HAS_DATA( '<stream_name>' )",
+      "returns": "BOOLEAN",
+      "status": "GA",
+      "source": "https://docs.snowflake.com/en/sql-reference/functions/system_stream_has_data",
+      "summary": "TRUE when a stream has change records to consume; the usual guard in a task WHEN clause."
+    },
+    {
+      "name": "AI_COMPLETE",
+      "category": "ai",
+      "signature": "AI_COMPLETE( <model>, <prompt> [, <model_parameters>, <response_format>, <show_details>] )",
+      "returns": "VARCHAR | VARIANT",
+      "status": "GA",
+      "source": "https://docs.snowflake.com/en/sql-reference/functions/ai_complete",
+      "summary": "Generates an LLM completion for the prompt; the AISQL successor to SNOWFLAKE.CORTEX.COMPLETE."
+    },
+    {
+      "name": "SNOWFLAKE.CORTEX.COMPLETE",
+      "category": "ai",
+      "signature": "SNOWFLAKE.CORTEX.COMPLETE( <model>, <prompt_or_history> [, <options>] )",
+      "returns": "VARCHAR | VARIANT",
+      "status": "GA",
+      "source": "https://docs.snowflake.com/en/sql-reference/functions/complete-snowflake-cortex",
+      "summary": "LLM completion with a chosen model; newer workloads should prefer AI_COMPLETE."
+    },
+    {
+      "name": "SNOWFLAKE.CORTEX.SENTIMENT",
+      "category": "ai",
+      "signature": "SNOWFLAKE.CORTEX.SENTIMENT( <text> )",
+      "returns": "FLOAT",
+      "status": "GA",
+      "source": "https://docs.snowflake.com/en/sql-reference/functions/sentiment-snowflake-cortex",
+      "summary": "Sentiment score from -1 (negative) to 1 (positive) for English text."
+    },
+    {
+      "name": "SNOWFLAKE.CORTEX.TRANSLATE",
+      "category": "ai",
+      "signature": "SNOWFLAKE.CORTEX.TRANSLATE( <text>, <source_language>, <target_language> )",
+      "returns": "VARCHAR",
+      "status": "GA",
+      "source": "https://docs.snowflake.com/en/sql-reference/functions/translate-snowflake-cortex",
+      "summary": "Translates text between supported languages; '' as source language enables auto-detection."
+    }
+  ]
+}
