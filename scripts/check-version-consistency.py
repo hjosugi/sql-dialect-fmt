@@ -42,9 +42,16 @@ def load_homebrew_formula_version(path: pathlib.Path) -> str:
 
 
 def main() -> int:
+    with (ROOT / "editors" / "package-lock.json").open(encoding="utf-8") as handle:
+        editor_package_lock = json.load(handle)
+
     versions = {
         "Cargo.toml": load_cargo_version(),
         "editors/package.json": load_json_version(ROOT / "editors" / "package.json"),
+        "editors/package-lock.json": editor_package_lock["version"],
+        'editors/package-lock.json packages[""]': editor_package_lock["packages"][""][
+            "version"
+        ],
         "extensions/chrome/manifest.json": load_json_version(
             ROOT / "extensions" / "chrome" / "manifest.json"
         ),

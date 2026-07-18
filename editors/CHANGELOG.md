@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.16.0
+
 - Added an opt-in LSP client (`sqlDialectFmt.lsp.enabled`, default off): when the
   `sql-dialect-fmt-lsp` binary is installed, `snowflake-sql` documents gain lint diagnostics,
   hover, completion, semantic highlighting, document symbols, folding, and on-type formatting,
@@ -9,6 +11,8 @@
   WebAssembly formatter, unchanged.
 - Added the `sqlDialectFmt.lsp.path` setting for pointing at a `sql-dialect-fmt-lsp` binary that
   is not on `PATH`.
+- Updated the Marketplace summary to identify the extension as a formatter and fixed README image
+  and integration links so they render from the monorepo layout.
 
 ## 1.14.0
 
