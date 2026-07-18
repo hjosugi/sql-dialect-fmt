@@ -55,6 +55,7 @@ pub(super) fn must_separate_to_preserve_tokens(prev: SyntaxKind, cur: SyntaxKind
     matches!(
         (prev, cur),
         (MINUS, GT)
+            | (MINUS, GTE)
             | (MINUS, MINUS)
             | (MINUS, ARROW)
             | (MINUS, FLOW_PIPE)

@@ -8,6 +8,9 @@
   ],
   "patterns": [
     {
+      "include": "#javascript-routine"
+    },
+    {
       "include": "#comments"
     },
     {
@@ -42,6 +45,71 @@
     }
   ],
   "repository": {
+    "javascript-routine": {
+      "begin": "(?i)(\\bLANGUAGE\\b)(\\s+)(\\bJAVASCRIPT\\b)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.sql"
+        },
+        "3": {
+          "name": "keyword.other.sql"
+        }
+      },
+      "end": "(?=;)",
+      "patterns": [
+        {
+          "name": "meta.embedded.block.javascript.snowflake",
+          "contentName": "source.js",
+          "begin": "\\$\\$",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.sql"
+            }
+          },
+          "end": "\\$\\$",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.sql"
+            }
+          },
+          "patterns": [
+            {
+              "include": "source.js"
+            }
+          ]
+        },
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#types"
+        },
+        {
+          "include": "#keywords"
+        },
+        {
+          "include": "#variables"
+        },
+        {
+          "include": "#stages"
+        },
+        {
+          "include": "#quoted-identifiers"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#punctuation"
+        }
+      ]
+    },
     "comments": {
       "patterns": [
         {

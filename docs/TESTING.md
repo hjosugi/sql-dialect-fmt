@@ -22,6 +22,18 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate
 npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 ```
 
+VS Code extension checks:
+
+```sh
+./scripts/build-vscode-extension.sh
+python3 scripts/check-vsix-package.py path/to/sql-dialect-fmt.vsix
+```
+
+The build script compiles the real Wasm formatter, bundles the extension host, and runs the
+TextMate and bundle-to-Wasm integration tests. The package validator runs after creating a VSIX and
+guards its manifest, embedded-language mapping, required assets, single JavaScript bundle, and
+absence of `node_modules`.
+
 ## Fuzzing
 
 Coverage-guided fuzzing lives in the excluded `fuzz/` crate so normal workspace
@@ -76,6 +88,8 @@ Highlight:
 - stable capture categories for editor adapters
 - byte ranges over Unicode and mixed newlines
 - Snowflake-specific operators and types
+- TextMate injection tests with `vscode-textmate` and `vscode-oniguruma`, including entry into and
+  exit from embedded JavaScript
 
 Hover:
 
@@ -90,6 +104,14 @@ Tree-sitter:
 - real capture execution for important highlight scopes
 - generated `src/parser.c` and `src/node-types.json` committed with grammar changes
 - body delimiter rule changes reflected in corpus and generated parser files
+
+VS Code:
+
+- the bundled extension registers document and range formatting providers
+- the provider sends a realistic fixture through the packaged Wasm ABI and compares exact output
+- embedded JavaScript uses VS Code's `source.js` scope without leaking into the following SQL
+- the VSIX contains one JavaScript bundle, the Wasm module, grammar, manifest, and no dependency
+  tree
 
 ## Fixture Policy
 
@@ -108,6 +130,12 @@ fixtures do not require updating every consumer test:
   focused `clean` parser tests as grammar support lands.
 - Add narrow table-driven tests beside the crate that owns the behavior when a
   bug is more specific than a fixture.
+
+Do not treat the presence of an `expected.sql` file in `EASY_CASES` as proof that every consumer
+compares formatter output byte-for-byte. For an output regression, add a focused regression fixture
+whose expected bytes are asserted by the owning formatter test. If the bug crosses a distribution
+boundary, exercise the same fixture through the relevant CLI, LSP stdio, raw Wasm ABI, or bundled
+editor provider as well.
 
 Broader generated corpora should stay outside the repository. Use the CLI
 `--fixtures` flag for one-off local checks rather than committing generated

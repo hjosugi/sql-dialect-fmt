@@ -13,6 +13,10 @@ use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
 use sql_dialect_fmt_test_fixtures::EASY_CASES;
+#[cfg(feature = "embedded-javascript")]
+use sql_dialect_fmt_test_fixtures::{
+    javascript_routine_trailing_whitespace_input, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED,
+};
 
 fn fmt(src: &str) -> String {
     format(src, &FormatOptions::default())
@@ -138,6 +142,7 @@ fn standalone_dot_followed_by_number_does_not_merge_into_float() {
 #[test]
 fn adjacent_operator_tokens_do_not_merge() {
     assert_eq!(fmt("desc - > "), "DESC - >;\n");
+    assert_eq!(fmt("create - >= "), "CREATE - >=;\n");
     assert_eq!(fmt("desc - - "), "DESC - -;\n");
     assert_eq!(fmt("desc - -> "), "DESC - ->;\n");
     assert_eq!(fmt("desc : = "), "DESC: =;\n");
@@ -683,6 +688,40 @@ fn javascript_routine_body_preserves_template_literal_indentation() {
 
 #[test]
 #[cfg(feature = "embedded-javascript")]
+fn javascript_routine_with_trailing_whitespace_matches_realistic_golden_output() {
+    let input = javascript_routine_trailing_whitespace_input();
+    let output = fmt(&input);
+
+    assert_ne!(
+        output, input,
+        "the formatter must not silently return the input"
+    );
+    assert_eq!(output, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED);
+    assert_eq!(
+        fmt(&output),
+        output,
+        "the regression output must be idempotent"
+    );
+    assert!(
+        !output
+            .lines()
+            .any(|line| line.ends_with(' ') || line.ends_with('\t')),
+        "formatted output still contains trailing whitespace"
+    );
+}
+
+#[test]
+#[cfg(feature = "embedded-javascript")]
+fn multiple_javascript_routine_bodies_use_their_own_prepared_output() {
+    let src = "create function f() returns string language javascript as $$\nvar x = 1; \n$$;\ncreate function g() returns string language javascript as $$\nvar y = 2; \n$$";
+    let expected = "CREATE FUNCTION f () RETURNS string LANGUAGE JAVASCRIPT AS $$\nvar x = 1;\n$$;\nCREATE FUNCTION g () RETURNS string LANGUAGE JAVASCRIPT AS $$\nvar y = 2;\n$$;\n";
+
+    assert_eq!(fmt(src), expected);
+    assert_eq!(fmt(expected), expected);
+}
+
+#[test]
+#[cfg(feature = "embedded-javascript")]
 fn documented_javascript_procedure_api_body_is_formatted() {
     let src = "create procedure stproc1() returns string not null language javascript as -- \"$$\" is delimiter\n$$ var statement = snowflake.createStatement({sqlText: \"select 1\"}); return statement.execute().next(); $$";
     let out = fmt(src);
@@ -785,6 +824,18 @@ fn invalid_javascript_routine_body_stays_verbatim() {
 }
 
 #[test]
+#[cfg(feature = "embedded-javascript")]
+fn invalid_javascript_routine_with_trailing_whitespace_preserves_the_entire_input() {
+    let src = "create function f() returns string language javascript as $$\nif ( \n   \n$$";
+    let out = fmt(src);
+
+    assert_eq!(
+        out, src,
+        "an unparseable embedded body must not bypass the trailing-whitespace safety fallback"
+    );
+}
+
+#[test]
 #[cfg(feature = "embedded-python")]
 fn python_routine_body_is_formatted_when_supported() {
     let py = "create procedure py_p() returns string language python RUNTIME_VERSION = '3.12' PACKAGES = ('snowflake-snowpark-python') HANDLER = 'main' as $$\ndef main(session):\n    return 'ok'\n$$";
@@ -813,7 +864,7 @@ fn java_and_scala_routine_bodies_are_formatted_when_supported() {
     let java_out = fmt(java);
     assert_eq!(
         java_out,
-        "CREATE FUNCTION java_f (\n    x int\n) RETURNS int LANGUAGE JAVA HANDLER = 'C.run' AS $$\nclass C {\n    public static int run(int x) {\n        return x + 1;\n    }\n}\n$$;\n"
+        "CREATE FUNCTION java_f (x int) RETURNS int LANGUAGE JAVA HANDLER = 'C.run' AS $$\nclass C {\n    public static int run(int x) {\n        return x + 1;\n    }\n}\n$$;\n"
     );
     assert_eq!(fmt(&java_out), java_out);
 

@@ -28,11 +28,12 @@ rustup target add wasm32-unknown-unknown >/dev/null
 
 (
   cd "$ROOT_DIR/editors"
-  # Dependency mode (no --no-dependencies): vsce walks the npm production dependencies installed
-  # by build-vscode-extension.sh so vscode-languageclient is bundled and the VSIX works offline.
-  npx --yes @vscode/vsce package \
+  # extension.js and vscode-languageclient are already bundled into dist/extension.js.
+  npx --yes @vscode/vsce@3.9.2 package \
+    --no-dependencies \
     --out "$DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
 )
+"$ROOT_DIR/scripts/check-vsix-package.py" "$DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
 
 echo "Extension packages:"
 echo "  $DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip"

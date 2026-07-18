@@ -1,0 +1,121 @@
+==================
+Deeply nested derived tables nest parenthesized expressions
+==================
+
+SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT id FROM base) a) b) c;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (operator)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (keyword)
+        (operator)
+        (keyword)
+        (expression
+          (parenthesized_expression
+            (keyword)
+            (operator)
+            (keyword)
+            (expression
+              (parenthesized_expression
+                (keyword)
+                (identifier)
+                (keyword)
+                (identifier)))
+            (identifier)))
+        (identifier)))
+    (identifier)))
+
+==================
+Correlated subqueries inside IN and EXISTS
+==================
+
+SELECT id FROM t
+WHERE id IN (SELECT id FROM u WHERE EXISTS (SELECT 1 FROM v WHERE v.id = u.id));
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (keyword)
+        (identifier)
+        (keyword)
+        (identifier)
+        (keyword)
+        (keyword)
+        (expression
+          (parenthesized_expression
+            (keyword)
+            (number)
+            (keyword)
+            (identifier)
+            (keyword)
+            (identifier)
+            (punctuation)
+            (identifier)
+            (operator)
+            (identifier)
+            (punctuation)
+            (identifier)))))))
+
+==================
+Comments between and after statements
+==================
+
+-- leading line comment
+SELECT 1; // slash-slash comment
+/* block
+   comment */
+SELECT 2 -- trailing
+;
+
+---
+
+(source_file
+  (comment)
+  (select_statement
+    (keyword)
+    (number))
+  (comment)
+  (comment)
+  (select_statement
+    (keyword)
+    (number)
+    (comment)))
+
+==================
+Comment inside an argument list
+==================
+
+SELECT count(
+    -- why: rows only
+    *
+) FROM t;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (expression
+      (call_expression
+        (identifier)
+        (argument_list
+          (comment)
+          (operator))))
+    (keyword)
+    (identifier)))

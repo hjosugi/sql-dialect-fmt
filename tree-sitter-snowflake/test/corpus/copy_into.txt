@@ -1,0 +1,120 @@
+==================
+Copy into a table with file format options
+==================
+
+COPY INTO mytable FROM @mystage/data
+FILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = ',' SKIP_HEADER = 1)
+ON_ERROR = 'CONTINUE';
+
+---
+
+(source_file
+  (copy_statement
+    (keyword)
+    (type)
+    (identifier)
+    (identifier)
+    (keyword)
+    (stage_reference)
+    (keyword)
+    (operator)
+    (expression
+      (parenthesized_expression
+        (identifier)
+        (operator)
+        (string)
+        (identifier)
+        (operator)
+        (string)
+        (identifier)
+        (operator)
+        (number)))
+    (identifier)
+    (operator)
+    (string)))
+
+==================
+Copy unloads a query result into a stage
+==================
+
+COPY INTO @mystage/unload/ FROM (SELECT id, name FROM src) OVERWRITE = TRUE;
+
+---
+
+(source_file
+  (copy_statement
+    (keyword)
+    (type)
+    (identifier)
+    (stage_reference)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (keyword)
+        (identifier)
+        (punctuation)
+        (identifier)
+        (keyword)
+        (identifier)))
+    (keyword)
+    (operator)
+    (keyword)))
+
+==================
+Copy with a transformation query and explicit files
+==================
+
+COPY INTO t (id, v) FROM (SELECT $1, $2 FROM @mystage) FILES = ('a.csv', 'b.csv') PURGE = TRUE;
+
+---
+
+(source_file
+  (copy_statement
+    (keyword)
+    (type)
+    (identifier)
+    (identifier)
+    (expression
+      (parenthesized_expression
+        (identifier)
+        (punctuation)
+        (identifier)))
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (keyword)
+        (variable)
+        (punctuation)
+        (variable)
+        (keyword)
+        (stage_reference)))
+    (identifier)
+    (operator)
+    (expression
+      (parenthesized_expression
+        (string)
+        (punctuation)
+        (string)))
+    (identifier)
+    (operator)
+    (keyword)))
+
+==================
+Copy in validation mode
+==================
+
+COPY INTO t FROM @s VALIDATION_MODE = 'RETURN_ERRORS';
+
+---
+
+(source_file
+  (copy_statement
+    (keyword)
+    (type)
+    (identifier)
+    (identifier)
+    (keyword)
+    (stage_reference)
+    (identifier)
+    (operator)
+    (string)))

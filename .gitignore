@@ -27,6 +27,9 @@ __pycache__/
 # Generated VS Code extension WebAssembly bundle
 /editors/vendor/*.wasm
 
+# Generated VS Code extension JavaScript bundle
+/editors/dist/
+
 # VS Code extension npm dependencies (installed by scripts/build-vscode-extension.sh)
 /editors/node_modules/
 

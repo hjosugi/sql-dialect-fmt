@@ -16,6 +16,7 @@ same engine used by [sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt
   highlighting, outline, folding (see [Language server](#language-server-optional))
 - Snowflake SQL keywords and built-in types
 - Snowflake Scripting and `$$ ... $$` routine bodies
+- native JavaScript highlighting inside `LANGUAGE JAVASCRIPT ... $$ ... $$` routine bodies
 - line (`--`, `//`) and block (`/* ... */`) comments
 - strings, quoted identifiers, numeric literals, and operators
 - positional `$1`, session `$name`, bind `:name`, and `?` variables

@@ -104,6 +104,7 @@ fn covers_all_required_token_classes() {
     let g = grammar();
     let repo = &g["repository"];
     for rule in [
+        "javascript-routine",
         "comments",
         "strings",
         "dollar-quoted",
@@ -118,6 +119,29 @@ fn covers_all_required_token_classes() {
     ] {
         assert!(repo.get(rule).is_some(), "missing repository rule `{rule}`");
     }
+}
+
+#[test]
+fn javascript_routines_embed_the_vscode_javascript_scope() {
+    let g = grammar();
+    let routine = &g["repository"]["javascript-routine"];
+    let patterns = routine["patterns"].as_array().expect("routine patterns");
+    let embedded = patterns
+        .iter()
+        .find(|pattern| pattern["name"] == "meta.embedded.block.javascript.snowflake")
+        .expect("embedded JavaScript body rule");
+
+    assert_eq!(embedded["begin"], "\\$\\$");
+    assert_eq!(embedded["end"], "\\$\\$");
+    assert_eq!(embedded["contentName"], "source.js");
+    assert!(
+        embedded["patterns"]
+            .as_array()
+            .expect("embedded patterns")
+            .iter()
+            .any(|pattern| pattern["include"] == "source.js"),
+        "embedded body must include VS Code's JavaScript grammar"
+    );
 }
 
 #[test]

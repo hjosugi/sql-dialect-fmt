@@ -9,10 +9,9 @@ cargo build --release --locked -p sql-dialect-fmt-wasm --target wasm32-unknown-u
 mkdir -p "$EXT_VENDOR"
 cp "$WASM_OUT" "$EXT_VENDOR/sql_dialect_fmt_wasm.wasm"
 
-# Runtime npm dependencies (the optional vscode-languageclient LSP client) are installed into
-# node_modules/ so `vsce package` can bundle them and the packaged VSIX works offline. The
-# `files` whitelist in editors/package.json must keep its `node_modules/**` entry: vsce filters
-# every collected file — dependencies included — through those globs.
-npm --prefix "$ROOT_DIR/editors" ci --omit=dev --no-audit --no-fund --loglevel=error
+# Bundle the extension host entry point and its language-client dependency into one production
+# artifact. `vscode` remains external because the extension host supplies it at runtime.
+npm --prefix "$ROOT_DIR/editors" ci --no-audit --no-fund --loglevel=error
+npm --prefix "$ROOT_DIR/editors" test
 
 echo "VS Code extension is ready at: $ROOT_DIR/editors"

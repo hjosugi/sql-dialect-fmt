@@ -8,7 +8,7 @@ small, careful changes are especially valuable.
 Required:
 
 - Rust stable
-- Node.js, only when working on `tree-sitter-snowflake`
+- Node.js, when working on `tree-sitter-snowflake` or the VS Code extension
 
 Run the core checks:
 
@@ -26,6 +26,13 @@ Run Tree-sitter checks:
 cd tree-sitter-snowflake
 npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate
 npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
+```
+
+For VS Code extension changes, build the real Wasm artifact and run the bundled-provider and
+TextMate integration tests:
+
+```sh
+./scripts/build-vscode-extension.sh
 ```
 
 `cargo test --workspace` must stay self-contained. Stable SQL fixtures belong in
@@ -76,4 +83,5 @@ For the longer map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
 - [ ] `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`
 - [ ] Tree-sitter grammar regenerated and tested, if `tree-sitter-snowflake/` changed
+- [ ] VS Code bundle/TextMate/Wasm integration tests and VSIX validation, if `editors/` changed
 - [ ] Docs updated, if behavior or public API changed

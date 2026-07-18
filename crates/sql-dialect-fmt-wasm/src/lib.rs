@@ -79,9 +79,22 @@ pub unsafe extern "C" fn sql_dialect_fmt_format_with_dialect(
     uppercase_keywords: u32,
     dialect: u32,
 ) -> u32 {
+    let bytes = slice::from_raw_parts(ptr as *const u8, len as usize);
+    format_bytes(bytes, line_width, indent_width, uppercase_keywords, dialect)
+}
+
+/// The safe core of the format ABI: validate `bytes` as UTF-8, format with the decoded raw
+/// options, and stash the result for the `result_ptr`/`result_len` accessors. Split out so the
+/// exact option decoding (clamping, dialect fallback) is testable without Wasm linear memory.
+fn format_bytes(
+    bytes: &[u8],
+    line_width: u32,
+    indent_width: u32,
+    uppercase_keywords: u32,
+    dialect: u32,
+) -> u32 {
     clear_last_result();
 
-    let bytes = slice::from_raw_parts(ptr as *const u8, len as usize);
     let Ok(source) = str::from_utf8(bytes) else {
         return 1;
     };
@@ -163,6 +176,10 @@ fn last_result_len() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sql_dialect_fmt_test_fixtures::{
+        javascript_routine_trailing_whitespace_input,
+        JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED,
+    };
 
     fn last_result_bytes() -> Vec<u8> {
         let ptr = last_result_ptr();
@@ -214,5 +231,166 @@ mod tests {
         clear_last_result();
         assert!(last_result_ptr().is_null());
         assert_eq!(last_result_len(), 0);
+    }
+
+    /// Run [`format_bytes`] and copy the stored result out, mirroring how JavaScript reads the
+    /// `result_ptr`/`result_len` pair after a successful call.
+    fn format_to_string(
+        source: &str,
+        line_width: u32,
+        indent_width: u32,
+        uppercase_keywords: u32,
+        dialect: u32,
+    ) -> String {
+        let status = format_bytes(
+            source.as_bytes(),
+            line_width,
+            indent_width,
+            uppercase_keywords,
+            dialect,
+        );
+        assert_eq!(status, 0, "format_bytes({source:?}) failed");
+        let result = String::from_utf8(last_result_bytes()).expect("UTF-8 result");
+        clear_last_result();
+        result
+    }
+
+    #[test]
+    fn format_defaults_produce_uppercase_snowflake_output() {
+        assert_eq!(
+            format_to_string("select a,b from t", 80, 4, 1, 0),
+            "SELECT a, b\nFROM t;\n"
+        );
+    }
+
+    #[test]
+    fn uppercase_flag_zero_preserves_source_keyword_case() {
+        // `uppercase_keywords = 0` maps to KeywordCase::Preserve, not lowercasing.
+        assert_eq!(
+            format_to_string("select a from t", 80, 4, 0, 0),
+            "select a\nfrom t;\n"
+        );
+        assert_eq!(
+            format_to_string("SELECT a from t", 80, 4, 0, 0),
+            "SELECT a\nfrom t;\n"
+        );
+    }
+
+    #[test]
+    fn line_width_controls_select_list_wrapping() {
+        let source = "select aaaa, bbbb, cccc from t";
+        assert_eq!(
+            format_to_string(source, 100, 4, 1, 0),
+            "SELECT aaaa, bbbb, cccc\nFROM t;\n"
+        );
+        assert_eq!(
+            format_to_string(source, 10, 4, 1, 0),
+            "SELECT\n    aaaa,\n    bbbb,\n    cccc\nFROM t;\n"
+        );
+    }
+
+    #[test]
+    fn indent_width_is_applied_and_clamped() {
+        let source = "select aaaa, bbbb from t";
+        assert_eq!(
+            format_to_string(source, 10, 8, 1, 0),
+            "SELECT\n        aaaa,\n        bbbb\nFROM t;\n"
+        );
+        // 0 clamps up to 1 space, out-of-range values clamp down to 16.
+        assert_eq!(
+            format_to_string(source, 10, 0, 1, 0),
+            "SELECT\n aaaa,\n bbbb\nFROM t;\n"
+        );
+        assert_eq!(
+            format_to_string(source, 10, 999, 1, 0),
+            format_to_string(source, 10, 16, 1, 0)
+        );
+    }
+
+    #[test]
+    fn zero_line_width_is_clamped_instead_of_panicking() {
+        assert_eq!(
+            format_to_string("select a from t", 0, 4, 1, 0),
+            format_to_string("select a from t", 1, 4, 1, 0)
+        );
+    }
+
+    #[test]
+    fn dialect_one_selects_databricks_and_unknown_values_fall_back_to_snowflake() {
+        // `a <=> b` only parses under Databricks; Snowflake passes the statement through verbatim.
+        let source = "select a <=> b from t";
+        assert_eq!(
+            format_to_string(source, 80, 4, 1, 1),
+            "SELECT a <=> b\nFROM t;\n"
+        );
+        let snowflake = format_to_string(source, 80, 4, 1, 0);
+        assert_eq!(format_to_string(source, 80, 4, 1, 999), snowflake);
+        assert_eq!(dialect_from_u32(0), Dialect::Snowflake);
+        assert_eq!(dialect_from_u32(1), Dialect::Databricks);
+        assert_eq!(dialect_from_u32(u32::MAX), Dialect::Snowflake);
+    }
+
+    #[test]
+    fn formatting_is_idempotent() {
+        let first = format_to_string("select a,b from t where x=1", 80, 4, 1, 0);
+        assert_eq!(format_to_string(&first, 80, 4, 1, 0), first);
+    }
+
+    #[test]
+    fn javascript_routine_regression_formats_through_the_wasm_abi() {
+        let input = javascript_routine_trailing_whitespace_input();
+        let output = format_to_string(&input, 100, 4, 1, 0);
+
+        assert_eq!(output, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED);
+        assert_eq!(format_to_string(&output, 100, 4, 1, 0), output);
+    }
+
+    #[test]
+    fn unparseable_statements_pass_through_verbatim() {
+        let source = "select from where";
+        let result = format_to_string(source, 80, 4, 1, 0);
+        assert!(
+            result.contains(source),
+            "broken input should survive verbatim, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn invalid_utf8_input_reports_failure_and_stores_no_result() {
+        // Leave a stale result behind to prove a failed call clears it.
+        store_last_result(b"stale".to_vec().into_boxed_slice());
+
+        let status = format_bytes(&[0x66, 0xFF, 0xFE], 80, 4, 1, 0);
+
+        assert_eq!(status, 1);
+        assert!(last_result_ptr().is_null());
+        assert_eq!(last_result_len(), 0);
+    }
+
+    #[test]
+    fn empty_input_formats_to_empty_output() {
+        assert_eq!(format_bytes(b"", 80, 4, 1, 0), 0);
+        assert_eq!(last_result_len(), 0);
+        clear_last_result();
+    }
+
+    #[test]
+    fn sequential_calls_replace_the_stored_result() {
+        assert_eq!(format_bytes(b"select 1", 80, 4, 1, 0), 0);
+        assert_eq!(last_result_bytes(), b"SELECT 1;\n");
+
+        assert_eq!(format_bytes(b"select 2", 80, 4, 1, 0), 0);
+        assert_eq!(last_result_bytes(), b"SELECT 2;\n");
+        clear_last_result();
+    }
+
+    #[test]
+    fn dealloc_ignores_null_and_zero_capacity_buffers() {
+        // The guard clauses must make these calls no-ops on any target.
+        unsafe {
+            sql_dialect_fmt_dealloc(0, 0);
+            sql_dialect_fmt_dealloc(0, 16);
+            sql_dialect_fmt_dealloc(4, 0);
+        }
     }
 }

@@ -2276,6 +2276,7 @@ dependencies = [
  "sql-dialect-fmt-formatter",
  "sql-dialect-fmt-lint",
  "sql-dialect-fmt-parser",
+ "sql-dialect-fmt-test-fixtures",
  "sql-dialect-fmt-text",
  "tempfile",
 ]
@@ -2385,6 +2386,7 @@ dependencies = [
  "sql-dialect-fmt-lint",
  "sql-dialect-fmt-parser",
  "sql-dialect-fmt-syntax",
+ "sql-dialect-fmt-test-fixtures",
  "sql-dialect-fmt-text",
  "tempfile",
 ]
@@ -2443,6 +2445,7 @@ name = "sql-dialect-fmt-wasm"
 version = "1.16.0"
 dependencies = [
  "sql-dialect-fmt-formatter",
+ "sql-dialect-fmt-test-fixtures",
 ]
 
 [[package]]

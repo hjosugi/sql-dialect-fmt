@@ -9,6 +9,38 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Added end-to-end LSP stdio coverage for initialization, diagnostics, document lifecycle,
+  formatting, hover, symbols, semantic tokens, configuration changes, and clean shutdown; expanded
+  the raw WebAssembly ABI tests and added 24 Tree-sitter corpus cases across six statement
+  families (#81).
+- Added a strict realistic JavaScript-procedure regression fixture and exercised its exact output
+  through the formatter API, CLI, LSP stdio server, raw WebAssembly ABI, bundled VS Code provider,
+  and the VS Code TextMate tokenization engine.
+- Added a CI gate that builds the VS Code WebAssembly artifact and JavaScript bundle, runs the
+  editor integration tests, packages a VSIX, and inspects the archive contents.
+
+### Changed
+
+- Bundled the VS Code extension and `vscode-languageclient` into one `dist/extension.js`; VSIX
+  packages now contain 12 files instead of hundreds of transitive `node_modules` files, and a
+  package validator prevents dependency trees from returning.
+- Reused routine bodies prepared by the trailing-whitespace safety pass during lowering, avoiding
+  a second embedded-formatter run; the realistic JavaScript-procedure benchmark improved by about
+  31% on the development machine.
+- Measured multiline embedded bodies by their final line instead of their full byte length, so a
+  short routine signature stays inline when it fits the configured line width.
+
+### Fixed
+
+- Preserved the token boundary between unary `-` and `>=` in lenient statements; a minimized
+  property-test regression had previously fused them into `->=`, breaking idempotency.
+- Allowed supported embedded-language formatters to normalize whitespace-only lines inside
+  multiline routine bodies instead of silently returning the entire SQL document unchanged.
+- Injected VS Code's JavaScript grammar inside `LANGUAGE JAVASCRIPT ... $$ ... $$` routine bodies,
+  including multiline headers, instead of coloring the whole body as a dollar-quoted SQL string.
+
 ## [1.16.0] - 2026-07-18
 
 ### Added

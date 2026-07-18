@@ -1,0 +1,80 @@
+==================
+Put uploads a quoted local file URL to a user stage
+==================
+
+PUT 'file:///tmp/data/nagaimo.csv' @~/staged AUTO_COMPRESS = TRUE;
+
+---
+
+(source_file
+  (statement
+    (identifier)
+    (string)
+    (stage_reference)
+    (identifier)
+    (operator)
+    (keyword)))
+
+==================
+Get downloads from a table stage
+==================
+
+GET @%mytable/data.csv 'file:///tmp/out' PARALLEL = 4;
+
+---
+
+(source_file
+  (statement
+    (identifier)
+    (stage_reference)
+    (string)
+    (identifier)
+    (operator)
+    (number)))
+
+==================
+List with a pattern
+==================
+
+LIST @mystage/path PATTERN = '.*[.]csv';
+
+---
+
+(source_file
+  (statement
+    (identifier)
+    (stage_reference)
+    (identifier)
+    (operator)
+    (string)))
+
+==================
+Remove a qualified stage path
+==================
+
+REMOVE @db.schema.stg/path/file.csv.gz;
+
+---
+
+(source_file
+  (statement
+    (identifier)
+    (stage_reference)))
+
+==================
+Unquoted file URL loses the rest of the line to the slash-slash comment
+==================
+
+PUT file:///tmp/x.csv @~/staged;
+LIST @~/staged;
+
+---
+
+(source_file
+  (statement
+    (identifier)
+    (identifier)
+    (operator)
+    (comment)
+    (identifier)
+    (stage_reference)))

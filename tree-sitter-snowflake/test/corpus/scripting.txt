@@ -1,0 +1,141 @@
+==================
+Anonymous block splits at inner statement terminators
+==================
+
+BEGIN
+    LET total := 1;
+    RETURN total;
+END;
+
+---
+
+(source_file
+  (statement
+    (keyword)
+    (keyword)
+    (identifier)
+    (operator)
+    (number))
+  (statement
+    (keyword)
+    (identifier))
+  (statement
+    (keyword)))
+
+==================
+Declare section keeps a mid-statement SELECT inline
+==================
+
+DECLARE
+    c1 CURSOR FOR SELECT id FROM t;
+BEGIN
+    OPEN c1;
+END;
+
+---
+
+(source_file
+  (statement
+    (type)
+    (identifier)
+    (identifier)
+    (keyword)
+    (keyword)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier))
+  (statement
+    (keyword)
+    (identifier)
+    (identifier))
+  (statement
+    (keyword)))
+
+==================
+Conditional scripting keywords stay plain statements
+==================
+
+IF (x > 0) THEN
+    RETURN 'positive';
+ELSEIF (x = 0) THEN
+    RETURN 'zero';
+END IF;
+
+---
+
+(source_file
+  (statement
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (identifier)
+        (operator)
+        (number)))
+    (keyword)
+    (keyword)
+    (string))
+  (statement
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (identifier)
+        (operator)
+        (number)))
+    (keyword)
+    (keyword)
+    (string))
+  (statement
+    (keyword)
+    (keyword)))
+
+==================
+Execute immediate holds a scripting body in one dollar-quoted token
+==================
+
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET x := 41;
+    RETURN x + 1;
+END;
+$$;
+
+---
+
+(source_file
+  (statement
+    (keyword)
+    (keyword)
+    (dollar_string)))
+
+==================
+For loop over a bind variable
+==================
+
+FOR i IN 1 TO 10 DO
+    INSERT INTO log VALUES (:i);
+END FOR;
+
+---
+
+(source_file
+  (statement
+    (keyword)
+    (identifier)
+    (keyword)
+    (number)
+    (identifier)
+    (number)
+    (keyword)
+    (keyword)
+    (type)
+    (identifier)
+    (identifier)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (operator)
+        (identifier))))
+  (statement
+    (keyword)
+    (keyword)))

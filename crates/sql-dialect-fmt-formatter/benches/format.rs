@@ -8,12 +8,13 @@
 //! * **DDL** (a `CREATE TABLE` with many column definitions — a big parenthesized list), and
 //! * a **MERGE** (multiple `WHEN MATCHED` / `WHEN NOT MATCHED` branches).
 //!
-//! A final `corpus` benchmark formats the whole embedded golden set, so a regression on any real
-//! fixture is visible too. Run with `cargo bench -p sql-dialect-fmt-formatter`.
+//! The `embedded` benchmark covers a realistic JavaScript routine body, and the final `corpus`
+//! benchmark formats the whole embedded golden set, so a regression on any real fixture is visible
+//! too. Run with `cargo bench -p sql-dialect-fmt-formatter`.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use sql_dialect_fmt_formatter::{format, Dialect, FormatOptions};
-use sql_dialect_fmt_test_fixtures::EASY_CASES;
+use sql_dialect_fmt_test_fixtures::{javascript_routine_trailing_whitespace_input, EASY_CASES};
 
 /// A wide SELECT: a long projection plus WHERE / GROUP BY / ORDER BY, so many groups are measured.
 fn wide_select() -> String {
@@ -145,5 +146,21 @@ fn bench_corpus(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_statements, bench_corpus);
+fn bench_javascript_routine(c: &mut Criterion) {
+    let opts = FormatOptions::default();
+    let sql = javascript_routine_trailing_whitespace_input();
+    let mut group = c.benchmark_group("format_embedded");
+    group.throughput(Throughput::Bytes(sql.len() as u64));
+    group.bench_function("javascript_routine", |b| {
+        b.iter(|| format(std::hint::black_box(&sql), &opts));
+    });
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_statements,
+    bench_corpus,
+    bench_javascript_routine
+);
 criterion_main!(benches);

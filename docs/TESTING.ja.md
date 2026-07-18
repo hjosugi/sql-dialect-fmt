@@ -21,6 +21,18 @@ npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate
 npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
 ```
 
+VS Code拡張チェック:
+
+```sh
+./scripts/build-vscode-extension.sh
+python3 scripts/check-vsix-package.py path/to/sql-dialect-fmt.vsix
+```
+
+build script は実際の Wasm formatter をコンパイルし、extension host を bundle して、
+TextMate と bundle→Wasm の統合テストを実行します。VSIX 作成後の package validator は
+manifest、埋め込み言語 mapping、必須 asset、JavaScript bundle が1つだけであること、
+`node_modules` が含まれないことを検査します。
+
 ## ファジング
 
 カバレッジガイドのファジングは除外された `fuzz/` クレートに存在し、通常のワークスペースチェックは迅速かつ自己完結しています。スケジュールされた `Fuzz` ワークフローは、同じターゲットを毎週実行し、`fuzz/artifacts/` と失敗したターゲットの生成されたコーパスをアップロードします。
@@ -72,6 +84,8 @@ cargo +nightly fuzz run parser_lossless -- -max_total_time=60
 - エディタアダプター用の安定したキャプチャカテゴリ
 - Unicodeおよび混合改行にわたるバイト範囲
 - Snowflake特有の演算子と型
+- `vscode-textmate` と `vscode-oniguruma` を使い、埋め込み JavaScript への進入と
+  後続 SQL への復帰を検証する TextMate injection テスト
 
 ホバー:
 
@@ -87,6 +101,13 @@ Tree-sitter:
 - 文法変更と共にコミットされた生成された `src/parser.c` と `src/node-types.json`
 - コーパスと生成されたパーサーファイルに反映されたボディ区切りルールの変更
 
+VS Code:
+
+- bundle 済み拡張が document/range formatting provider を登録すること
+- provider が実例 fixture を package 済み Wasm ABI に通し、出力を厳密比較すること
+- 埋め込み JavaScript が VS Code の `source.js` scope を使い、後続 SQL へ漏れないこと
+- VSIX に JavaScript bundle 1つ、Wasm、grammar、manifest があり、依存 tree がないこと
+
 ## フィクスチャポリシー
 
 `cargo test --workspace` は自己完結でなければなりません。安定したキュレーションされた例を `crates/sql-dialect-fmt-test-fixtures` に保持してください。
@@ -97,6 +118,12 @@ Tree-sitter:
 - レキサー/ハイライト/Tree-sitterテストは、すべての埋め込まれたフィクスチャがクリーンでロスレスであることを要求します。
 - パーサーフィクスチャテストは、すべての埋め込まれたフィクスチャがロスレスに回復することを要求します。文法サポートが追加されると、焦点を当てた `clean` パーサーテストを追加します。
 - バグがフィクスチャよりも特定のときは、その動作を所有するクレートの隣に狭いテーブル駆動テストを追加します。
+
+`EASY_CASES` に `expected.sql` が存在するだけで、すべての consumer が formatter 出力を
+byte 単位で比較しているとはみなしません。出力の回帰には、所有する formatter test が
+期待 byte を厳密比較する専用 regression fixture を追加します。配布境界をまたぐ不具合は、
+同じ fixture を必要に応じて CLI、LSP stdio、raw Wasm ABI、bundle 済み editor provider
+にも通します。
 
 より広範な生成コーパスはリポジトリの外に留まるべきです。生成されたフィクスチャディレクトリをコミットするのではなく、1回限りのローカルチェックにはCLIの `--fixtures` フラグを使用してください。
 

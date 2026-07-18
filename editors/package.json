@@ -27,7 +27,7 @@
     "Programming Languages",
     "Formatters"
   ],
-  "main": "./extension.js",
+  "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:snowflake-sql"
   ],
@@ -46,19 +46,26 @@
   ],
   "files": [
     "CHANGELOG.md",
-    "extension.js",
+    "dist/extension.js",
     "images/icon.png",
     "images/syntax-highlighting.png",
     "LICENSE.md",
     "README.md",
     "language-configuration.json",
-    "node_modules/**",
     "package.json",
     "snowflake.tmLanguage.json",
     "vendor/sql_dialect_fmt_wasm.wasm"
   ],
-  "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+  "scripts": {
+    "build": "esbuild extension.js --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "pretest": "npm run build",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   },
   "contributes": {
     "configuration": {
@@ -127,7 +134,10 @@
       {
         "language": "snowflake-sql",
         "scopeName": "source.snowflake-sql",
-        "path": "./snowflake.tmLanguage.json"
+        "path": "./snowflake.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.javascript.snowflake": "javascript"
+        }
       }
     ]
   }

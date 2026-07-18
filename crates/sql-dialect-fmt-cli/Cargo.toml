@@ -23,6 +23,7 @@ sql-dialect-fmt-parser.workspace = true
 sql-dialect-fmt-text.workspace = true
 
 [dev-dependencies]
+sql-dialect-fmt-test-fixtures.workspace = true
 tempfile = "3"
 
 [package.metadata.binstall]
