@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # sql-dialect-fmt for SQL editors
 
 Chrome extension that formats the active Snowsight or Databricks SQL editor with the repository's

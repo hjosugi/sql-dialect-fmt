@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](prior-art.md) | [日本語](prior-art.ja.md)
+
 # sql-dialect-fmt: Prior-Art Research & Distilled Lessons
 
 ## Executive summary

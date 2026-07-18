@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](CHROME_WEB_STORE_SUBMISSION.md) | [日本語](CHROME_WEB_STORE_SUBMISSION.ja.md)
+
 # Chrome Web Store submission sheet
 
 Last verified against the official Chrome Web Store listing and image documentation: 2026-07-11.

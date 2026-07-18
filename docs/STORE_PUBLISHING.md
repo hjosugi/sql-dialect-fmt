@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](STORE_PUBLISHING.md) | [日本語](STORE_PUBLISHING.ja.md)
+
 # Store Publishing Runbook
 
 Last checked against official store docs: 2026-07-11.

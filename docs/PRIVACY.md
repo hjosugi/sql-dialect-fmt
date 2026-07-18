@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](PRIVACY.md) | [日本語](PRIVACY.ja.md)
+
 # sql-dialect-fmt Extensions Privacy Policy
 
 Last updated: 2026-07-11

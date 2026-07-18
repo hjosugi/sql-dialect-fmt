@@ -22,6 +22,7 @@ sql-dialect-fmt-formatter = { path = "crates/sql-dialect-fmt-formatter", version
 sql-dialect-fmt-highlight = { path = "crates/sql-dialect-fmt-highlight", version = "1.14.0" }
 sql-dialect-fmt-hover = { path = "crates/sql-dialect-fmt-hover", version = "1.14.0" }
 sql-dialect-fmt-lexer = { path = "crates/sql-dialect-fmt-lexer", version = "1.14.0" }
+sql-dialect-fmt-lint = { path = "crates/sql-dialect-fmt-lint", version = "1.14.0" }
 sql-dialect-fmt-parser = { path = "crates/sql-dialect-fmt-parser", version = "1.14.0" }
 sql-dialect-fmt-syntax = { path = "crates/sql-dialect-fmt-syntax", version = "1.14.0" }
 sql-dialect-fmt-test-fixtures = { path = "crates/sql-dialect-fmt-test-fixtures", version = "1.14.0" }

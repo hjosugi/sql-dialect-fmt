@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ARCHITECTURE.md) | [日本語](ARCHITECTURE.ja.md)
+
 # Architecture
 
 sql-dialect-fmt is split into small layers so contributors can work on one concern at a

@@ -1,8 +1,8 @@
 //! `sql-dialect-fmt-lsp` — a Language Server for Snowflake SQL.
 //!
-//! Speaks LSP over stdio (via `lsp-server`) and exposes whole-document **formatting**,
-//! **semantic tokens**, **diagnostics**, **hover**, **folding ranges**, **document symbols**, and
-//! static SQL **completion**. Documents are kept in sync incrementally (range edits are spliced as
+//! Speaks LSP over stdio (via `lsp-server`) and exposes whole-document, range, and on-type
+//! **formatting**, **semantic tokens**, **diagnostics**, **hover**, **folding ranges**,
+//! **document symbols**, and static SQL **completion**. Documents are kept in sync incrementally (range edits are spliced as
 //! they arrive). Everything is synchronous — no async runtime — matching the rest of the workspace.
 
 // `lsp_types::Uri` wraps a parsed URI whose hash/eq are value-stable; the lint can't see that, so
@@ -20,7 +20,7 @@ use lsp_types::notification::{
 };
 use lsp_types::request::{
     CodeActionRequest, Completion, DocumentSymbolRequest, FoldingRangeRequest, Formatting,
-    HoverRequest, RangeFormatting, Request as _, SemanticTokensFullDeltaRequest,
+    HoverRequest, OnTypeFormatting, RangeFormatting, Request as _, SemanticTokensFullDeltaRequest,
     SemanticTokensFullRequest, SemanticTokensRangeRequest,
 };
 use lsp_types::{
@@ -28,14 +28,15 @@ use lsp_types::{
     CodeActionProviderCapability, CodeActionResponse, CompletionOptions, CompletionParams,
     CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
-    DocumentRangeFormattingParams, DocumentSymbolOptions, DocumentSymbolParams,
-    DocumentSymbolResponse, FoldingRange, FoldingRangeParams, Hover, HoverParams,
-    HoverProviderCapability, InitializeParams, OneOf, Position, PositionEncodingKind,
-    PublishDiagnosticsParams, Range, SemanticTokens, SemanticTokensDeltaParams,
-    SemanticTokensFullDeltaResult, SemanticTokensLegend, SemanticTokensOptions,
-    SemanticTokensParams, SemanticTokensRangeParams, SemanticTokensRangeResult,
-    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions, WorkspaceEdit,
+    DocumentOnTypeFormattingOptions, DocumentOnTypeFormattingParams, DocumentRangeFormattingParams,
+    DocumentSymbolOptions, DocumentSymbolParams, DocumentSymbolResponse, FoldingRange,
+    FoldingRangeParams, Hover, HoverParams, HoverProviderCapability, InitializeParams, OneOf,
+    Position, PositionEncodingKind, PublishDiagnosticsParams, Range, SemanticTokens,
+    SemanticTokensDeltaParams, SemanticTokensFullDeltaResult, SemanticTokensLegend,
+    SemanticTokensOptions, SemanticTokensParams, SemanticTokensRangeParams,
+    SemanticTokensRangeResult, SemanticTokensServerCapabilities, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
+    WorkspaceEdit,
 };
 use serde::Deserialize;
 use sql_dialect_fmt_config::Config;
@@ -44,8 +45,9 @@ use sql_dialect_fmt_lsp::{
     apply_change_with_encoding, completion_items, diagnostic_lint_code,
     diagnostics_with_lint_options, document_symbols_with_encoding, folding_ranges,
     format_edits_with_encoding, format_range_edits_with_encoding, hover_with_encoding,
-    semantic_tokens_range_with_encoding, semantic_tokens_with_encoding, token_modifiers,
-    token_types, LintOptions, PositionEncoding as NegotiatedPositionEncoding,
+    on_type_formatting_edits_with_encoding, semantic_tokens_range_with_encoding,
+    semantic_tokens_with_encoding, token_modifiers, token_types, LintOptions,
+    PositionEncoding as NegotiatedPositionEncoding,
 };
 use sql_dialect_fmt_parser::Dialect;
 
@@ -159,6 +161,14 @@ struct LintSettings {
     large_in_list: Option<bool>,
     #[serde(alias = "unsupported_embedded_language")]
     unsupported_embedded_language: Option<bool>,
+    #[serde(alias = "delete_without_where")]
+    delete_without_where: Option<bool>,
+    #[serde(alias = "update_without_where")]
+    update_without_where: Option<bool>,
+    #[serde(alias = "comma_join")]
+    comma_join: Option<bool>,
+    #[serde(alias = "order_by_ordinal")]
+    order_by_ordinal: Option<bool>,
     #[serde(alias = "large_in_list_threshold")]
     large_in_list_threshold: Option<usize>,
 }
@@ -201,6 +211,18 @@ impl LintSettings {
         }
         if other.unsupported_embedded_language.is_some() {
             self.unsupported_embedded_language = other.unsupported_embedded_language;
+        }
+        if other.delete_without_where.is_some() {
+            self.delete_without_where = other.delete_without_where;
+        }
+        if other.update_without_where.is_some() {
+            self.update_without_where = other.update_without_where;
+        }
+        if other.comma_join.is_some() {
+            self.comma_join = other.comma_join;
+        }
+        if other.order_by_ordinal.is_some() {
+            self.order_by_ordinal = other.order_by_ordinal;
         }
         if other.large_in_list_threshold.is_some() {
             self.large_in_list_threshold = other.large_in_list_threshold;
@@ -263,6 +285,10 @@ fn apply_editor_lint(options: &mut LintOptions, settings: &LintSettings) {
         options.select_wildcard = enabled;
         options.large_in_list = enabled;
         options.unsupported_embedded_language = enabled;
+        options.delete_without_where = enabled;
+        options.update_without_where = enabled;
+        options.comma_join = enabled;
+        options.order_by_ordinal = enabled;
     }
     if let Some(select_wildcard) = settings.select_wildcard {
         options.select_wildcard = select_wildcard;
@@ -272,6 +298,18 @@ fn apply_editor_lint(options: &mut LintOptions, settings: &LintSettings) {
     }
     if let Some(unsupported_embedded_language) = settings.unsupported_embedded_language {
         options.unsupported_embedded_language = unsupported_embedded_language;
+    }
+    if let Some(delete_without_where) = settings.delete_without_where {
+        options.delete_without_where = delete_without_where;
+    }
+    if let Some(update_without_where) = settings.update_without_where {
+        options.update_without_where = update_without_where;
+    }
+    if let Some(comma_join) = settings.comma_join {
+        options.comma_join = comma_join;
+    }
+    if let Some(order_by_ordinal) = settings.order_by_ordinal {
+        options.order_by_ordinal = order_by_ordinal;
     }
     if let Some(threshold) = settings.large_in_list_threshold {
         options.large_in_list_threshold = threshold;
@@ -394,6 +432,10 @@ fn server_capabilities(position_encoding: NegotiatedPositionEncoding) -> ServerC
         )),
         document_formatting_provider: Some(OneOf::Left(true)),
         document_range_formatting_provider: Some(OneOf::Left(true)),
+        document_on_type_formatting_provider: Some(DocumentOnTypeFormattingOptions {
+            first_trigger_character: ";".to_string(),
+            more_trigger_character: Some(vec!["\n".to_string()]),
+        }),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
         document_symbol_provider: Some(OneOf::Right(DocumentSymbolOptions {
@@ -456,6 +498,10 @@ fn handle_request(request: Request, docs: &Docs, state: &mut ServerState) -> Res
         },
         RangeFormatting::METHOD => match cast::<RangeFormatting>(request) {
             Ok((id, params)) => ok(id, range_formatting(params, docs, state)),
+            Err(response) => *response,
+        },
+        OnTypeFormatting::METHOD => match cast::<OnTypeFormatting>(request) {
+            Ok((id, params)) => ok(id, on_type_formatting(params, docs, state)),
             Err(response) => *response,
         },
         SemanticTokensFullRequest::METHOD => match cast::<SemanticTokensFullRequest>(request) {
@@ -530,6 +576,27 @@ fn range_formatting(
     format_range_edits_with_encoding(
         &document.text,
         params.range,
+        &options,
+        state.position_encoding,
+    )
+}
+
+fn on_type_formatting(
+    params: DocumentOnTypeFormattingParams,
+    docs: &Docs,
+    state: &ServerState,
+) -> Vec<TextEdit> {
+    let uri = &params.text_document_position.text_document.uri;
+    let Some(document) = docs.get(uri) else {
+        return Vec::new();
+    };
+    let mut options = state.effective_options(uri);
+    if params.options.insert_spaces {
+        options.indent_width = (params.options.tab_size as usize).max(1);
+    }
+    on_type_formatting_edits_with_encoding(
+        &document.text,
+        params.text_document_position.position,
         &options,
         state.position_encoding,
     )

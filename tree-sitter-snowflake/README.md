@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # tree-sitter-snowflake
 
 Tree-sitter grammar for Snowflake SQL in `sql-dialect-fmt`.
