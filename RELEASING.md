@@ -15,14 +15,15 @@ Published to crates.io (in dependency order):
 | 2 | `sql-dialect-fmt-text` | — |
 | 3 | `sql-dialect-fmt-lexer` | syntax, text |
 | 4 | `sql-dialect-fmt-parser` | syntax, lexer, text |
-| 5 | `sql-dialect-fmt-formatter` | syntax, lexer, parser |
-| 6 | `sql-dialect-fmt-highlight` | syntax, lexer, text |
-| 7 | `sql-dialect-fmt-hover` | syntax, lexer |
-| 8 | `sql-dialect-fmt-encoding` | — |
-| 9 | `sql-dialect-fmt-config` | formatter, parser |
-| 10 | `sql-dialect-fmt` | config, encoding, formatter, parser, text |
-| 11 | `sql-dialect-fmt-lsp` | config, formatter, highlight, hover, lexer, parser, syntax, text |
-| 12 | `sql-dialect-fmt-wasm` | formatter |
+| 5 | `sql-dialect-fmt-lint` | lexer, parser, syntax, text |
+| 6 | `sql-dialect-fmt-formatter` | syntax, lexer, parser |
+| 7 | `sql-dialect-fmt-highlight` | syntax, lexer, text |
+| 8 | `sql-dialect-fmt-hover` | syntax, lexer |
+| 9 | `sql-dialect-fmt-encoding` | — |
+| 10 | `sql-dialect-fmt-config` | formatter, parser |
+| 11 | `sql-dialect-fmt` | config, encoding, formatter, lint, parser, text |
+| 12 | `sql-dialect-fmt-lsp` | config, formatter, highlight, hover, lexer, lint, parser, syntax, text |
+| 13 | `sql-dialect-fmt-wasm` | formatter |
 
 **Not published** (`publish = false`):
 
@@ -108,9 +109,10 @@ Published to crates.io (in dependency order):
    scripts/publish-crates.sh
    ```
 
-   The canonical order is **syntax → text → lexer → parser → formatter → highlight → hover →
-   config → cli / lsp / wasm** (with `encoding` published any time before `cli`, `config` any
-   time after `formatter` but before `cli` and `lsp`, and `wasm` any time after `formatter`).
+   The canonical order is **syntax → text → lexer → parser → lint → formatter → highlight →
+   hover → config → cli / lsp / wasm** (with `encoding` published any time before `cli`,
+   `lint` any time after `parser` but before `cli` and `lsp`, `config` any time after
+   `formatter` but before `cli` and `lsp`, and `wasm` any time after `formatter`).
 
    For automatic publication from future `v*.*.*` tag pushes, create a crates.io API token,
    export it locally, and let the helper store it without printing the value:

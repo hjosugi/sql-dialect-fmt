@@ -18,6 +18,7 @@ rayon = "1"
 sql-dialect-fmt-config.workspace = true
 sql-dialect-fmt-encoding.workspace = true
 sql-dialect-fmt-formatter.workspace = true
+sql-dialect-fmt-lint.workspace = true
 sql-dialect-fmt-parser.workspace = true
 sql-dialect-fmt-text.workspace = true
 

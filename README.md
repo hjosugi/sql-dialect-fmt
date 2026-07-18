@@ -56,6 +56,7 @@ sql-dialect-fmt query.sql                 # format to stdout
 sql-dialect-fmt --write *.sql             # rewrite files in place
 sql-dialect-fmt --check src/**/*.sql      # non-zero when files are not formatted
 sql-dialect-fmt --check --diff query.sql  # show a unified diff for unformatted input
+sql-dialect-fmt --lint src/               # lint (SDF001-SDF007): path:line:col findings, exit 1 when any
 cat query.sql | sql-dialect-fmt           # stdin to stdout
 cat query.sql | sql-dialect-fmt -         # explicitly read stdin with `-`
 sql-dialect-fmt --stdin-filepath src/query.sql < query.sql  # use a path for config discovery

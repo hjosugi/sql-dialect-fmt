@@ -161,6 +161,14 @@ struct LintSettings {
     large_in_list: Option<bool>,
     #[serde(alias = "unsupported_embedded_language")]
     unsupported_embedded_language: Option<bool>,
+    #[serde(alias = "delete_without_where")]
+    delete_without_where: Option<bool>,
+    #[serde(alias = "update_without_where")]
+    update_without_where: Option<bool>,
+    #[serde(alias = "comma_join")]
+    comma_join: Option<bool>,
+    #[serde(alias = "order_by_ordinal")]
+    order_by_ordinal: Option<bool>,
     #[serde(alias = "large_in_list_threshold")]
     large_in_list_threshold: Option<usize>,
 }
@@ -203,6 +211,18 @@ impl LintSettings {
         }
         if other.unsupported_embedded_language.is_some() {
             self.unsupported_embedded_language = other.unsupported_embedded_language;
+        }
+        if other.delete_without_where.is_some() {
+            self.delete_without_where = other.delete_without_where;
+        }
+        if other.update_without_where.is_some() {
+            self.update_without_where = other.update_without_where;
+        }
+        if other.comma_join.is_some() {
+            self.comma_join = other.comma_join;
+        }
+        if other.order_by_ordinal.is_some() {
+            self.order_by_ordinal = other.order_by_ordinal;
         }
         if other.large_in_list_threshold.is_some() {
             self.large_in_list_threshold = other.large_in_list_threshold;
@@ -265,6 +285,10 @@ fn apply_editor_lint(options: &mut LintOptions, settings: &LintSettings) {
         options.select_wildcard = enabled;
         options.large_in_list = enabled;
         options.unsupported_embedded_language = enabled;
+        options.delete_without_where = enabled;
+        options.update_without_where = enabled;
+        options.comma_join = enabled;
+        options.order_by_ordinal = enabled;
     }
     if let Some(select_wildcard) = settings.select_wildcard {
         options.select_wildcard = select_wildcard;
@@ -274,6 +298,18 @@ fn apply_editor_lint(options: &mut LintOptions, settings: &LintSettings) {
     }
     if let Some(unsupported_embedded_language) = settings.unsupported_embedded_language {
         options.unsupported_embedded_language = unsupported_embedded_language;
+    }
+    if let Some(delete_without_where) = settings.delete_without_where {
+        options.delete_without_where = delete_without_where;
+    }
+    if let Some(update_without_where) = settings.update_without_where {
+        options.update_without_where = update_without_where;
+    }
+    if let Some(comma_join) = settings.comma_join {
+        options.comma_join = comma_join;
+    }
+    if let Some(order_by_ordinal) = settings.order_by_ordinal {
+        options.order_by_ordinal = order_by_ordinal;
     }
     if let Some(threshold) = settings.large_in_list_threshold {
         options.large_in_list_threshold = threshold;

@@ -235,7 +235,6 @@ pub fn diagnostics_with_lint_options(
     let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(text, options.dialect);
     let lex_errors = lexed.errors.clone();
     let parse = sql_dialect_fmt_parser::parse_lexed(text, options.dialect, lexed);
-    let highlighted = sql_dialect_fmt_highlight::highlight(text);
     let mut diagnostics: Vec<_> = lex_errors
         .iter()
         .map(|err| make(to_range(err.range()), err.message.clone()))
@@ -248,7 +247,7 @@ pub fn diagnostics_with_lint_options(
         .collect();
     diagnostics.extend(lint::diagnostics_with_encoding(
         text,
-        &highlighted.tokens,
+        options.dialect,
         &index,
         lint_options,
         encoding,

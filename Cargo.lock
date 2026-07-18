@@ -2274,6 +2274,7 @@ dependencies = [
  "sql-dialect-fmt-config",
  "sql-dialect-fmt-encoding",
  "sql-dialect-fmt-formatter",
+ "sql-dialect-fmt-lint",
  "sql-dialect-fmt-parser",
  "sql-dialect-fmt-text",
  "tempfile",
@@ -2359,6 +2360,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sql-dialect-fmt-lint"
+version = "1.14.0"
+dependencies = [
+ "sql-dialect-fmt-lexer",
+ "sql-dialect-fmt-parser",
+ "sql-dialect-fmt-syntax",
+ "sql-dialect-fmt-text",
+]
+
+[[package]]
 name = "sql-dialect-fmt-lsp"
 version = "1.14.0"
 dependencies = [
@@ -2371,6 +2382,7 @@ dependencies = [
  "sql-dialect-fmt-highlight",
  "sql-dialect-fmt-hover",
  "sql-dialect-fmt-lexer",
+ "sql-dialect-fmt-lint",
  "sql-dialect-fmt-parser",
  "sql-dialect-fmt-syntax",
  "sql-dialect-fmt-text",

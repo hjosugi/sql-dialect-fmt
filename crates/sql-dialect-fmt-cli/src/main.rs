@@ -1,11 +1,11 @@
 // `sql-dialect-fmt` — the command-line SQL dialect formatter.
 //
 // Reads SQL from files, directories (recursed for `*.sql`), or stdin (no paths or `-`), formats it,
-// and either prints to stdout, rewrites the files (`--write`), or checks formatting (`--check`).
-// Formatting is encoding-aware: a UTF-8 BOM and UTF-16 inputs round-trip, and bytes that are not
-// valid text pass through untouched. The formatter never panics and never drops content — input it
-// cannot parse is returned unchanged, and the parse diagnostics are surfaced to stderr so a
-// malformed file is reported rather than silently passed through.
+// and either prints to stdout, rewrites the files (`--write`), checks formatting (`--check`), or
+// lints it (`--lint`). Formatting is encoding-aware: a UTF-8 BOM and UTF-16 inputs round-trip, and
+// bytes that are not valid text pass through untouched. The formatter never panics and never drops
+// content — input it cannot parse is returned unchanged, and the parse diagnostics are surfaced to
+// stderr so a malformed file is reported rather than silently passed through.
 //
 // Configuration knobs come from three layers, lowest priority first:
 //   1. the formatter's built-in defaults,
@@ -13,8 +13,9 @@
 //   3. explicit CLI flags.
 //
 // Exit codes:
-//   * `0` — success (formatted to stdout/written, or `--check` found nothing to do),
-//   * `1` — `--check` only: at least one input would be reformatted,
+//   * `0` — success (formatted to stdout/written, `--check` found nothing to do, or `--lint`
+//     found no findings),
+//   * `1` — `--check`: at least one input would be reformatted; `--lint`: at least one finding,
 //   * `2` — a parse error, an I/O error, or a usage error.
 
 use std::collections::HashMap;
@@ -30,14 +31,16 @@ use ignore::WalkBuilder;
 use rayon::prelude::*;
 use sql_dialect_fmt_encoding::DecodedText;
 use sql_dialect_fmt_formatter::{format_range, FormatOptions, KeywordCase, LineEnding};
+use sql_dialect_fmt_lint::LintOptions;
 use sql_dialect_fmt_parser::{Dialect, ParseError};
-use sql_dialect_fmt_text::LineColumn;
+use sql_dialect_fmt_text::{LineColumn, LineIndex};
 
 use sql_dialect_fmt_config::{self as config, Config};
 
 /// Process exit codes, kept in one place so their meaning is documented and consistent. Success
 /// (`0`) is expressed via [`ExitCode::SUCCESS`]; the two non-zero codes are named here.
 const EXIT_CHECK_FAILED: u8 = 1;
+const EXIT_LINT_FINDINGS: u8 = 1;
 const EXIT_ERROR: u8 = 2;
 const DEFAULT_EXCLUDE_PATTERNS: &[&str] = &[
     ".git",
@@ -70,6 +73,8 @@ struct Args {
     paths: Vec<PathBuf>,
     write: bool,
     check: bool,
+    /// Lint the inputs instead of formatting them.
+    lint: bool,
     /// Show a unified diff when `--check` finds unformatted input.
     diff: bool,
     /// File path context for stdin, used for config discovery and diagnostics.
@@ -129,10 +134,96 @@ fn run<I: IntoIterator<Item = OsString>>(raw: I) -> Result<ExitCode, String> {
         }
     };
 
+    if args.lint {
+        return run_lint(&args);
+    }
     if args.paths.is_empty() || args.paths.iter().any(|path| is_stdin_path(path)) {
         return run_stdin(&args);
     }
     run_paths(&args)
+}
+
+/// `--lint`: report lint findings as `path:line:col: SDFxxx message` instead of formatting.
+///
+/// The dialect follows the same defaults → `sql-dialect-fmt.toml` → CLI flag layering as
+/// formatting; lint rules run with their defaults, and per-line suppression comments
+/// (`-- sql-dialect-fmt: disable-next-line SDFxxx`) are honored. Exits `1` when any finding is
+/// reported and `0` otherwise.
+fn run_lint(args: &Args) -> Result<ExitCode, String> {
+    if args.paths.is_empty() || args.paths.iter().any(|path| is_stdin_path(path)) {
+        return run_lint_stdin(args);
+    }
+
+    let files = collect_files(args)?;
+    let options = OptionsResolver::new(args);
+    let mut stdout = io::stdout().lock();
+    let mut findings = 0usize;
+    for file in &files {
+        let options = options.for_file(file)?;
+        let source =
+            fs::read(file).map_err(|err| format!("failed to read {}: {err}", file.display()))?;
+        let decoded = DecodedText::decode(&source);
+        // Non-text input (e.g. binary) has nothing to lint; skip it like formatting passes it
+        // through.
+        let Some(text) = decoded.as_str() else {
+            continue;
+        };
+        findings += write_lint_findings(&mut stdout, &file.display().to_string(), text, &options)?;
+    }
+    Ok(lint_exit_code(findings))
+}
+
+fn run_lint_stdin(args: &Args) -> Result<ExitCode, String> {
+    let options = options_for(args, args.stdin_filepath.as_deref())?;
+    let mut source = Vec::new();
+    io::stdin()
+        .read_to_end(&mut source)
+        .map_err(|err| format!("failed to read stdin: {err}"))?;
+    let decoded = DecodedText::decode(&source);
+    let Some(text) = decoded.as_str() else {
+        return Ok(ExitCode::SUCCESS);
+    };
+    let label = args
+        .stdin_filepath
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "<stdin>".to_string());
+    let findings = write_lint_findings(&mut io::stdout().lock(), &label, text, &options)?;
+    Ok(lint_exit_code(findings))
+}
+
+/// Lint `text` and print one `label:line:col: SDFxxx message` line per finding (1-based
+/// line/column). Returns the number of findings printed.
+fn write_lint_findings(
+    stdout: &mut impl Write,
+    label: &str,
+    text: &str,
+    options: &FormatOptions,
+) -> Result<usize, String> {
+    let findings =
+        sql_dialect_fmt_lint::lint_with_dialect(text, options.dialect, LintOptions::default());
+    let index = LineIndex::new(text);
+    for finding in &findings {
+        let position = index.line_column(finding.range.start);
+        writeln!(
+            stdout,
+            "{label}:{}:{}: {} {}",
+            position.line,
+            position.column,
+            finding.code.as_str(),
+            finding.message
+        )
+        .map_err(|err| format!("failed to write stdout: {err}"))?;
+    }
+    Ok(findings.len())
+}
+
+fn lint_exit_code(findings: usize) -> ExitCode {
+    if findings > 0 {
+        ExitCode::from(EXIT_LINT_FINDINGS)
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 /// Resolve the effective options for a single input `path` (or stdin when `path` is `None`).
@@ -710,6 +801,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
     let mut paths = Vec::new();
     let mut write = false;
     let mut check = false;
+    let mut lint = false;
     let mut diff = false;
     let mut stdin_filepath = None;
     let mut range = None;
@@ -721,6 +813,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
         match arg.to_string_lossy().as_ref() {
             "--write" | "-w" => write = true,
             "--check" => check = true,
+            "--lint" => lint = true,
             "--diff" => diff = true,
             "--no-config" => no_config = true,
             "--no-uppercase" => overrides.uppercase_keywords = Some(false),
@@ -781,6 +874,12 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
     if write && check {
         return Err("--write and --check are mutually exclusive".to_string());
     }
+    if lint && (write || check) {
+        return Err("--lint cannot be combined with --write or --check".to_string());
+    }
+    if lint && diff {
+        return Err("--lint cannot be combined with --diff".to_string());
+    }
     if diff && !check {
         return Err("--diff requires --check".to_string());
     }
@@ -795,8 +894,8 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
         return Err("--stdin-filepath requires stdin input (no paths or '-')".to_string());
     }
     if range.is_some() {
-        if write || check {
-            return Err("--range cannot be combined with --write or --check".to_string());
+        if write || check || lint {
+            return Err("--range cannot be combined with --write, --check, or --lint".to_string());
         }
         if paths.len() - stdin_path_count > 0 {
             return Err("--range requires stdin input (no file paths)".to_string());
@@ -806,6 +905,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
         paths,
         write,
         check,
+        lint,
         diff,
         stdin_filepath,
         range,
@@ -926,6 +1026,12 @@ USAGE:
 OPTIONS:
     -w, --write           Format files in place
         --check           Exit non-zero if any input is not already formatted (no writes)
+        --lint            Lint instead of formatting: print findings as
+                           path:line:col: SDFxxx message and exit 1 when any exist.
+                           Rules: SELECT * (SDF001), large IN list (SDF002), unsupported
+                           embedded language (SDF003), DELETE/UPDATE without WHERE
+                           (SDF004/SDF005), comma join (SDF006), ORDER BY ordinal (SDF007).
+                           Suppress per line with -- sql-dialect-fmt: disable-next-line SDFxxx
         --diff            With --check, print a unified diff for unformatted input
         --stdin-filepath PATH
                            File path context for stdin config discovery and diagnostics
@@ -946,7 +1052,7 @@ OPTIONS:
 
 EXIT CODES:
     0   success
-    1   --check: at least one input would be reformatted
+    1   --check: at least one input would be reformatted; --lint: at least one finding
     2   parse error, I/O error, or bad usage
 "
     .to_string()
