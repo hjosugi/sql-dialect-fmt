@@ -1,0 +1,126 @@
+==================
+Match_recognize clause with measures, pattern, and define
+==================
+
+SELECT * FROM stock_ticks MATCH_RECOGNIZE (
+    PARTITION BY symbol
+    ORDER BY tick_time
+    MEASURES MATCH_NUMBER() AS mno, FIRST(price) AS start_price
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP TO LAST rise
+    PATTERN (dip+ rise+)
+    DEFINE dip AS price < LAG(price), rise AS price > LAG(price)
+);
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (operator)
+    (keyword)
+    (identifier)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (keyword)
+        (keyword)
+        (identifier)
+        (keyword)
+        (keyword)
+        (identifier)
+        (identifier)
+        (expression
+          (call_expression
+            (identifier)
+            (argument_list)))
+        (keyword)
+        (identifier)
+        (punctuation)
+        (expression
+          (call_expression
+            (keyword)
+            (argument_list
+              (identifier))))
+        (keyword)
+        (identifier)
+        (identifier)
+        (keyword)
+        (identifier)
+        (identifier)
+        (keyword)
+        (identifier)
+        (identifier)
+        (identifier)
+        (keyword)
+        (identifier)
+        (identifier)
+        (expression
+          (parenthesized_expression
+            (identifier)
+            (operator)
+            (identifier)
+            (operator)))
+        (identifier)
+        (identifier)
+        (keyword)
+        (identifier)
+        (operator)
+        (expression
+          (call_expression
+            (identifier)
+            (argument_list
+              (identifier))))
+        (punctuation)
+        (identifier)
+        (keyword)
+        (identifier)
+        (operator)
+        (expression
+          (call_expression
+            (identifier)
+            (argument_list
+              (identifier))))))))
+
+==================
+Match_recognize written as an immediate call
+==================
+
+SELECT price FROM ticks
+MATCH_RECOGNIZE(ORDER BY t ALL ROWS PER MATCH PATTERN(a b) DEFINE a AS price > 10, b AS TRUE);
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (expression
+      (call_expression
+        (keyword)
+        (argument_list
+          (keyword)
+          (keyword)
+          (identifier)
+          (keyword)
+          (keyword)
+          (identifier)
+          (identifier)
+          (expression
+            (call_expression
+              (identifier)
+              (argument_list
+                (identifier)
+                (identifier))))
+          (identifier)
+          (identifier)
+          (keyword)
+          (identifier)
+          (operator)
+          (number)
+          (punctuation)
+          (identifier)
+          (keyword)
+          (keyword))))))

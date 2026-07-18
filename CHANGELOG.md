@@ -17,6 +17,11 @@ The published crates share a single workspace version (see `RELEASING.md`).
   `SUSPEND`/`RESUME`, `SWAP WITH`, …) are now CST nodes, so multiple actions stack one per line
   and `ALTER SESSION SET` property lists wrap with proper keyword casing; unmodeled ALTER kinds
   keep the lossless lenient token run.
+- Added end-to-end LSP tests that drive the real server binary over stdio (initialize
+  negotiation, diagnostics, formatting, hover, symbols, semantic tokens, configuration, and
+  shutdown), native regression tests for the raw Wasm format ABI, and 24 new Tree-sitter corpus
+  cases covering scripting blocks, MATCH_RECOGNIZE, stage file operations, COPY INTO variants,
+  Databricks-flavored syntax, nested subqueries, and comment placement.
 
 ### Changed
 

@@ -1,0 +1,131 @@
+==================
+Lambda arrow and null-safe equality operators
+==================
+
+SELECT transform(items, x -> x + 1) AS bumped, a <=> b AS same FROM events;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (expression
+      (call_expression
+        (identifier)
+        (argument_list
+          (identifier)
+          (punctuation)
+          (identifier)
+          (operator)
+          (identifier)
+          (operator)
+          (number))))
+    (keyword)
+    (identifier)
+    (punctuation)
+    (identifier)
+    (operator)
+    (identifier)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)))
+
+==================
+Group by all with a qualify filter
+==================
+
+SELECT category, count(*) FROM sales
+GROUP BY ALL
+QUALIFY row_number() OVER (PARTITION BY category ORDER BY total DESC) = 1;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (identifier)
+    (punctuation)
+    (expression
+      (call_expression
+        (identifier)
+        (argument_list
+          (operator))))
+    (keyword)
+    (identifier)
+    (keyword)
+    (keyword)
+    (keyword)
+    (keyword)
+    (expression
+      (call_expression
+        (identifier)
+        (argument_list)))
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (keyword)
+        (keyword)
+        (identifier)
+        (keyword)
+        (keyword)
+        (identifier)
+        (keyword)))
+    (operator)
+    (number)))
+
+==================
+Semi-structured path access
+==================
+
+SELECT raw:store.bicycle.price FROM json_events WHERE raw:store IS NOT NULL;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (identifier)
+    (operator)
+    (identifier)
+    (punctuation)
+    (identifier)
+    (punctuation)
+    (identifier)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)
+    (operator)
+    (identifier)
+    (keyword)
+    (keyword)
+    (keyword)))
+
+==================
+Create table using a Delta source keeps modifiers inline
+==================
+
+CREATE TABLE events (id BIGINT, ts TIMESTAMP) USING DELTA PARTITIONED BY (ts);
+
+---
+
+(source_file
+  (create_statement
+    (keyword)
+    (keyword)
+    (identifier)
+    (expression
+      (parenthesized_expression
+        (identifier)
+        (type)
+        (punctuation)
+        (identifier)
+        (type)))
+    (keyword)
+    (identifier)
+    (identifier)
+    (keyword)
+    (expression
+      (parenthesized_expression
+        (identifier)))))
