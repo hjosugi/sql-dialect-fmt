@@ -11,6 +11,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Added `textDocument/onTypeFormatting` to the language server: typing `;` or a newline reformats
+  the statement that just ended, using the same statement-level range formatting engine, and leaves
+  already formatted statements untouched.
 - Added four lint rules, each individually toggleable and suppressible with
   `-- sql-dialect-fmt: disable-next-line SDFxxx`: `DELETE` without `WHERE` (SDF004), `UPDATE`
   without `WHERE` (SDF005), comma join in `FROM` — implicit cross join, with the Snowflake
@@ -21,6 +24,11 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Changed
 
+- Split the formatter's SQL lowering module into focused query/DML/DDL/scripting/expression
+  submodules so the statement-family rules no longer live in one large file.
+- Split the parser grammar module into focused per-family submodules (queries, expressions, DDL,
+  access control, COPY INTO, scripting, MATCH_RECOGNIZE) so the grammar no longer lives in one
+  large file.
 - Extracted the lint engine into a published, LSP-independent `sql-dialect-fmt-lint` crate
   (byte-ranged diagnostics; publishes after `parser`, before the CLI and LSP crates). The LSP
   crate keeps its public lint API (`LintOptions`, `LintCode`, `diagnostic_lint_code`, …) as a

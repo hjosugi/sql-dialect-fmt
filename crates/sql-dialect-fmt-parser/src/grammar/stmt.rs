@@ -1,5 +1,7 @@
-//! Top-level statement dispatch and Snowflake flow-chain parsing.
+//! Top-level statement dispatch and Snowflake flow-chain parsing, plus the simple statement
+//! forms (`CALL`, session `SET`, `EXECUTE IMMEDIATE`) and the generic lenient statement rule.
 
+use sql_dialect_fmt_syntax::SyntaxKind;
 use sql_dialect_fmt_syntax::SyntaxKind::*;
 
 use crate::parser::Parser;
@@ -84,29 +86,29 @@ pub(super) fn statement(p: &mut Parser) {
     } else if p.at(REVOKE_KW) {
         super::revoke_stmt(p);
     } else if p.at(USE_KW) {
-        super::lenient_stmt(p, USE_STMT);
+        lenient_stmt(p, USE_STMT);
     } else if p.at(SHOW_KW) {
-        super::lenient_stmt(p, SHOW_STMT);
+        lenient_stmt(p, SHOW_STMT);
     } else if p.dialect().supports_delta_commands() && super::delta::at_describe_history(p) {
         super::delta::delta_stmt(p);
     } else if p.at(DESCRIBE_KW) || p.at(DESC_KW) {
-        super::lenient_stmt(p, DESCRIBE_STMT);
+        lenient_stmt(p, DESCRIBE_STMT);
     } else if p.at(TRUNCATE_KW) {
-        super::lenient_stmt(p, TRUNCATE_STMT);
+        lenient_stmt(p, TRUNCATE_STMT);
     } else if p.dialect().supports_scripting_blocks() && super::at_block_start(p) {
         super::block_stmt(p);
     } else if p.at(COMMIT_KW) || p.at(ROLLBACK_KW) || super::at_begin_transaction(p) {
-        super::lenient_stmt(p, TRANSACTION_STMT);
+        lenient_stmt(p, TRANSACTION_STMT);
     } else if p.at(UNDROP_KW) {
-        super::lenient_stmt(p, UNDROP_STMT);
+        lenient_stmt(p, UNDROP_STMT);
     } else if super::at_comment_stmt(p) {
         super::comment_stmt(p);
     } else if p.at(CALL_KW) {
-        super::call_stmt(p);
+        call_stmt(p);
     } else if p.at(SET_KW) {
-        super::set_stmt(p);
+        set_stmt(p);
     } else if p.at(EXECUTE_KW) {
-        super::execute_stmt(p);
+        execute_stmt(p);
     } else if p.dialect().supports_copy_into() && p.at(COPY_KW) {
         super::copy_stmt(p);
     } else if super::stage::at_stage_file_stmt(p) {
@@ -127,4 +129,80 @@ pub(super) fn statement(p: &mut Parser) {
         }
         m.complete(p, EXPR_STMT);
     }
+}
+
+/// Parse the leading keyword and the rest of the statement as a flat token run, completing it as
+/// `node`. Used for statements whose surface is large/evolving (GRANT, REVOKE) or simple enough that
+/// inline token rendering is all the formatter needs (USE, SHOW, DESCRIBE, TRUNCATE): the result
+/// round-trips losslessly and gets inline spacing normalization rather than erroring the file.
+fn lenient_stmt(p: &mut Parser, node: SyntaxKind) {
+    let m = p.start();
+    p.bump_any(); // the leading statement keyword
+    while !super::at_stmt_terminator(p) {
+        p.bump_any();
+    }
+    m.complete(p, node);
+}
+
+/// `CALL proc(args)` — invoke a stored procedure. The invocation is an ordinary call expression, so
+/// its argument list is formatted like any other (one-per-line when it overflows). A trailing tail
+/// (e.g. `INTO :result`) is kept leniently as tokens so it round-trips.
+pub(super) fn call_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(CALL_KW);
+    super::expr(p); // the procedure-call expression: name(args)
+    while !super::at_stmt_terminator(p) {
+        p.bump_any();
+    }
+    m.complete(p, CALL_STMT);
+}
+
+// ---- session SET / EXECUTE IMMEDIATE ----
+
+/// `SET <name> = <expr>` or `SET (<name>, ...) = (<expr>, ...)` (session variables).
+fn set_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(SET_KW);
+    if p.at(L_PAREN) {
+        super::column_list(p);
+    } else {
+        super::name_ref(p);
+    }
+    p.expect(EQ);
+    if p.at(L_PAREN) {
+        // A tuple / subquery right-hand side.
+        p.bump(L_PAREN);
+        if p.at(SELECT_KW) || p.at(WITH_KW) {
+            super::query_expr(p);
+        } else if !p.at(R_PAREN) {
+            super::expr_list(p);
+        }
+        p.expect(R_PAREN);
+    } else {
+        super::expr(p);
+    }
+    m.complete(p, SET_STMT);
+}
+
+/// `EXECUTE IMMEDIATE <string|$$…$$|:var> [USING (<binds>)]`.
+fn execute_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(EXECUTE_KW);
+    p.expect(IMMEDIATE_KW);
+    super::expr(p);
+    if p.eat(USING_KW) {
+        if p.at(L_PAREN) {
+            p.bump(L_PAREN);
+            if !p.at(R_PAREN) {
+                super::expr_list(p);
+            }
+            p.expect(R_PAREN);
+        } else {
+            super::expr(p);
+            while p.eat(COMMA) {
+                super::expr(p);
+            }
+        }
+    }
+    m.complete(p, EXECUTE_STMT);
 }
