@@ -10,7 +10,7 @@ WHERE payload:name ILIKE 'nagaimo%'
 ---
 
 (source_file
-  (statement
+  (select_statement
     (keyword)
     (identifier)
     (operator)
@@ -48,7 +48,7 @@ $$;
 ---
 
 (source_file
-  (statement
+  (create_statement
     (keyword)
     (keyword)
     (expression
@@ -72,9 +72,9 @@ SELECT 2;
 ---
 
 (source_file
-  (statement
+  (select_statement
     (keyword)
     (number))
-  (statement
+  (select_statement
     (keyword)
     (number)))

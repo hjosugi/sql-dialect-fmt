@@ -29,7 +29,8 @@ pub const LOCALS_QUERY: &str = include_str!("../../../tree-sitter-snowflake/quer
 pub const INJECTIONS_QUERY: &str =
     include_str!("../../../tree-sitter-snowflake/queries/injections.scm");
 
-/// Folding query: collapses each `statement` node (and block comments), mirroring the LSP server's
+/// Folding query: collapses each statement-kind node (`select_statement`, `create_statement`, ...,
+/// plus the lenient `statement` fallback) and block comments, mirroring the LSP server's
 /// `textDocument/foldingRange`.
 pub const FOLDS_QUERY: &str = include_str!("../../../tree-sitter-snowflake/queries/folds.scm");
 
