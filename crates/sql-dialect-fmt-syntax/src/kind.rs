@@ -391,6 +391,11 @@ pub enum SyntaxKind {
     PRIV_LIST, // the privilege list of a GRANT/REVOKE (`SELECT, INSERT` / `ALL PRIVILEGES`)
     GRANT_TARGET, // the `ON <object_type> <object_name>` securable of a GRANT/REVOKE
     GRANTEE,   // the `[ROLE|USER] <name>` recipient of a GRANT/REVOKE
+    // Structured ALTER statements (issue #30): one action clause of an `ALTER <kind> <name>`
+    // statement — `ADD COLUMN …`, `DROP COLUMN …`, `RENAME TO …`, `SET <prop> = …`, `UNSET …`,
+    // `SUSPEND`/`RESUME`, `SWAP WITH …`, … . The action body stays a lossless token run (with
+    // `SET` property pairs structured as OBJECT_PROPERTY children).
+    ALTER_ACTION,
 
     // Databricks / Delta maintenance + cache statements (recognized only under the Databricks
     // dialect; the leading words stay ordinary identifiers under Snowflake).

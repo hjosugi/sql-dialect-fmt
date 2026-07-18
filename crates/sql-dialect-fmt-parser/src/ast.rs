@@ -181,6 +181,7 @@ ast_nodes! {
     IntoClause, INTO_CLAUSE;
     InsertWhen, INSERT_WHEN;
     ObjectProperty, OBJECT_PROPERTY;
+    AlterAction, ALTER_ACTION;
     StreamSource, STREAM_SOURCE;
     TaskAfter, TASK_AFTER;
     SemanticViewClause, SEMANTIC_VIEW_CLAUSE;

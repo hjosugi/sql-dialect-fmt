@@ -816,15 +816,180 @@ pub(super) fn drop_stmt(p: &mut Parser) {
     m.complete(p, DROP_STMT);
 }
 
-/// `ALTER` has enormous surface; parse it leniently as a flat token run so it round-trips and gets
-/// inline formatting rather than erroring the whole file.
+/// The action-lead words of a structured ALTER statement that are not reserved keywords
+/// (`DROP`/`ALTER`/`SET` are reserved and matched by kind).
+const ALTER_ACTION_LEAD_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Add,
+    ContextualKeyword::Modify,
+    ContextualKeyword::Rename,
+    ContextualKeyword::Unset,
+    ContextualKeyword::Suspend,
+    ContextualKeyword::Resume,
+    ContextualKeyword::Swap,
+    ContextualKeyword::Refresh,
+];
+
+/// Non-reserved words recognized inside an ALTER action's lenient token run — tagged so the
+/// formatter up-cases them like keywords (`ADD COLUMN`, `RENAME TO`, `ADD SEARCH OPTIMIZATION`,
+/// `SET TBLPROPERTIES (...)`, Databricks `ADD COLUMNS (...)`). The DDL constraint/option words
+/// (`DEFAULT`, `PRIMARY KEY`, `MASKING POLICY`, `TAG`, …) come from [`DDL_CONTEXTUAL_WORDS`].
+const ALTER_RUN_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
+    ContextualKeyword::Column,
+    ContextualKeyword::Columns,
+    ContextualKeyword::To,
+    ContextualKeyword::Search,
+    ContextualKeyword::Optimization,
+    ContextualKeyword::Tblproperties,
+    ContextualKeyword::Options,
+];
+
+/// The object kinds whose ALTER statements this parser structures (issue #30): the common
+/// Snowflake/Databricks `ALTER TABLE / VIEW / SESSION / WAREHOUSE / TASK` plus the kinds that
+/// share the same `<name> <action>[, <action>]*` shape (`SCHEMA`, `DATABASE`, `MATERIALIZED VIEW`,
+/// `DYNAMIC TABLE`). Everything else keeps the historical lenient token run.
+fn at_alter_object_kind(p: &Parser) -> bool {
+    p.at(TABLE_KW)
+        || p.at(VIEW_KW)
+        || p.at(WAREHOUSE_KW)
+        || p.at(TASK_KW)
+        || p.nth_contextual(0, ContextualKeyword::Session)
+        || p.nth_contextual(0, ContextualKeyword::Schema)
+        || p.nth_contextual(0, ContextualKeyword::Database)
+        || (p.nth_contextual(0, ContextualKeyword::Materialized) && p.nth_at(1, VIEW_KW))
+        || (p.nth_contextual(0, ContextualKeyword::Dynamic) && p.nth_at(1, TABLE_KW))
+}
+
+/// `ALTER <kind> [IF EXISTS] <name> <action> [, <action>]*` for the recognized object kinds
+/// (issue #30). Each action (`ADD COLUMN …`, `MODIFY COLUMN … SET …`, `RENAME TO …`, `SET k = v`,
+/// `UNSET …`, `SUSPEND`/`RESUME`, `SWAP WITH …`) becomes an [`ALTER_ACTION`] node; a `SET` action's
+/// `key = value` pairs are structured as [`OBJECT_PROPERTY`] children so `ALTER SESSION SET` /
+/// `ALTER WAREHOUSE … SET` lay out one property per line. Unrecognized object kinds and any
+/// unmodeled tail keep the historical lenient flat token run, so the statement always round-trips
+/// losslessly and never errors the file.
 pub(super) fn alter_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(ALTER_KW);
+    if at_alter_object_kind(p) {
+        alter_object_kind_words(p);
+        if_exists_clause(p);
+        // The object name — absent for `ALTER SESSION`, whose next word is already the action
+        // (`SET`/`UNSET`), so an action-lead word is never mistaken for a name.
+        if p.at_name() && !at_alter_action_start(p, 0) {
+            name_ref(p);
+        }
+        alter_actions(p);
+    } else {
+        // Unmodeled surface (ALTER USER / PIPE / STAGE / FUNCTION / ACCOUNT / …): flat and lossless.
+        while !at_stmt_terminator(p) {
+            p.bump_any();
+        }
+    }
+    m.complete(p, ALTER_STMT);
+}
+
+/// The object-kind word(s) after `ALTER`: reserved kinds bump as keywords, the contextual kinds
+/// (`SESSION`, `SCHEMA`, `DATABASE`, and the first word of `MATERIALIZED VIEW`/`DYNAMIC TABLE`)
+/// are tagged for up-casing.
+fn alter_object_kind_words(p: &mut Parser) {
+    if p.nth_contextual(0, ContextualKeyword::Materialized) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // MATERIALIZED
+        p.bump(VIEW_KW);
+    } else if p.nth_contextual(0, ContextualKeyword::Dynamic) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // DYNAMIC
+        p.bump(TABLE_KW);
+    } else if p.at_keyword() {
+        p.bump_any(); // TABLE / VIEW / WAREHOUSE / TASK
+    } else {
+        p.bump_as(CONTEXTUAL_KEYWORD); // SESSION / SCHEMA / DATABASE
+    }
+}
+
+/// At the start of an ALTER action, `n` tokens ahead: a reserved lead (`DROP`, `ALTER`, `SET`),
+/// a contextual lead word, or `CLUSTER BY`.
+fn at_alter_action_start(p: &Parser, n: usize) -> bool {
+    p.nth_at(n, DROP_KW)
+        || p.nth_at(n, ALTER_KW)
+        || p.nth_at(n, SET_KW)
+        || p.nth_any_contextual(n, ALTER_ACTION_LEAD_CONTEXTUAL_WORDS)
+        || (p.nth_contextual(n, ContextualKeyword::Cluster) && p.nth_at(n + 1, BY_KW))
+}
+
+/// The comma-separated action list of a structured ALTER. A top-level comma separates actions only
+/// when the next token starts one; otherwise it belongs to the current action's token run
+/// (`ADD SEARCH OPTIMIZATION ON EQUALITY(...), SUBSTRING(...)`, `SET a = 1, b = 2`). Any tail that
+/// does not start with an action keyword stays a lossless flat run.
+fn alter_actions(p: &mut Parser) {
+    if at_alter_action_start(p, 0) {
+        alter_action(p);
+        while p.at(COMMA) && at_alter_action_start(p, 1) {
+            p.bump(COMMA);
+            alter_action(p);
+        }
+    }
+    // Anything left over (an unmodeled or malformed tail) stays flat and lossless.
     while !at_stmt_terminator(p) {
         p.bump_any();
     }
-    m.complete(p, ALTER_STMT);
+}
+
+/// One ALTER action: the lead keyword(s), then either a structured `SET` property list or a
+/// lenient balanced token run up to the next top-level action comma / statement end.
+fn alter_action(p: &mut Parser) {
+    let m = p.start();
+    if p.at(SET_KW) {
+        p.bump(SET_KW);
+        alter_set_tail(p);
+    } else {
+        if p.at_keyword() {
+            p.bump_any(); // DROP / ALTER (reserved) — already up-cased
+        } else {
+            p.bump_as(CONTEXTUAL_KEYWORD); // ADD / MODIFY / RENAME / UNSET / SUSPEND / RESUME / SWAP / …
+        }
+        alter_action_token_run(p);
+    }
+    m.complete(p, ALTER_ACTION);
+}
+
+/// After a `SET` lead: `key = value [, key = value]*` pairs become [`OBJECT_PROPERTY`] children
+/// (`ALTER SESSION SET TIMEZONE = 'UTC', WEEK_START = 1`, `ALTER TASK t SET SCHEDULE = '1 minute'`),
+/// while the non-property forms (`SET TAG n = v`, `SET MASKING POLICY …`, `SET DEFAULT …`,
+/// `SET NOT NULL`, `SET DATA TYPE …`) stay a lenient token run. Any residue after the pairs is
+/// kept losslessly in the same run.
+fn alter_set_tail(p: &mut Parser) {
+    while at_alter_set_property(p, 0) {
+        object_property(p);
+        if p.at(COMMA) && at_alter_set_property(p, 1) && !at_alter_action_start(p, 1) {
+            p.bump(COMMA);
+        }
+    }
+    alter_action_token_run(p);
+}
+
+/// At a `word = …` pair `n` tokens ahead (the `SET` property shape).
+fn at_alter_set_property(p: &Parser, n: usize) -> bool {
+    (p.nth_at(n, IDENT) || p.nth_at(n, QUOTED_IDENT)) && p.nth_at(n + 1, EQ)
+}
+
+/// The lenient body of an ALTER action: a balanced token run that stops at the statement end or a
+/// top-level comma that starts the next action, tagging the recognized DDL/ALTER words for casing.
+fn alter_action_token_run(p: &mut Parser) {
+    balanced_token_run_until(
+        p,
+        |p| at_stmt_terminator(p) || (p.at(COMMA) && at_alter_action_start(p, 1)),
+        bump_alter_word,
+    );
+}
+
+/// Consume one token of an ALTER action run: reserved keywords as themselves, recognized
+/// DDL/ALTER contextual words tagged for up-casing, everything else verbatim.
+fn bump_alter_word(p: &mut Parser) {
+    if p.at_keyword() {
+        p.bump_any();
+    } else if is_ddl_contextual_word(p) || p.nth_any_contextual(0, ALTER_RUN_CONTEXTUAL_WORDS) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    } else {
+        p.bump_any();
+    }
 }
 
 /// At a `COMMENT ON …` statement. `comment` is a contextual keyword recognized only before `ON`, so

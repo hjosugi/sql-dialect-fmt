@@ -312,4 +312,27 @@ contextual_keywords! {
     Source => "source",
     /// `MERGE ... WHEN NOT MATCHED BY TARGET ...` — the `TARGET` qualifier word.
     Target => "target",
+    // ---- structured ALTER statements (issue #30) ----
+    /// `ALTER SESSION SET ...` — the object-kind word.
+    Session => "session",
+    /// `ALTER TABLE t ADD COLUMN ...` — an action-lead word.
+    Add => "add",
+    /// `ALTER TABLE t MODIFY COLUMN ...` — an action-lead word.
+    Modify => "modify",
+    /// `ALTER TABLE t RENAME TO ...` / `RENAME COLUMN a TO b` — an action-lead word.
+    Rename => "rename",
+    /// `ALTER TABLE t UNSET ...` / `ALTER SESSION UNSET ...` — an action-lead word.
+    Unset => "unset",
+    /// `ALTER TASK t SUSPEND` / `ALTER WAREHOUSE w SUSPEND` — an action-lead word.
+    Suspend => "suspend",
+    /// `ALTER TASK t RESUME` / `ALTER WAREHOUSE w RESUME` — an action-lead word.
+    Resume => "resume",
+    /// `ALTER TABLE t SWAP WITH u` — an action-lead word.
+    Swap => "swap",
+    /// `ALTER TABLE t ADD COLUMN c INT` — the `COLUMN` word inside an ALTER action.
+    Column => "column",
+    /// `ALTER TABLE t ADD SEARCH OPTIMIZATION ...` — first word.
+    Search => "search",
+    /// `ALTER TABLE t ADD SEARCH OPTIMIZATION ...` — second word.
+    Optimization => "optimization",
 }
