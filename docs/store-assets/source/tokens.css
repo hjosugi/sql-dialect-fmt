@@ -1,0 +1,50 @@
+:root {
+  --sdf-font-family-ui:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sdf-font-family-brand:
+    Inter, ui-sans-serif, system-ui, sans-serif;
+  --sdf-font-family-mono:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --sdf-font-size-2xs: 11px;
+  --sdf-font-size-xs: 12px;
+  --sdf-font-size-sm: 13px;
+  --sdf-font-size-md: 14px;
+  --sdf-font-size-base: 16px;
+  --sdf-font-size-lg: 17px;
+  --sdf-font-size-xl: 18px;
+  --sdf-font-size-2xl: 19px;
+  --sdf-font-size-heading: 22px;
+  --sdf-font-size-display-sm: 38px;
+  --sdf-font-size-display-md: 40px;
+  --sdf-font-size-display-lg: 44px;
+
+  --sdf-font-weight-medium: 500;
+  --sdf-font-weight-semibold: 650;
+  --sdf-font-weight-bold: 700;
+  --sdf-font-weight-heavy: 750;
+  --sdf-font-weight-extrabold: 800;
+
+  --sdf-space-sm: 8px;
+  --sdf-space-md: 12px;
+  --sdf-space-lg: 14px;
+  --sdf-space-xl: 16px;
+  --sdf-space-2xl: 18px;
+  --sdf-space-3xl: 24px;
+  --sdf-space-4xl: 28px;
+  --sdf-space-5xl: 34px;
+
+  --sdf-color-brand: #173d3f;
+  --sdf-color-brand-border: #2f5d62;
+  --sdf-color-accent: #55d6be;
+  --sdf-color-surface: #f7fbf9;
+  --sdf-color-white: #fff;
+
+  --sdf-radius-xs: 5px;
+  --sdf-radius-sm: 6px;
+  --sdf-radius-md: 7px;
+  --sdf-radius-lg: 10px;
+  --sdf-radius-xl: 12px;
+  --sdf-radius-2xl: 14px;
+  --sdf-radius-pill: 999px;
+}

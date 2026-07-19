@@ -1,0 +1,33 @@
+:root {
+  --sdf-font-family-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+  --sdf-font-size-label: 0.82rem;
+  --sdf-font-size-code: 0.9rem;
+  --sdf-font-weight-semibold: 600;
+
+  --sdf-space-2xs: 4px;
+  --sdf-space-xs: 6px;
+  --sdf-space-sm: 8px;
+  --sdf-space-md: 12px;
+  --sdf-space-lg: 16px;
+  --sdf-space-xl: 20px;
+  --sdf-space-2xl: 22px;
+  --sdf-space-3xl: 28px;
+
+  --sdf-color-toolbar: #f6f8fa;
+  --sdf-color-border: #d8dee4;
+  --sdf-color-control-border: #afb8c1;
+  --sdf-color-editor-border: #d0d7de;
+  --sdf-color-muted: #57606a;
+  --sdf-color-primary: #0969da;
+  --sdf-color-success: #1f883d;
+  --sdf-color-disabled: #8c959f;
+  --sdf-color-white: #fff;
+  --sdf-color-focus: rgb(9 105 218 / 25%);
+
+  --sdf-radius-control: 6px;
+  --sdf-height-control: 34px;
+  --sdf-height-status: 22px;
+  --sdf-height-editor: 430px;
+  --sdf-height-editor-compact: 320px;
+}

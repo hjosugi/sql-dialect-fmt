@@ -21,7 +21,9 @@ Marketplace submissions.
 The screenshots are rendered from the HTML fixtures under `source/`. They use demo SQL and a
 generic SQL workspace so no customer data, account details, or third-party product artwork is
 included. The extension button, success toast, options, supported dialects, and privacy statements
-match the shipped extension behavior.
+match the shipped extension behavior. Those fixtures share `source/tokens.css`; font families,
+font sizes, weights, spacing, radii, and brand colors should be changed there instead of being
+redeclared in individual fixtures.
 
 The icon and promotional tiles were generated with the built-in image generation workflow. Final
 assets were resized to the exact official dimensions and visually checked at native size and at
@@ -31,4 +33,5 @@ See [`CHROME_WEB_STORE_SUBMISSION.md`](CHROME_WEB_STORE_SUBMISSION.md) for every
 privacy answer, reviewer instruction, and the one external YouTube upload step.
 
 Run `python3 scripts/check-store-assets.py` to verify every PNG dimension, icon alpha channel,
-package reference, privacy statement, and the demo video's codec, dimensions, and duration.
+package reference, shared CSS-token reference, privacy statement, and the demo video's codec,
+dimensions, and duration.

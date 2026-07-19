@@ -43,7 +43,7 @@
         "https://*.gcp.databricks.com/*"
       ],
       "js": ["src/content.js"],
-      "css": ["src/content.css"],
+      "css": ["src/tokens.css", "src/content.css"],
       "run_at": "document_idle"
     }
   ],

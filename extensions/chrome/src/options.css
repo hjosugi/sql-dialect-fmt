@@ -1,67 +1,67 @@
 body {
   margin: 0;
-  background: #f7fbf9;
-  color: #173d3f;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--sdf-color-surface);
+  color: var(--sdf-color-brand);
+  font-family: var(--sdf-font-family-ui);
+  font-size: var(--sdf-font-size-base);
 }
 
 main {
-  width: min(460px, calc(100vw - 40px));
-  margin: 32px auto;
+  width: min(460px, calc(100vw - var(--sdf-space-4xl)));
+  margin: var(--sdf-space-3xl) auto;
 }
 
 h1 {
-  margin: 0 0 20px;
-  font-size: 22px;
-  font-weight: 700;
+  margin: 0 0 var(--sdf-space-2xl);
+  font-size: var(--sdf-font-size-heading);
+  font-weight: var(--sdf-font-weight-bold);
 }
 
 form {
   display: grid;
-  gap: 16px;
+  gap: var(--sdf-space-xl);
 }
 
 label {
   display: grid;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 650;
+  gap: var(--sdf-space-xs);
+  font-size: var(--sdf-font-size-sm);
+  font-weight: var(--sdf-font-weight-semibold);
 }
 
 select,
 input[type="number"] {
-  height: 34px;
-  border: 1px solid #9ab2ad;
-  border-radius: 6px;
-  padding: 0 10px;
-  background: #fff;
-  color: #173d3f;
+  height: var(--sdf-height-control);
+  border: 1px solid var(--sdf-color-control-border);
+  border-radius: var(--sdf-radius-control);
+  padding: 0 var(--sdf-space-md);
+  background: var(--sdf-color-white);
+  color: var(--sdf-color-brand);
   font: inherit;
 }
 
 .checkbox {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sdf-space-sm);
 }
 
 button {
   width: fit-content;
-  height: 34px;
-  border: 1px solid #2f5d62;
-  border-radius: 6px;
-  padding: 0 14px;
-  background: #173d3f;
-  color: #fff;
+  height: var(--sdf-height-control);
+  border: 1px solid var(--sdf-color-brand-border);
+  border-radius: var(--sdf-radius-control);
+  padding: 0 var(--sdf-space-lg);
+  background: var(--sdf-color-brand);
+  color: var(--sdf-color-white);
   cursor: pointer;
   font: inherit;
-  font-weight: 650;
+  font-weight: var(--sdf-font-weight-semibold);
 }
 
 #status {
   min-height: 18px;
   margin: 0;
-  color: #49605c;
-  font-size: 12px;
+  color: var(--sdf-color-brand-muted);
+  font-size: var(--sdf-font-size-xs);
 }
