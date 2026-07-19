@@ -63,7 +63,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "vscode-languageclient": "^9.0.1",
+    "vscode-languageclient": "^10.1.0",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
   },
