@@ -137,7 +137,7 @@
 - ✅ エディタ拡張（VS Code）パッケージング（`editors/` を extension root とする `package.json` + `language-configuration.json`）
 - ✅ Snowsight/Chrome 拡張（`sql-dialect-fmt-wasm` を `wasm32-unknown-unknown` でビルドして同梱、worksheet editor 上のボタン/拡張アイコン/`Alt+Shift+F` から整形）… [sql-dialect-fmt-wasm](crates/sql-dialect-fmt-wasm/) / [extensions/chrome](extensions/chrome/) / [build script](scripts/build-chrome-extension.sh)
 - ✅ GitHub Release asset: CLI tarball + sha256、Chrome zip、VS Code VSIX を `v*.*.*` release に同梱。旧 `snow-fmt-*` asset は除去済み
-- ✅ VS Code Marketplace / Chrome Web Store publish workflow: tag push で package artifact を作成し、repo variable で opt-in すれば store publish まで自動実行。VS Code Marketplace は初回 listing と v1.16.0 への更新を完了し、`VSCE_PAT` + `VSCODE_MARKETPLACE_AUTO_PUBLISH=true` を設定済み。Chrome は Web Store API OAuth credentials と初回 listing/審査が未完了。repo secret/variable は [configure-extension-publishing.sh](scripts/configure-extension-publishing.sh) で投入可
+- ✅ VS Code Marketplace / Chrome Web Store publish workflow: tag push で package artifact を作成し、repo variable で opt-in すれば store publish まで自動実行。VS Code Marketplace は初回 listing と v1.16.1 への自動更新を完了し、`VSCE_PAT` + `VSCODE_MARKETPLACE_AUTO_PUBLISH=true` を設定済み。Chrome は Web Store API OAuth credentials と初回 listing/審査が未完了。repo secret/variable は [configure-extension-publishing.sh](scripts/configure-extension-publishing.sh) で投入可
 - ✅ 公式仕様由来の conformance generator（Future Tech Blog の `uroborosql-fmt` / `postgresql-cst-parser` 型の発想を Snowflake 向けに翻訳）: local path / archive から `.sql` と SQL fenced block を抽出し、外部 corpus harness に流して parser/formatter conformance report を生成。将来、機械可読な公式 grammar が得られるなら Pure Rust CST parser 生成の候補にする … [scripts/conformance-report.py](scripts/conformance-report.py)
 
 ---

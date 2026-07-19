@@ -11,5 +11,5 @@ create-missing = false
 [output.html]
 git-repository-url = "https://github.com/hjosugi/sql-dialect-fmt"
 edit-url-template = "https://github.com/hjosugi/sql-dialect-fmt/edit/main/docs-site/{path}"
-additional-css = ["theme/playground.css"]
+additional-css = ["theme/tokens.css", "theme/playground.css"]
 additional-js = ["theme/playground.js"]

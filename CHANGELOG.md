@@ -9,6 +9,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- Centralized Chrome extension, docs playground, and store-demo typography and repeated visual
+  values in namespaced CSS custom properties; the store-asset validator now prevents consumers
+  from bypassing the shared font tokens.
+
 ## [1.16.1] - 2026-07-18
 
 ### Added

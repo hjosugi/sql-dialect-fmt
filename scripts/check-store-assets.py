@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import struct
 import subprocess
@@ -26,6 +27,28 @@ PNG_ASSETS = {
     "extensions/chrome/images/icon48.png": (48, 48, True),
     "extensions/chrome/images/icon128.png": (128, 128, True),
 }
+
+CSS_TOKEN_GROUPS = {
+    "extensions/chrome/src/tokens.css": (
+        "extensions/chrome/src/content.css",
+        "extensions/chrome/src/options.css",
+    ),
+    "docs-site/theme/tokens.css": ("docs-site/theme/playground.css",),
+    "docs/store-assets/source/tokens.css": (
+        "docs/store-assets/source/chrome-formatter-demo.html",
+        "docs/store-assets/source/chrome-options-demo.html",
+        "docs/store-assets/source/demo-end.html",
+        "docs/store-assets/source/demo-title.html",
+        "docs/store-assets/source/vscode-syntax-demo.html",
+    ),
+}
+
+CSS_VARIABLE_DEFINITION = re.compile(r"(--sdf-[a-z0-9-]+)\s*:")
+CSS_VARIABLE_REFERENCE = re.compile(r"var\((--sdf-[a-z0-9-]+)")
+RAW_FONT_SHORTHAND = re.compile(
+    r"\bfont\s*:\s*[^;]*(?:\d+(?:\.\d+)?(?:px|rem)|monospace|sans-serif)",
+    re.IGNORECASE,
+)
 
 
 def read_png(path: Path) -> tuple[int, int, bool]:
@@ -72,6 +95,55 @@ def validate_manifests() -> None:
         raise ValueError("Chrome manifest top-level icons do not match packaged artwork")
     if chrome.get("action", {}).get("default_icon") != expected_icons:
         raise ValueError("Chrome manifest action icons do not match packaged artwork")
+    content_css = chrome.get("content_scripts", [{}])[0].get("css")
+    if content_css != ["src/tokens.css", "src/content.css"]:
+        raise ValueError("Chrome manifest must load tokens.css before content.css")
+
+
+def validate_css_tokens() -> None:
+    for token_relative, consumer_relatives in CSS_TOKEN_GROUPS.items():
+        token_path = ROOT / token_relative
+        token_text = token_path.read_text()
+        definitions = set(CSS_VARIABLE_DEFINITION.findall(token_text))
+        if not any(name.startswith("--sdf-font-size-") for name in definitions):
+            raise ValueError(f"{token_relative}: missing font-size tokens")
+        if not any(name.startswith("--sdf-font-family-") for name in definitions):
+            raise ValueError(f"{token_relative}: missing font-family tokens")
+
+        for consumer_relative in consumer_relatives:
+            consumer_text = (ROOT / consumer_relative).read_text()
+            missing = set(CSS_VARIABLE_REFERENCE.findall(consumer_text)) - definitions
+            if missing:
+                names = ", ".join(sorted(missing))
+                raise ValueError(f"{consumer_relative}: undefined CSS tokens: {names}")
+
+            for line_number, line in enumerate(consumer_text.splitlines(), start=1):
+                if "font-size:" in line and "font-size: var(--sdf-font-size-" not in line:
+                    raise ValueError(
+                        f"{consumer_relative}:{line_number}: font-size must use an --sdf token"
+                    )
+                if "font-family:" in line and "font-family: var(--sdf-font-family-" not in line:
+                    raise ValueError(
+                        f"{consumer_relative}:{line_number}: font-family must use an --sdf token"
+                    )
+                if RAW_FONT_SHORTHAND.search(line):
+                    raise ValueError(
+                        f"{consumer_relative}:{line_number}: numeric font shorthand bypasses tokens"
+                    )
+
+    options = (ROOT / "extensions/chrome/options.html").read_text()
+    if '<link rel="stylesheet" href="src/tokens.css">' not in options:
+        raise ValueError("Chrome options page must load src/tokens.css")
+
+    for consumer_relative in CSS_TOKEN_GROUPS["docs/store-assets/source/tokens.css"]:
+        source = (ROOT / consumer_relative).read_text()
+        if '<link rel="stylesheet" href="tokens.css">' not in source:
+            raise ValueError(f"{consumer_relative}: must load shared tokens.css")
+
+    book = (ROOT / "docs-site/book.toml").read_text()
+    expected = 'additional-css = ["theme/tokens.css", "theme/playground.css"]'
+    if expected not in book:
+        raise ValueError("docs-site/book.toml must load tokens.css before playground.css")
 
 
 def validate_copy() -> None:
@@ -126,12 +198,15 @@ def main() -> int:
     try:
         validate_pngs()
         validate_manifests()
+        validate_css_tokens()
         validate_copy()
         validate_video()
     except (FileNotFoundError, ValueError, subprocess.CalledProcessError, StopIteration) as error:
         print(f"store asset validation failed: {error}", file=sys.stderr)
         return 1
-    print(f"store asset validation ok: {len(PNG_ASSETS)} PNGs and 1 demo video")
+    print(
+        f"store asset validation ok: {len(PNG_ASSETS)} PNGs, 1 demo video, and shared CSS tokens"
+    )
     return 0
 
 

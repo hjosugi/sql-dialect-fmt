@@ -1,0 +1,33 @@
+:root {
+  --sdf-font-family-ui:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sdf-font-size-xs: 12px;
+  --sdf-font-size-sm: 13px;
+  --sdf-font-size-base: 16px;
+  --sdf-font-size-heading: 22px;
+  --sdf-font-weight-semibold: 650;
+  --sdf-font-weight-bold: 700;
+
+  --sdf-space-2xs: 4px;
+  --sdf-space-xs: 6px;
+  --sdf-space-sm: 8px;
+  --sdf-space-md: 10px;
+  --sdf-space-lg: 14px;
+  --sdf-space-xl: 16px;
+  --sdf-space-2xl: 20px;
+  --sdf-space-3xl: 32px;
+  --sdf-space-4xl: 40px;
+
+  --sdf-color-brand: #173d3f;
+  --sdf-color-brand-border: #2f5d62;
+  --sdf-color-brand-muted: #49605c;
+  --sdf-color-control-border: #9ab2ad;
+  --sdf-color-surface: #f7fbf9;
+  --sdf-color-surface-hover: #e8f5f0;
+  --sdf-color-white: #fff;
+
+  --sdf-radius-control: 6px;
+  --sdf-height-control: 34px;
+  --sdf-height-action: 36px;
+  --sdf-shadow-floating: 0 6px 18px rgb(0 0 0 / 18%);
+}

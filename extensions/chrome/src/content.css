@@ -1,31 +1,30 @@
 .sql-dialect-fmt-toolbar {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: var(--sdf-space-xl);
+  bottom: var(--sdf-space-xl);
   z-index: 2147483647;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  gap: var(--sdf-space-sm);
+  font-family: var(--sdf-font-family-ui);
 }
 
 .sql-dialect-fmt-button {
   min-width: 88px;
-  height: 36px;
-  border: 1px solid #2f5d62;
-  border-radius: 6px;
-  background: #f7fbf9;
-  color: #173d3f;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+  height: var(--sdf-height-action);
+  border: 1px solid var(--sdf-color-brand-border);
+  border-radius: var(--sdf-radius-control);
+  background: var(--sdf-color-surface);
+  color: var(--sdf-color-brand);
+  box-shadow: var(--sdf-shadow-floating);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sdf-font-size-sm);
+  font-weight: var(--sdf-font-weight-semibold);
   letter-spacing: 0;
 }
 
 .sql-dialect-fmt-button:hover {
-  background: #e8f5f0;
+  background: var(--sdf-color-surface-hover);
 }
 
 .sql-dialect-fmt-button:disabled {
@@ -34,13 +33,13 @@
 }
 
 .sql-dialect-fmt-toast {
-  max-width: min(340px, calc(100vw - 32px));
-  padding: 8px 10px;
-  border: 1px solid #49605c;
-  border-radius: 6px;
-  background: #173d3f;
-  color: #fff;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
-  font-size: 12px;
+  max-width: min(340px, calc(100vw - var(--sdf-space-3xl)));
+  padding: var(--sdf-space-sm) var(--sdf-space-md);
+  border: 1px solid var(--sdf-color-brand-muted);
+  border-radius: var(--sdf-radius-control);
+  background: var(--sdf-color-brand);
+  color: var(--sdf-color-white);
+  box-shadow: var(--sdf-shadow-floating);
+  font-size: var(--sdf-font-size-xs);
   line-height: 1.35;
 }
