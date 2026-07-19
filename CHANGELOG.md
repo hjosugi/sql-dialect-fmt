@@ -9,11 +9,15 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.16.2] - 2026-07-19
+
 ### Changed
 
 - Centralized Chrome extension, docs playground, and store-demo typography and repeated visual
   values in namespaced CSS custom properties; the store-asset validator now prevents consumers
   from bypassing the shared font tokens.
+- Updated the bundled VS Code language client to 10.1.0, aligned the extension's minimum VS Code
+  version to 1.91.0, and refreshed the Rust lockfile for serde 1.0.229 and cc 1.3.0.
 
 ## [1.16.1] - 2026-07-18
 
@@ -455,7 +459,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.1...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.2...HEAD
+[1.16.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.1...v1.16.2
 [1.16.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.14.0...v1.15.0
