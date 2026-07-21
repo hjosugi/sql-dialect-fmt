@@ -60,9 +60,15 @@ pub(super) fn must_separate_to_preserve_tokens(prev: SyntaxKind, cur: SyntaxKind
             | (MINUS, ARROW)
             | (MINUS, FLOW_PIPE)
             | (EQ, GT)
+            | (EQ, GTE)
             | (LT, EQ)
             | (LT, GT)
+            | (LT, GTE)
+            | (LT, FAT_ARROW)
             | (GT, EQ)
+            | (GT, FAT_ARROW)
+            | (ARROW, GT)
+            | (ARROW, GTE)
             | (COLON, EQ)
             | (COLON, COLON)
             | (COLON, ASSIGN)
@@ -70,7 +76,9 @@ pub(super) fn must_separate_to_preserve_tokens(prev: SyntaxKind, cur: SyntaxKind
             | (COLON, FAT_ARROW)
             | (PIPE, GT)
             | (PIPE, PIPE)
+            | (PIPE, CONCAT)
             | (BANG, EQ)
+            | (BANG, FAT_ARROW)
             | (SLASH, SLASH)
             | (SLASH, STAR)
     )
@@ -97,4 +105,44 @@ pub(super) fn is_value_end(kind: SyntaxKind) -> bool {
             | FALSE_KW
             | END_KW
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sql_dialect_fmt_lexer::tokenize;
+
+    #[test]
+    fn compound_operator_boundaries_that_retokenize_are_explicitly_separated() {
+        let cases = [
+            (EQ, "=", GTE, ">="),
+            (LT, "<", GTE, ">="),
+            (LT, "<", FAT_ARROW, "=>"),
+            (GT, ">", FAT_ARROW, "=>"),
+            (ARROW, "->", GT, ">"),
+            (ARROW, "->", GTE, ">="),
+            (PIPE, "|", CONCAT, "||"),
+            (BANG, "!", FAT_ARROW, "=>"),
+        ];
+
+        for (prev, prev_text, cur, cur_text) in cases {
+            assert!(
+                must_separate_to_preserve_tokens(prev, cur),
+                "missing boundary protection for {prev:?} followed by {cur:?}"
+            );
+
+            let joined = format!("{prev_text}{cur_text}");
+            let joined_kinds: Vec<_> = tokenize(&joined)
+                .tokens
+                .into_iter()
+                .filter(|token| !token.kind.is_trivia())
+                .map(|token| token.kind)
+                .collect();
+            assert_ne!(
+                joined_kinds,
+                vec![prev, cur],
+                "the test case is not a lexically ambiguous boundary: {joined:?}"
+            );
+        }
+    }
 }

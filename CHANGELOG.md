@@ -9,6 +9,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Fixed
+
+- Hardened the generic token walker against eight additional compound-operator boundary fusions,
+  preserving the original token sequence when adjacent `=`, `<`, `>`, `->`, `|`, or `!` tokens
+  could otherwise be re-lexed as a different multi-character operator.
+
 ## [1.17.0] - 2026-07-21
 
 ### Added
