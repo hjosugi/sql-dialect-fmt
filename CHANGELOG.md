@@ -9,6 +9,18 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Recognized `${ ... }` template-substitution placeholders as first-class tokens, so SQL embedded
+  in a host language now formats and highlights cleanly: a JavaScript template literal
+  (`` `SELECT ${cfg.col} FROM ${cfg.t}` ``) or a Databricks / Spark / dbt `${var}` substitution.
+  The lexer keeps each placeholder as one atomic token, balancing nested braces and skipping quoted
+  `}` and nested template literals so `SELECT ${ fn({a: 1}, '}') }` stays intact; the parser accepts
+  a placeholder wherever a name or value can appear; the formatter lays the statement out normally
+  while preserving the placeholder verbatim; and the lexical highlighter, TextMate grammar, and
+  Tree-sitter grammar colour it as a parameter (with nine new lexer/parser/formatter/highlight cases
+  and four Tree-sitter corpus cases).
+
 ## [1.16.2] - 2026-07-19
 
 ### Changed

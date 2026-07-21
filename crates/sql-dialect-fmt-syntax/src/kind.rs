@@ -22,7 +22,10 @@ pub enum SyntaxKind {
     FILE_URI,      // unquoted file:// URI used by Snowflake PUT / GET
     INT_NUMBER,
     FLOAT_NUMBER,
-    VARIABLE, // $1, $42 (positional)  or  $name (session/binding)
+    VARIABLE,    // $1, $42 (positional)  or  $name (session/binding)
+    PLACEHOLDER, // ${ ... } template-substitution placeholder (JS template literals, Databricks /
+    // Spark / dbt variable substitution). Lexed as one atomic token with balanced
+    // nested braces so embedded-in-source SQL still formats and highlights.
 
     // ---- Punctuation & operators ----
     L_PAREN,      // (
@@ -480,6 +483,7 @@ impl SyntaxKind {
             INT_NUMBER => "an integer literal",
             FLOAT_NUMBER => "a number literal",
             VARIABLE => "a variable",
+            PLACEHOLDER => "a template placeholder",
             // Punctuation & operators (quoted so the symbol is unambiguous in a sentence).
             L_PAREN => "'('",
             R_PAREN => "')'",

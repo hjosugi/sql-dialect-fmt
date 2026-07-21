@@ -127,6 +127,10 @@ ON quotes.symbol = trades.symbol;
         sql: r#"SELECT "顧客"."名前", '長芋' FROM "schema"."table";"#,
     },
     SqlCase {
+        name: "template placeholders with nested structure",
+        sql: "SELECT ${cfg.col} FROM ${cfg.t} WHERE x = ${ fn({a: 1, b: [2, 3]}, '}') };",
+    },
+    SqlCase {
         name: "comments and mixed operators",
         sql: "/* block */\nSELECT a => b, c -> d, e::NUMBER -- line\nFROM t // slash line\n;",
     },
@@ -184,6 +188,16 @@ const CAPTURE_CASES: &[CaptureCase] = &[
             ("keyword", "CREATE"),
             ("keyword", "JAVASCRIPT"),
             ("string.special", "$$return \"ok\";$$"),
+        ],
+    },
+    CaptureCase {
+        name: "template placeholders captured as parameters",
+        sql: "SELECT ${cfg.col} FROM ${cfg.t};",
+        expected: &[
+            ("keyword", "SELECT"),
+            ("variable.parameter", "${cfg.col}"),
+            ("keyword", "FROM"),
+            ("variable.parameter", "${cfg.t}"),
         ],
     },
     CaptureCase {

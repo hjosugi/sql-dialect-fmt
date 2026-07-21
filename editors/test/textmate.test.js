@@ -167,3 +167,47 @@ test("JavaScript injection survives a multiline routine header and delimiter", a
   );
   assert.ok(!trailingSelect?.scopes.includes("source.js"), trailingSelect?.scopes);
 });
+
+test("template-literal ${...} placeholders are scoped as template expressions", async () => {
+  const grammar = await loadSnowflakeGrammar();
+  const source = "SELECT ${cfg.col} FROM ${cfg.t} WHERE id = ${id};";
+  const tokens = tokenize(grammar, source);
+
+  // The opening `${` and the interpolated body carry the template-expression scopes.
+  const open = tokens.find((token) => token.text === "${");
+  assert.ok(
+    open?.scopes.includes("punctuation.definition.template-expression.begin.sql"),
+    open?.scopes,
+  );
+  const body = tokens.find((token) => token.text.includes("cfg.col"));
+  assert.ok(body?.scopes.includes("meta.template-expression.sql"), body?.scopes);
+  assert.ok(body?.scopes.includes("variable.parameter.template.sql"), body?.scopes);
+
+  // The surrounding SQL keywords keep their ordinary SQL scopes.
+  const select = tokens.find((token) => token.text === "SELECT");
+  assert.ok(select?.scopes.includes("keyword.other.sql"), select?.scopes);
+  const from = tokens.find((token) => token.text === "FROM");
+  assert.ok(from?.scopes.includes("keyword.other.sql"), from?.scopes);
+});
+
+test("nested braces and strings inside ${...} stay one template expression", async () => {
+  const grammar = await loadSnowflakeGrammar();
+  // Object literal with a nested array, plus a `}` hidden inside a string: none of these must
+  // close the placeholder early, so the trailing SQL keeps its SQL scopes.
+  const source = "SELECT ${ fn({a: 1, b: [2, 3]}, '}') } AS c FROM t;";
+  const tokens = tokenize(grammar, source);
+
+  const asKeyword = tokens.find((token) => token.text === "AS");
+  assert.ok(asKeyword, "expected the trailing AS keyword to be tokenized");
+  assert.ok(asKeyword.scopes.includes("keyword.other.sql"), asKeyword.scopes);
+  assert.ok(
+    !asKeyword.scopes.includes("meta.template-expression.sql"),
+    "AS must be outside the placeholder: " + asKeyword.scopes,
+  );
+
+  // The `}` inside the single-quoted string is string content, not the placeholder terminator.
+  const stringBrace = tokens.find(
+    (token) => token.text === "}" && token.scopes.includes("string.quoted.single.sql"),
+  );
+  assert.ok(stringBrace, "expected a '}' scoped as string content inside the placeholder");
+});

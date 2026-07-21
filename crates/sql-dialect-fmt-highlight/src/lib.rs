@@ -122,7 +122,10 @@ pub fn classify(kind: SyntaxKind, text: &str) -> HighlightKind {
         SyntaxKind::DOLLAR_STRING => HighlightKind::DollarString,
         SyntaxKind::FILE_URI => HighlightKind::String,
         SyntaxKind::INT_NUMBER | SyntaxKind::FLOAT_NUMBER => HighlightKind::Number,
-        SyntaxKind::VARIABLE | SyntaxKind::DOLLAR | SyntaxKind::QUESTION => HighlightKind::Variable,
+        SyntaxKind::VARIABLE
+        | SyntaxKind::PLACEHOLDER
+        | SyntaxKind::DOLLAR
+        | SyntaxKind::QUESTION => HighlightKind::Variable,
         SyntaxKind::ERROR | SyntaxKind::BANG => HighlightKind::Error,
         kind if is_operator(kind) => HighlightKind::Operator,
         _ => HighlightKind::Punctuation,

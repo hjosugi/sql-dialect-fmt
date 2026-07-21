@@ -960,6 +960,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "placeholder"
+        },
+        {
+          "type": "SYMBOL",
           "name": "variable"
         },
         {
@@ -2356,6 +2360,594 @@
                 "value": "[A-Za-z_][A-Za-z0-9_$]*"
               }
             ]
+          }
+        ]
+      }
+    },
+    "placeholder": {
+      "type": "TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "${"
+          },
+          {
+            "type": "REPEAT",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "PATTERN",
+                  "value": "[^{}'\"`]+"
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "STRING",
+                          "value": "'"
+                        },
+                        {
+                          "type": "REPEAT",
+                          "content": {
+                            "type": "CHOICE",
+                            "members": [
+                              {
+                                "type": "PATTERN",
+                                "value": "[^'\\\\]"
+                              },
+                              {
+                                "type": "PATTERN",
+                                "value": "\\\\."
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "'"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "STRING",
+                          "value": "\""
+                        },
+                        {
+                          "type": "REPEAT",
+                          "content": {
+                            "type": "CHOICE",
+                            "members": [
+                              {
+                                "type": "PATTERN",
+                                "value": "[^\"\\\\]"
+                              },
+                              {
+                                "type": "PATTERN",
+                                "value": "\\\\."
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "\""
+                        }
+                      ]
+                    },
+                    {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "STRING",
+                          "value": "`"
+                        },
+                        {
+                          "type": "REPEAT",
+                          "content": {
+                            "type": "CHOICE",
+                            "members": [
+                              {
+                                "type": "PATTERN",
+                                "value": "[^`\\\\]"
+                              },
+                              {
+                                "type": "PATTERN",
+                                "value": "\\\\."
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "`"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "SEQ",
+                  "members": [
+                    {
+                      "type": "STRING",
+                      "value": "{"
+                    },
+                    {
+                      "type": "REPEAT",
+                      "content": {
+                        "type": "CHOICE",
+                        "members": [
+                          {
+                            "type": "PATTERN",
+                            "value": "[^{}'\"`]+"
+                          },
+                          {
+                            "type": "CHOICE",
+                            "members": [
+                              {
+                                "type": "SEQ",
+                                "members": [
+                                  {
+                                    "type": "STRING",
+                                    "value": "'"
+                                  },
+                                  {
+                                    "type": "REPEAT",
+                                    "content": {
+                                      "type": "CHOICE",
+                                      "members": [
+                                        {
+                                          "type": "PATTERN",
+                                          "value": "[^'\\\\]"
+                                        },
+                                        {
+                                          "type": "PATTERN",
+                                          "value": "\\\\."
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "type": "STRING",
+                                    "value": "'"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "SEQ",
+                                "members": [
+                                  {
+                                    "type": "STRING",
+                                    "value": "\""
+                                  },
+                                  {
+                                    "type": "REPEAT",
+                                    "content": {
+                                      "type": "CHOICE",
+                                      "members": [
+                                        {
+                                          "type": "PATTERN",
+                                          "value": "[^\"\\\\]"
+                                        },
+                                        {
+                                          "type": "PATTERN",
+                                          "value": "\\\\."
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "type": "STRING",
+                                    "value": "\""
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "SEQ",
+                                "members": [
+                                  {
+                                    "type": "STRING",
+                                    "value": "`"
+                                  },
+                                  {
+                                    "type": "REPEAT",
+                                    "content": {
+                                      "type": "CHOICE",
+                                      "members": [
+                                        {
+                                          "type": "PATTERN",
+                                          "value": "[^`\\\\]"
+                                        },
+                                        {
+                                          "type": "PATTERN",
+                                          "value": "\\\\."
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "type": "STRING",
+                                    "value": "`"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "SEQ",
+                            "members": [
+                              {
+                                "type": "STRING",
+                                "value": "{"
+                              },
+                              {
+                                "type": "REPEAT",
+                                "content": {
+                                  "type": "CHOICE",
+                                  "members": [
+                                    {
+                                      "type": "PATTERN",
+                                      "value": "[^{}'\"`]+"
+                                    },
+                                    {
+                                      "type": "CHOICE",
+                                      "members": [
+                                        {
+                                          "type": "SEQ",
+                                          "members": [
+                                            {
+                                              "type": "STRING",
+                                              "value": "'"
+                                            },
+                                            {
+                                              "type": "REPEAT",
+                                              "content": {
+                                                "type": "CHOICE",
+                                                "members": [
+                                                  {
+                                                    "type": "PATTERN",
+                                                    "value": "[^'\\\\]"
+                                                  },
+                                                  {
+                                                    "type": "PATTERN",
+                                                    "value": "\\\\."
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            {
+                                              "type": "STRING",
+                                              "value": "'"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "SEQ",
+                                          "members": [
+                                            {
+                                              "type": "STRING",
+                                              "value": "\""
+                                            },
+                                            {
+                                              "type": "REPEAT",
+                                              "content": {
+                                                "type": "CHOICE",
+                                                "members": [
+                                                  {
+                                                    "type": "PATTERN",
+                                                    "value": "[^\"\\\\]"
+                                                  },
+                                                  {
+                                                    "type": "PATTERN",
+                                                    "value": "\\\\."
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            {
+                                              "type": "STRING",
+                                              "value": "\""
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "SEQ",
+                                          "members": [
+                                            {
+                                              "type": "STRING",
+                                              "value": "`"
+                                            },
+                                            {
+                                              "type": "REPEAT",
+                                              "content": {
+                                                "type": "CHOICE",
+                                                "members": [
+                                                  {
+                                                    "type": "PATTERN",
+                                                    "value": "[^`\\\\]"
+                                                  },
+                                                  {
+                                                    "type": "PATTERN",
+                                                    "value": "\\\\."
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            {
+                                              "type": "STRING",
+                                              "value": "`"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "SEQ",
+                                      "members": [
+                                        {
+                                          "type": "STRING",
+                                          "value": "{"
+                                        },
+                                        {
+                                          "type": "REPEAT",
+                                          "content": {
+                                            "type": "CHOICE",
+                                            "members": [
+                                              {
+                                                "type": "PATTERN",
+                                                "value": "[^{}'\"`]+"
+                                              },
+                                              {
+                                                "type": "CHOICE",
+                                                "members": [
+                                                  {
+                                                    "type": "SEQ",
+                                                    "members": [
+                                                      {
+                                                        "type": "STRING",
+                                                        "value": "'"
+                                                      },
+                                                      {
+                                                        "type": "REPEAT",
+                                                        "content": {
+                                                          "type": "CHOICE",
+                                                          "members": [
+                                                            {
+                                                              "type": "PATTERN",
+                                                              "value": "[^'\\\\]"
+                                                            },
+                                                            {
+                                                              "type": "PATTERN",
+                                                              "value": "\\\\."
+                                                            }
+                                                          ]
+                                                        }
+                                                      },
+                                                      {
+                                                        "type": "STRING",
+                                                        "value": "'"
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "SEQ",
+                                                    "members": [
+                                                      {
+                                                        "type": "STRING",
+                                                        "value": "\""
+                                                      },
+                                                      {
+                                                        "type": "REPEAT",
+                                                        "content": {
+                                                          "type": "CHOICE",
+                                                          "members": [
+                                                            {
+                                                              "type": "PATTERN",
+                                                              "value": "[^\"\\\\]"
+                                                            },
+                                                            {
+                                                              "type": "PATTERN",
+                                                              "value": "\\\\."
+                                                            }
+                                                          ]
+                                                        }
+                                                      },
+                                                      {
+                                                        "type": "STRING",
+                                                        "value": "\""
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "SEQ",
+                                                    "members": [
+                                                      {
+                                                        "type": "STRING",
+                                                        "value": "`"
+                                                      },
+                                                      {
+                                                        "type": "REPEAT",
+                                                        "content": {
+                                                          "type": "CHOICE",
+                                                          "members": [
+                                                            {
+                                                              "type": "PATTERN",
+                                                              "value": "[^`\\\\]"
+                                                            },
+                                                            {
+                                                              "type": "PATTERN",
+                                                              "value": "\\\\."
+                                                            }
+                                                          ]
+                                                        }
+                                                      },
+                                                      {
+                                                        "type": "STRING",
+                                                        "value": "`"
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "type": "SEQ",
+                                                "members": [
+                                                  {
+                                                    "type": "STRING",
+                                                    "value": "{"
+                                                  },
+                                                  {
+                                                    "type": "REPEAT",
+                                                    "content": {
+                                                      "type": "CHOICE",
+                                                      "members": [
+                                                        {
+                                                          "type": "PATTERN",
+                                                          "value": "[^{}'\"`]+"
+                                                        },
+                                                        {
+                                                          "type": "CHOICE",
+                                                          "members": [
+                                                            {
+                                                              "type": "SEQ",
+                                                              "members": [
+                                                                {
+                                                                  "type": "STRING",
+                                                                  "value": "'"
+                                                                },
+                                                                {
+                                                                  "type": "REPEAT",
+                                                                  "content": {
+                                                                    "type": "CHOICE",
+                                                                    "members": [
+                                                                      {
+                                                                        "type": "PATTERN",
+                                                                        "value": "[^'\\\\]"
+                                                                      },
+                                                                      {
+                                                                        "type": "PATTERN",
+                                                                        "value": "\\\\."
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                },
+                                                                {
+                                                                  "type": "STRING",
+                                                                  "value": "'"
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "type": "SEQ",
+                                                              "members": [
+                                                                {
+                                                                  "type": "STRING",
+                                                                  "value": "\""
+                                                                },
+                                                                {
+                                                                  "type": "REPEAT",
+                                                                  "content": {
+                                                                    "type": "CHOICE",
+                                                                    "members": [
+                                                                      {
+                                                                        "type": "PATTERN",
+                                                                        "value": "[^\"\\\\]"
+                                                                      },
+                                                                      {
+                                                                        "type": "PATTERN",
+                                                                        "value": "\\\\."
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                },
+                                                                {
+                                                                  "type": "STRING",
+                                                                  "value": "\""
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "type": "SEQ",
+                                                              "members": [
+                                                                {
+                                                                  "type": "STRING",
+                                                                  "value": "`"
+                                                                },
+                                                                {
+                                                                  "type": "REPEAT",
+                                                                  "content": {
+                                                                    "type": "CHOICE",
+                                                                    "members": [
+                                                                      {
+                                                                        "type": "PATTERN",
+                                                                        "value": "[^`\\\\]"
+                                                                      },
+                                                                      {
+                                                                        "type": "PATTERN",
+                                                                        "value": "\\\\."
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                },
+                                                                {
+                                                                  "type": "STRING",
+                                                                  "value": "`"
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  },
+                                                  {
+                                                    "type": "STRING",
+                                                    "value": "}"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        },
+                                        {
+                                          "type": "STRING",
+                                          "value": "}"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "STRING",
+                                "value": "}"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "}"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "STRING",
+            "value": "}"
           }
         ]
       }
