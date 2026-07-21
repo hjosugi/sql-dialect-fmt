@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-07-21
+
 ### Added
 
 - Recognized `${ ... }` template-substitution placeholders as first-class tokens, so SQL embedded
@@ -471,7 +473,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.2...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.2...v1.17.0
 [1.16.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.1...v1.16.2
 [1.16.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.15.0...v1.16.0
