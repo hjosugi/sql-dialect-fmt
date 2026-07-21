@@ -186,6 +186,16 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.backtick_ident_body(start);
                     self.push(SyntaxKind::QUOTED_IDENT, start);
                 }
+                // `${ ... }` template-substitution placeholder. A `$` immediately followed by `{`
+                // opens a placeholder whose body is a balanced brace run: JS template-literal
+                // interpolation (`${cfg.table}`), Databricks / Spark / dbt variable substitution
+                // (`${env:VAR}`), and similar. Recognized in every dialect (SQL is commonly embedded
+                // in a host language), and lexed as one atomic token so the surrounding statement
+                // still parses, formats, and highlights instead of derailing on the braces.
+                b'$' if self.peek_at(1) == b'{' => {
+                    self.placeholder(start);
+                    self.push(SyntaxKind::PLACEHOLDER, start);
+                }
                 // $1 / $name variables (but not body delimiters, handled above). Gated on dollar
                 // quoting so non-Snowflake dialects lex a bare `$` as the DOLLAR operator instead.
                 b'$' if dollar_quoting
@@ -355,6 +365,88 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
         }
     }
 
+    /// Consume a `${ ... }` template-substitution placeholder, entered with the cursor on the
+    /// opening `$` (and `{` immediately after). Advances past the matching close brace.
+    ///
+    /// The body is scanned with an explicit context stack rather than a naive search for the next
+    /// `}`, so nested structure is handled exactly:
+    /// - nested braces balance (`${ fn({a: 1, b: [2]}) }` stays one token),
+    /// - a `}` inside a `'...'` / `"..."` string does not close the placeholder,
+    /// - a back-tick template literal switches to string context, where only `` ` `` closes it and
+    ///   an inner `${ ... }` opens a fresh nested placeholder scope (JS template nesting).
+    ///
+    /// The stack lives on the heap and grows at most one frame per opening brace/back-tick, so even
+    /// pathological input cannot overflow the call stack. An unterminated placeholder records an
+    /// error but still consumes to end of input, keeping the token lossless.
+    fn placeholder(&mut self, start: usize) {
+        self.pos += 2; // opening `${`
+        let mut stack = vec![PlaceholderCtx::Brace];
+        while let Some(ctx) = stack.last().copied() {
+            if self.at_end() {
+                self.error("unterminated placeholder", start);
+                return;
+            }
+            match ctx {
+                // JS-expression context: braces are structural, strings are skipped wholesale.
+                PlaceholderCtx::Brace => match self.peek() {
+                    b'{' => {
+                        self.pos += 1;
+                        stack.push(PlaceholderCtx::Brace);
+                    }
+                    b'}' => {
+                        self.pos += 1;
+                        stack.pop();
+                    }
+                    b'\'' => self.skip_placeholder_string(b'\''),
+                    b'"' => self.skip_placeholder_string(b'"'),
+                    b'`' => {
+                        self.pos += 1;
+                        stack.push(PlaceholderCtx::Template);
+                    }
+                    _ => self.pos += 1,
+                },
+                // Template-literal context: bare braces are text; only `` ` `` closes, and `${`
+                // opens a nested interpolation scope.
+                PlaceholderCtx::Template => match self.peek() {
+                    b'\\' => {
+                        self.pos += 1;
+                        if !self.at_end() {
+                            self.pos += 1; // escaped character
+                        }
+                    }
+                    b'`' => {
+                        self.pos += 1;
+                        stack.pop();
+                    }
+                    b'$' if self.peek_at(1) == b'{' => {
+                        self.pos += 2;
+                        stack.push(PlaceholderCtx::Brace);
+                    }
+                    _ => self.pos += 1,
+                },
+            }
+        }
+    }
+
+    /// Skip a `'...'` / `"..."` string inside a placeholder body so a `}` within it does not close
+    /// the placeholder. Honors backslash escapes (JS interpolation semantics). Entered with the
+    /// cursor on the opening quote; returns with the cursor past the closing quote, or at end of
+    /// input if the string is unterminated (the caller then reports the placeholder as unterminated).
+    fn skip_placeholder_string(&mut self, quote: u8) {
+        self.pos += 1; // opening quote
+        while !self.at_end() {
+            match self.bump() {
+                b'\\' => {
+                    if !self.at_end() {
+                        self.pos += 1; // escaped character
+                    }
+                }
+                c if c == quote => return,
+                _ => {}
+            }
+        }
+    }
+
     /// Lex a numeric literal. Entered on a digit or on `.` immediately followed by a digit.
     fn number(&mut self, start: usize) {
         let mut is_float = false;
@@ -519,6 +611,15 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
         };
         self.push(kind, start);
     }
+}
+
+/// A scope on the placeholder scanner's context stack. See [`Lexer::placeholder`].
+#[derive(Clone, Copy)]
+enum PlaceholderCtx {
+    /// JS-expression / brace scope, opened by `{` (or the initial `${`) and closed by `}`.
+    Brace,
+    /// Back-tick template-literal scope, opened and closed by `` ` ``.
+    Template,
 }
 
 #[inline]

@@ -88,6 +88,38 @@ CREATE PROCEDURE p() RETURNS STRING LANGUAGE SQL HANDLER = 'run';";
 }
 
 #[test]
+fn classifies_template_placeholders_as_parameters() {
+    // SQL lifted out of a JavaScript template literal: each `${ ... }` is one placeholder token,
+    // coloured like a parameter, with the surrounding SQL classified normally.
+    assert_interesting_highlights(
+        "SELECT ${cfg.col} FROM ${cfg.t} WHERE id = ${id}",
+        &[
+            ("SELECT", HighlightKind::Keyword),
+            ("${cfg.col}", HighlightKind::Variable),
+            ("FROM", HighlightKind::Keyword),
+            ("${cfg.t}", HighlightKind::Variable),
+            ("WHERE", HighlightKind::Keyword),
+            ("id", HighlightKind::Identifier),
+            ("=", HighlightKind::Operator),
+            ("${id}", HighlightKind::Variable),
+        ],
+    );
+
+    // Nested braces, a quoted `}`, and a nested template literal each stay inside one placeholder
+    // token, so the trailing `AS c` keeps its ordinary SQL classification.
+    let nested = interesting_highlights("SELECT ${ fn({a: 1}, '}') } AS c");
+    assert_eq!(nested[0], ("SELECT", HighlightKind::Keyword));
+    assert_eq!(nested[1], ("${ fn({a: 1}, '}') }", HighlightKind::Variable));
+    assert_eq!(nested[2], ("AS", HighlightKind::Keyword));
+    assert_eq!(nested[3], ("c", HighlightKind::Identifier));
+
+    let template = interesting_highlights("SELECT ${ `col_${i}` }");
+    assert_eq!(template[1], ("${ `col_${i}` }", HighlightKind::Variable));
+
+    assert_highlight_lossless("SELECT ${ fn({a: 1}, '}') } AS c");
+}
+
+#[test]
 fn long_highlight_input_keeps_byte_ranges() {
     let mut sql = String::new();
     for i in 0..256 {

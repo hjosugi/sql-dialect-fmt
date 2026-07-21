@@ -114,9 +114,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Is the current token a usable *name* (a non-keyword identifier or a quoted identifier)?
+    ///
+    /// A `${ ... }` template placeholder also counts as a name: templated SQL substitutes
+    /// placeholders wherever an identifier could appear (table, column, alias, qualifier), so
+    /// accepting one as a name lets the statement parse and format instead of erroring on the
+    /// braces. The placeholder is a single lexer token, so it slots in like any other name atom.
     pub(crate) fn at_name(&self) -> bool {
         match self.nth(0) {
-            SyntaxKind::QUOTED_IDENT => true,
+            SyntaxKind::QUOTED_IDENT | SyntaxKind::PLACEHOLDER => true,
             SyntaxKind::IDENT => self
                 .keyword_kind(self.input.text(self.pos))
                 .is_none_or(is_identifier_compatible_keyword),

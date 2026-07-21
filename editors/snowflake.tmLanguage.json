@@ -14,6 +14,9 @@
       "include": "#comments"
     },
     {
+      "include": "#template-placeholder"
+    },
+    {
       "include": "#strings"
     },
     {
@@ -219,6 +222,76 @@
         {
           "name": "punctuation.terminator.statement.sql",
           "match": ";"
+        }
+      ]
+    },
+    "template-placeholder": {
+      "name": "meta.template-expression.sql",
+      "begin": "\\$\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.template-expression.begin.sql"
+        }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.template-expression.end.sql"
+        }
+      },
+      "contentName": "variable.parameter.template.sql",
+      "patterns": [
+        {
+          "include": "#template-expression-body"
+        }
+      ]
+    },
+    "template-expression-body": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.sql",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sql",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.sql",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sql",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.template.sql",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "include": "#template-placeholder"
+            },
+            {
+              "name": "constant.character.escape.sql",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#template-expression-body"
+            }
+          ]
         }
       ]
     }

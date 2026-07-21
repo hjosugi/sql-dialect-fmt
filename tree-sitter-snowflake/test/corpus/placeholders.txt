@@ -1,0 +1,71 @@
+==================
+Template placeholders in select, table, and predicate positions
+==================
+
+SELECT ${cfg.col} FROM ${cfg.t} WHERE id = ${id};
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (placeholder)
+    (keyword)
+    (placeholder)
+    (keyword)
+    (identifier)
+    (operator)
+    (placeholder)))
+
+==================
+Placeholder with nested braces, an array, and a quoted brace stays one token
+==================
+
+SELECT ${ fn({a: 1, b: [2, 3]}, '}') } AS c FROM t;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (placeholder)
+    (keyword)
+    (identifier)
+    (keyword)
+    (identifier)))
+
+==================
+Placeholder wrapping a nested template literal
+==================
+
+SELECT ${ `col_${i}` } FROM t;
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (placeholder)
+    (keyword)
+    (identifier)))
+
+==================
+Databricks / Spark style ${namespace:name} substitution
+==================
+
+SELECT * FROM ${env:CATALOG}.sales WHERE dt = ${var:run_date};
+
+---
+
+(source_file
+  (select_statement
+    (keyword)
+    (operator)
+    (keyword)
+    (placeholder)
+    (punctuation)
+    (identifier)
+    (keyword)
+    (identifier)
+    (operator)
+    (placeholder)))

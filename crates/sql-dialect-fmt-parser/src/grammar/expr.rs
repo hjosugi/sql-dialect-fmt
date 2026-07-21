@@ -50,6 +50,7 @@ pub(super) fn at_expr_start(p: &Parser) -> bool {
         || p.at(FALSE_KW)
         || p.at(NULL_KW)
         || p.at(VARIABLE)
+        || p.at(PLACEHOLDER)
         || p.at(QUESTION)
         || p.at(COLON)
         || p.at(L_BRACKET)

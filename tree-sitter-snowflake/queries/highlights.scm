@@ -16,6 +16,7 @@
 
 (number) @number
 (variable) @variable.parameter
+(placeholder) @variable.parameter
 (stage_reference) @string.special
 
 (operator) @operator

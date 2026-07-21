@@ -233,6 +233,13 @@ const STATEMENT_LEADING_KEYWORDS = [...new Set(STATEMENT_KINDS.flatMap(([, words
 
 const GENERAL_KEYWORDS = KEYWORDS.filter(word => !STATEMENT_LEADING_KEYWORDS.includes(word));
 
+// The most deeply nested structural `{ ... }` a `${ ... }` placeholder body is balanced through.
+// Token regexes cannot recurse, so the nesting is expanded to this fixed depth -- far beyond what
+// realistic templated SQL uses. Quoted strings are matched at every level, so a `}` inside a string
+// never closes the placeholder regardless of depth. Declared before `grammar(...)` (unlike the
+// hoisted helper functions below) because the rule closures read it while the grammar is built.
+const PLACEHOLDER_MAX_DEPTH = 4;
+
 module.exports = grammar({
   name: 'snowflake',
 
@@ -328,6 +335,7 @@ module.exports = grammar({
       $.string,
       $.quoted_identifier,
       $.number,
+      $.placeholder,
       $.variable,
       $.identifier,
       $.operator,
@@ -386,6 +394,13 @@ module.exports = grammar({
     )),
 
     variable: _ => token(seq('$', choice(/[0-9]+/, /[A-Za-z_][A-Za-z0-9_$]*/))),
+
+    // A `${ ... }` template-substitution placeholder: a JS template literal interpolation
+    // (`${cfg.table}`), or Databricks / Spark / dbt variable substitution (`${env:VAR}`). SQL is
+    // routinely embedded in a host language, so -- like `$$...$$` -- the placeholder is kept as one
+    // coarse token, letting the surrounding statement keep parsing and be highlighted as a unit.
+    // See `placeholderBody` for how nested braces and quoted `}` are balanced.
+    placeholder: _ => token(seq('${', repeat(placeholderBody(PLACEHOLDER_MAX_DEPTH)), '}')),
 
     operator: _ => token(prec(3, choice(
       '->>',
@@ -446,4 +461,24 @@ function dollarQuotedBody() {
     repeat(choice(/[^$]/, seq('$', /[^$]/))),
     '$$',
   );
+}
+
+// A single-, double-, or back-tick-quoted string inside a placeholder body, consumed opaquely so
+// that a `}` -- or an inner `${...}` inside a template literal -- cannot terminate the placeholder.
+function placeholderString() {
+  return choice(
+    seq("'", repeat(choice(/[^'\\]/, /\\./)), "'"),
+    seq('"', repeat(choice(/[^"\\]/, /\\./)), '"'),
+    seq('`', repeat(choice(/[^`\\]/, /\\./)), '`'),
+  );
+}
+
+// One element of a placeholder body: a run of ordinary characters, a quoted string, or -- until the
+// depth budget is spent -- a balanced nested `{ ... }` group whose own body recurses one level down.
+function placeholderBody(depth) {
+  const parts = [/[^{}'"`]+/, placeholderString()];
+  if (depth > 0) {
+    parts.push(seq('{', repeat(placeholderBody(depth - 1)), '}'));
+  }
+  return choice(...parts);
 }

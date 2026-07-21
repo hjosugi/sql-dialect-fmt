@@ -148,6 +148,12 @@ Databricks mode covers LATERAL VIEW, Delta DDL options,
 `VERSION`/`TIMESTAMP AS OF`, higher-order-function lambdas, SQL scripting blocks, and backtick
 identifiers.
 
+SQL lifted out of a host language keeps formatting and highlighting: a `${ ... }` template
+placeholder — a JavaScript template literal (`` `SELECT ${cfg.col} FROM ${cfg.t}` ``) or a
+Databricks/Spark/dbt `${var}` substitution — is treated as one atomic token, with nested braces,
+quoted `}`, and nested template literals balanced so the statement still parses and the placeholder
+round-trips verbatim.
+
 The workspace also includes an LSP server, semantic tokens, hover text, a Tree-sitter grammar, a
 CLI, VS Code packaging, and the Chrome/WASM extension. The LSP server discovers and applies the same
 `sql-dialect-fmt.toml` as the CLI (with editor settings layered on top), so an editor formats

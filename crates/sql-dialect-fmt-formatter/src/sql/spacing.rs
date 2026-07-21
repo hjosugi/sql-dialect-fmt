@@ -87,6 +87,7 @@ pub(super) fn is_value_end(kind: SyntaxKind) -> bool {
             | INT_NUMBER
             | FLOAT_NUMBER
             | VARIABLE
+            | PLACEHOLDER
             | QUESTION
             | R_PAREN
             | R_BRACKET

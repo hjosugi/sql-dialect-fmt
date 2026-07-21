@@ -128,7 +128,7 @@ cargo test -p sql-dialect-fmt-formatter --no-default-features
 
 ## 状態
 
-Snowflake は SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。JavaScript/Python body formatting は既定で有効、Java/Scala body formatting は `embedded-brace-formatters` で opt-in し、通常は verbatim 保持します。Databricks は LATERAL VIEW、Delta DDL option、VERSION/TIMESTAMP AS OF、higher-order function lambda、SQL scripting block、backtick identifier を dialect mode でサポート。LSP/semantic tokens/hover、Tree-sitter grammar、CLI、Snowsight/Databricks 用 Chrome/WASM 拡張も入っています。看板機能は **magic trailing comma**。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
+Snowflake は SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。JavaScript/Python body formatting は既定で有効、Java/Scala body formatting は `embedded-brace-formatters` で opt-in し、通常は verbatim 保持します。Databricks は LATERAL VIEW、Delta DDL option、VERSION/TIMESTAMP AS OF、higher-order function lambda、SQL scripting block、backtick identifier を dialect mode でサポート。ホスト言語に埋め込まれた SQL も整形・ハイライト対象で、`${ ... }` テンプレートプレースホルダ（JavaScript テンプレートリテラルの `` `SELECT ${cfg.col} FROM ${cfg.t}` `` や Databricks/Spark/dbt の `${var}` 置換）は 1 個の原子トークンとして扱い、入れ子の中括弧・文字列内の `}`・入れ子テンプレートリテラルまでバランスを取るので、文はそのままパースでき、プレースホルダは verbatim に保持されます。LSP/semantic tokens/hover、Tree-sitter grammar、CLI、Snowsight/Databricks 用 Chrome/WASM 拡張も入っています。看板機能は **magic trailing comma**。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
 
 ## クレート構成
 
