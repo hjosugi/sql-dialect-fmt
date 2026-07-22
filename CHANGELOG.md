@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.17.2] - 2026-07-22
+
 ### Fixed
 
 - Fixed crates.io packaging for the CLI, LSP, and Wasm crates by keeping their private test-fixture
@@ -487,7 +489,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.1...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.2...HEAD
+[1.17.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.1...v1.17.2
 [1.17.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.0...v1.17.1
 [1.17.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.2...v1.17.0
 [1.16.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.1...v1.16.2
