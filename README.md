@@ -18,7 +18,7 @@ unchanged, significant tokens and comments are preserved, and `format(format(x))
 
 ```sh
 # From crates.io
-cargo install sql-dialect-fmt --version 1.17.1 --locked
+cargo install sql-dialect-fmt --version 1.17.2 --locked
 
 # Directly from this repository
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
@@ -43,7 +43,7 @@ CI can use the bundled composite action or the GHCR image.
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.17.1 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.17.2 --check .
 ```
 
 Try the browser playground from the docs site:
@@ -70,7 +70,7 @@ pre-commit users can enable the official hooks:
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.17.1
+    rev: v1.17.2
     hooks:
       - id: sql-dialect-fmt
 ```
