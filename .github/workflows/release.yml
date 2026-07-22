@@ -44,6 +44,8 @@ jobs:
           echo "package_version=${version#v}" >> "$GITHUB_OUTPUT"
       - name: Check version consistency
         run: python3 scripts/check-version-consistency.py "${{ steps.version.outputs.version }}"
+      - name: Check publishable Cargo manifests
+        run: python3 scripts/check-publish-manifests.py
       - name: Build release binary
         run: cargo build --release --locked -p sql-dialect-fmt --bin sql-dialect-fmt
       - name: Package binary

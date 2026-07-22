@@ -62,6 +62,7 @@ Published to crates.io (in dependency order):
    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
    cargo bench -p sql-dialect-fmt-formatter --bench format -- --test
    cargo fmt --all --check
+   scripts/check-publish-manifests.py
    scripts/run-external-corpus.sh --sample
    scripts/conformance-report.py --path crates/sql-dialect-fmt-formatter/tests/corpus_sample \
      --out target/conformance-report.md
@@ -90,6 +91,12 @@ Published to crates.io (in dependency order):
    predecessor appears in the index.
 
    (`cargo package -p <crate>` produces the tarball without the dry-run upload check.)
+
+   Publishable crates may use an unpublished workspace crate only as a path-only
+   development dependency. Do not inherit such dependencies from `[workspace.dependencies]`:
+   Cargo normalizes the inherited version into the package manifest and then tries to resolve
+   the private crate from crates.io during `cargo publish`. The manifest check in step 3 enforces
+   this rule.
 
 6. **Commit and tag:**
 

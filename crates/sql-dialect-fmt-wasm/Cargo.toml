@@ -18,4 +18,4 @@ crate-type = ["cdylib", "rlib"]
 sql-dialect-fmt-formatter.workspace = true
 
 [dev-dependencies]
-sql-dialect-fmt-test-fixtures.workspace = true
+sql-dialect-fmt-test-fixtures = { path = "../sql-dialect-fmt-test-fixtures" }

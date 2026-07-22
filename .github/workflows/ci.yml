@@ -38,6 +38,9 @@ jobs:
       - name: Hover tables in sync with spec seeds
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: python3 scripts/generate-hover-tables.py --check
+      - name: Publishable Cargo manifests
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: python3 scripts/check-publish-manifests.py
       - name: Test
         run: cargo test --workspace --locked
       - name: Docs
