@@ -9,6 +9,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed crates.io packaging for the CLI, LSP, and Wasm crates by keeping their private test-fixture
+  dependency path-only, and added CI/release validation to prevent private workspace crates from
+  leaking into published manifests again.
+
 ## [1.17.1] - 2026-07-21
 
 ### Fixed
