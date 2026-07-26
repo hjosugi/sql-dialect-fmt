@@ -136,7 +136,11 @@
         "scopeName": "source.snowflake-sql",
         "path": "./snowflake.tmLanguage.json",
         "embeddedLanguages": {
-          "meta.embedded.block.javascript.snowflake": "javascript"
+          "meta.embedded.block.javascript.snowflake": "javascript",
+          "meta.embedded.block.python.snowflake": "python",
+          "meta.embedded.block.java.snowflake": "java",
+          "meta.embedded.block.scala.snowflake": "scala",
+          "meta.embedded.block.sql.snowflake": "snowflake-sql"
         }
       }
     ]

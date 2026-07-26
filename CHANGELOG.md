@@ -9,6 +9,27 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Rebuilt the VS Code TextMate grammar around the official Snowflake reference material, replacing
+  the single flat keyword scope with differentiated scopes: control-flow keywords
+  (`keyword.control`), `TRUE`/`FALSE`/`NULL` constants (`constant.language`), Snowflake Scripting
+  status variables such as `SQLROWCOUNT` (`variable.language`), built-in exceptions
+  (`STATEMENT_ERROR`, `EXPRESSION_ERROR`), and the 900 built-in functions documented in the
+  Snowflake "All functions" reference (`support.function.builtin`), with a generic
+  function-call fallback for UDFs.
+- Highlighted `LANGUAGE SQL`, `EXECUTE IMMEDIATE`, and `AS $$` routine bodies as Snowflake SQL
+  instead of one opaque dollar-quoted string, and fenced `LANGUAGE PYTHON` / `JAVA` / `SCALA`
+  bodies as embedded Python/Java/Scala the way `LANGUAGE JAVASCRIPT` bodies already were.
+- Completed the type list from the official data-type summary (`SMALLINT`, `TINYINT`, `BYTEINT`,
+  `FLOAT4`, `FLOAT8`, `DOUBLE PRECISION`, `CHARACTER`, `NCHAR`, `NVARCHAR`, `NVARCHAR2`,
+  `VARBINARY`, `DECFLOAT`, `FILE`, `UUID`) plus the Snowflake Scripting declaration types
+  `CURSOR` and `RESULTSET`, and added missing DDL/clause keywords (`DATABASE`, `SCHEMA`, `STAGE`,
+  `STREAM`, `TASK` object words, `ASOF`/`MATCH_CONDITION`, `EXCLUDE`, `AT`/`BEFORE`/`CHANGES`
+  time travel, `BREAK`/`CONTINUE`/`EXIT`/`ITERATE`/`RAISE` scripting words, and more).
+- Named the object created, altered, or dropped by DDL statements with an `entity.name` scope so
+  `CREATE OR REPLACE PROCEDURE db.schema.proc` visibly highlights the procedure name.
+
 ## [1.17.2] - 2026-07-22
 
 ### Fixed

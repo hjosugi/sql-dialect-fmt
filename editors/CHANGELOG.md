@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Reworked syntax highlighting around the official Snowflake reference material: control-flow
+  keywords, constants, Snowflake Scripting status variables and exceptions, and all 900 documented
+  built-in functions now carry their own TextMate scopes instead of one flat keyword colour, and
+  DDL statements highlight the created/altered/dropped object name.
+- Highlighted `LANGUAGE SQL`, `EXECUTE IMMEDIATE`, and `AS $$` bodies as Snowflake SQL instead of
+  an opaque string, and embedded `LANGUAGE PYTHON`/`JAVA`/`SCALA` bodies as their host language.
+- Completed the data-type list from the official summary (`SMALLINT`, `TINYINT`, `BYTEINT`,
+  `FLOAT4`/`FLOAT8`, `DOUBLE PRECISION`, `NCHAR`/`NVARCHAR`/`NVARCHAR2`, `VARBINARY`, `DECFLOAT`,
+  `FILE`, `UUID`, `CURSOR`, `RESULTSET`) and added missing DDL/clause keywords.
 - Fixed JavaScript stored-procedure highlighting by injecting VS Code's JavaScript grammar inside
   `LANGUAGE JAVASCRIPT ... $$ ... $$` bodies.
 - Fixed formatting of JavaScript procedures containing whitespace-only lines; these previously
