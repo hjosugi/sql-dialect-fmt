@@ -208,9 +208,9 @@ jobs:
           cache-dependency-path: tree-sitter-snowflake/package.json
       - name: Generate parser
         working-directory: tree-sitter-snowflake
-        run: npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate
+        run: npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter generate
       - name: Test grammar
         working-directory: tree-sitter-snowflake
-        run: npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
+        run: npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter test
       - name: Generated files are committed
         run: git diff --exit-code -- tree-sitter-snowflake/src

@@ -18,8 +18,8 @@ Tree-sitter grammar checks:
 
 ```sh
 cd tree-sitter-snowflake
-npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate
-npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
+npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter generate
+npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter test
 ```
 
 VS Code extension checks:
