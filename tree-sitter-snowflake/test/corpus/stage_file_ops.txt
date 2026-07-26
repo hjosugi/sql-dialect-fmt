@@ -73,7 +73,7 @@ LIST @~/staged;
 (source_file
   (statement
     (identifier)
-    (identifier)
+    (type)
     (operator)
     (comment)
     (identifier)

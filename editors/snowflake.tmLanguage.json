@@ -60,6 +60,9 @@
           "include": "#types"
         },
         {
+          "include": "#scripting-types"
+        },
+        {
           "include": "#builtin-functions"
         },
         {
@@ -76,6 +79,9 @@
         },
         {
           "include": "#keywords"
+        },
+        {
+          "include": "#keywords-nonreserved"
         },
         {
           "include": "#generic-function-call"
@@ -391,7 +397,11 @@
     },
     "types": {
       "name": "support.type.sql",
-      "match": "(?i)\\b(timestamp_ltz|timestamp_ntz|timestamp_tz|character|geography|nvarchar2|resultset|timestamp|varbinary|datetime|decfloat|geometry|nvarchar|smallint|boolean|byteint|decimal|double(?:\\s+precision)?|integer|numeric|tinyint|varchar|variant|bigint|binary|cursor|float4|float8|number|object|string|vector|array|float|nchar|char|date|file|real|text|time|uuid|dec|int|map)\\b"
+      "match": "(?i)\\b(timestamp_ltz|timestamp_ntz|timestamp_tz|character|geography|nvarchar2|timestamp|varbinary|datetime|decfloat|geometry|nvarchar|smallint|boolean|byteint|decimal|integer|numeric|tinyint|varchar|variant|bigint|binary|double|float4|float8|number|object|string|vector|array|float|nchar|char|date|file|real|text|time|uuid|dec|int|map)\\b"
+    },
+    "scripting-types": {
+      "name": "support.type.sql",
+      "match": "(?i)\\b(resultset|cursor)\\b"
     },
     "builtin-functions": {
       "name": "support.function.builtin.sql",
@@ -415,7 +425,11 @@
     },
     "keywords": {
       "name": "keyword.other.sql",
-      "match": "(?i)\\b(match_condition|runtime_version|autoincrement|materialized|notification|aggregation|integration|tablesample|constraint|javascript|projection|references|bernoulli|following|immediate|intersect|overwrite|partition|preceding|procedure|recursive|statement|temporary|transient|unbounded|warehouse|database|describe|distinct|external|function|identity|interval|language|packages|password|resource|rollback|schedule|security|sequence|truncate|try_cast|volatile|account|between|changes|cluster|collate|comment|connect|current|default|dynamic|exclude|execute|flatten|foreign|handler|iceberg|imports|lateral|masking|matched|monitor|natural|network|primary|qualify|refresh|replace|respect|returns|session|storage|suspend|unpivot|before|called|caller|commit|create|delete|except|exists|format|grants|having|hybrid|ignore|insert|offset|output|policy|python|regexp|rename|resume|revoke|sample|schema|secure|select|stream|strict|undrop|unique|update|values|window|within|after|alert|alter|apply|check|clone|close|cross|event|fetch|first|grant|group|ilike|inner|input|limit|merge|minus|nulls|order|outer|owner|pivot|prior|range|right|rlike|scala|share|stage|start|table|union|usage|using|where|asof|call|cast|copy|desc|drop|from|full|into|java|join|last|left|like|open|over|pipe|role|rows|seed|show|swap|task|temp|user|view|with|all|and|any|api|asc|key|not|out|row|set|sql|tag|top|use|as|at|by|in|is|on|or)\\b"
+      "match": "(?i)\\b(runtime_version|tablesample|javascript|following|immediate|intersect|overwrite|partition|preceding|procedure|recursive|temporary|transient|unbounded|warehouse|describe|distinct|function|language|packages|rollback|schedule|truncate|try_cast|volatile|between|connect|current|execute|flatten|handler|imports|lateral|matched|natural|qualify|replace|returns|unpivot|called|caller|commit|create|delete|except|exists|grants|having|insert|offset|output|python|regexp|revoke|sample|secure|select|strict|undrop|update|values|window|within|after|alter|cross|fetch|first|grant|group|ilike|inner|input|limit|merge|minus|nulls|order|outer|owner|pivot|prior|range|right|rlike|scala|start|table|union|using|where|call|cast|copy|desc|drop|from|full|into|java|join|last|left|like|over|rows|show|task|temp|view|with|all|and|any|asc|not|out|row|set|sql|top|use|as|by|in|is|on|or)\\b"
+    },
+    "keywords-nonreserved": {
+      "name": "keyword.other.sql",
+      "match": "(?i)\\b(match_condition|autoincrement|materialized|notification|aggregation|integration|constraint|projection|references|bernoulli|precision|statement|database|external|identity|interval|password|resource|security|sequence|account|changes|cluster|collate|comment|default|dynamic|exclude|foreign|iceberg|masking|monitor|network|primary|refresh|respect|session|storage|suspend|before|format|hybrid|ignore|policy|rename|resume|schema|stream|unique|alert|apply|check|clone|close|event|share|stage|usage|asof|open|pipe|role|seed|swap|user|api|key|tag|at)\\b"
     },
     "generic-function-call": {
       "name": "entity.name.function.sql",

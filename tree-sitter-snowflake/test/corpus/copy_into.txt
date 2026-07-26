@@ -16,7 +16,8 @@ ON_ERROR = 'CONTINUE';
     (identifier)
     (keyword)
     (stage_reference)
-    (keyword)
+    (type)
+    (identifier)
     (operator)
     (expression
       (parenthesized_expression
@@ -88,6 +89,7 @@ COPY INTO t (id, v) FROM (SELECT $1, $2 FROM @mystage) FILES = ('a.csv', 'b.csv'
         (variable)
         (keyword)
         (stage_reference)))
+    (type)
     (identifier)
     (operator)
     (expression

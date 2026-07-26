@@ -609,11 +609,20 @@ fn type_documentation(label: &str) -> &'static str {
     match label {
         "NUMBER" => "Exact fixed-point numeric type.",
         "DECIMAL" | "NUMERIC" => "Alias for NUMBER.",
-        "INT" | "INTEGER" | "BIGINT" => "Integer numeric alias.",
-        "FLOAT" | "DOUBLE" | "REAL" => "Approximate floating-point numeric type.",
+        "INT" | "INTEGER" | "BIGINT" | "SMALLINT" | "TINYINT" | "BYTEINT" => {
+            "Integer numeric alias."
+        }
+        "FLOAT" | "FLOAT4" | "FLOAT8" | "DOUBLE" | "REAL" => {
+            "Approximate floating-point numeric type."
+        }
+        "DECFLOAT" => "Decimal floating-point numeric type.",
         "VARCHAR" => "Variable-length character data.",
-        "STRING" | "TEXT" => "Alias for VARCHAR.",
+        "STRING" | "TEXT" | "NVARCHAR" | "NVARCHAR2" => "Alias for VARCHAR.",
         "CHAR" => "Character data.",
+        "CHARACTER" | "NCHAR" => "Alias for CHAR.",
+        "VARBINARY" => "Alias for BINARY.",
+        "FILE" => "Reference to an unstructured file on a stage.",
+        "UUID" => "Universally unique identifier.",
         "BOOLEAN" => "TRUE/FALSE logical value.",
         "VARIANT" => "Semi-structured value.",
         "OBJECT" => "Semi-structured key/value object.",

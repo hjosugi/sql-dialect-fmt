@@ -105,12 +105,29 @@ fn covers_all_required_token_classes() {
     let repo = &g["repository"];
     for rule in [
         "javascript-routine",
+        "python-routine",
+        "java-routine",
+        "scala-routine",
+        "sql-routine",
+        "execute-immediate",
+        "as-dollar-sql",
+        "sql-content",
         "comments",
         "strings",
         "dollar-quoted",
         "numbers",
+        "ddl-object-name",
+        "constants",
         "types",
+        "scripting-types",
+        "builtin-functions",
+        "context-functions",
+        "scripting-variables",
+        "builtin-exceptions",
+        "keywords-control",
         "keywords",
+        "keywords-nonreserved",
+        "generic-function-call",
         "variables",
         "stages",
         "quoted-identifiers",
@@ -145,6 +162,70 @@ fn javascript_routines_embed_the_vscode_javascript_scope() {
 }
 
 #[test]
+fn foreign_routines_embed_their_host_language_scopes() {
+    let g = grammar();
+    for (rule, embedded, source) in [
+        (
+            "python-routine",
+            "meta.embedded.block.python.snowflake",
+            "source.python",
+        ),
+        (
+            "java-routine",
+            "meta.embedded.block.java.snowflake",
+            "source.java",
+        ),
+        (
+            "scala-routine",
+            "meta.embedded.block.scala.snowflake",
+            "source.scala",
+        ),
+    ] {
+        let routine = &g["repository"][rule];
+        let patterns = routine["patterns"].as_array().expect("routine patterns");
+        let body = patterns
+            .iter()
+            .find(|pattern| pattern["name"] == embedded)
+            .unwrap_or_else(|| panic!("`{rule}` lacks its embedded body rule"));
+        assert_eq!(body["contentName"], source, "`{rule}` contentName");
+        assert!(
+            body["patterns"]
+                .as_array()
+                .expect("embedded patterns")
+                .iter()
+                .any(|pattern| pattern["include"] == source),
+            "`{rule}` body must include `{source}`"
+        );
+    }
+}
+
+#[test]
+fn sql_routine_bodies_reuse_the_sql_content_rule() {
+    let g = grammar();
+    for rule in ["sql-routine", "execute-immediate"] {
+        let patterns = g["repository"][rule]["patterns"]
+            .as_array()
+            .expect("routine patterns");
+        assert!(
+            patterns
+                .iter()
+                .any(|pattern| pattern["include"] == "#sql-dollar-body"),
+            "`{rule}` must delegate $$ bodies to #sql-dollar-body"
+        );
+    }
+    let body = &g["repository"]["sql-dollar-body"];
+    assert_eq!(body["name"], "meta.embedded.block.sql.snowflake");
+    assert!(
+        body["patterns"]
+            .as_array()
+            .expect("body patterns")
+            .iter()
+            .any(|pattern| pattern["include"] == "#sql-content"),
+        "$$ SQL bodies must highlight as SQL content"
+    );
+}
+
+#[test]
 fn keyword_words_classify_as_keywords() {
     let g = grammar();
     let words = alternation(g["repository"]["keywords"]["match"].as_str().unwrap());
@@ -162,18 +243,117 @@ fn keyword_words_classify_as_keywords() {
     }
 }
 
+/// Snowflake Scripting control words the grammar colours as control flow but the parser does not
+/// reserve (they are ordinary identifiers outside scripting statements).
+const NONRESERVED_CONTROL: &[&str] = &["break", "continue", "exit", "iterate", "raise"];
+
 #[test]
-fn keyword_list_is_complete_against_the_keyword_table() {
+fn control_words_split_reserved_vs_scripting() {
+    let g = grammar();
+    let words = alternation(
+        g["repository"]["keywords-control"]["match"]
+            .as_str()
+            .unwrap(),
+    );
+    assert!(
+        words.len() >= 20,
+        "control keyword set looks truncated ({} words)",
+        words.len()
+    );
+    for word in &words {
+        let expected = if NONRESERVED_CONTROL.contains(&word.as_str()) {
+            HighlightKind::Identifier
+        } else {
+            HighlightKind::Keyword
+        };
+        assert_eq!(
+            classify(SyntaxKind::IDENT, word),
+            expected,
+            "control word `{word}` classification drifted"
+        );
+    }
+}
+
+#[test]
+fn constant_words_are_the_reserved_literals() {
     let g = grammar();
     let words: std::collections::HashSet<String> =
-        alternation(g["repository"]["keywords"]["match"].as_str().unwrap())
+        alternation(g["repository"]["constants"]["match"].as_str().unwrap())
             .into_iter()
             .collect();
+    let expected: std::collections::HashSet<String> = ["true", "false", "null"]
+        .iter()
+        .map(|w| w.to_string())
+        .collect();
+    assert_eq!(words, expected);
+    for word in &words {
+        assert_eq!(classify(SyntaxKind::IDENT, word), HighlightKind::Keyword);
+    }
+}
+
+#[test]
+fn scripting_type_words_are_reserved_keywords_rescoped_as_types() {
+    // CURSOR and RESULTSET are reserved words in the parser table; the grammar deliberately gives
+    // them a type scope because they are Snowflake Scripting declaration types.
+    let g = grammar();
+    let words: std::collections::HashSet<String> = alternation(
+        g["repository"]["scripting-types"]["match"]
+            .as_str()
+            .unwrap(),
+    )
+    .into_iter()
+    .collect();
+    let expected: std::collections::HashSet<String> = ["cursor", "resultset"]
+        .iter()
+        .map(|w| w.to_string())
+        .collect();
+    assert_eq!(words, expected);
+    for word in &words {
+        assert_eq!(classify(SyntaxKind::IDENT, word), HighlightKind::Keyword);
+    }
+}
+
+#[test]
+fn nonreserved_keyword_words_are_not_reserved() {
+    // Words the grammar colours as keywords for readability must stay plain identifiers for the
+    // parser; if one is ever promoted to the reserved table this fails and the word must move to
+    // the `keywords` rule.
+    let g = grammar();
+    let words = alternation(
+        g["repository"]["keywords-nonreserved"]["match"]
+            .as_str()
+            .unwrap(),
+    );
+    assert!(!words.is_empty());
+    for word in &words {
+        assert_eq!(
+            classify(SyntaxKind::IDENT, word),
+            HighlightKind::Identifier,
+            "`{word}` is reserved or a type; move it out of keywords-nonreserved"
+        );
+    }
+}
+
+#[test]
+fn keyword_list_is_complete_against_the_keyword_table() {
+    // Every reserved word must be scoped by exactly one of the keyword-ish rules: plain keywords,
+    // control flow, literal constants, or the scripting declaration types.
+    let g = grammar();
+    let repo = &g["repository"];
+    let mut words: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for rule in [
+        "keywords",
+        "keywords-control",
+        "constants",
+        "scripting-types",
+    ] {
+        words.extend(alternation(repo[rule]["match"].as_str().unwrap()));
+    }
 
     for kw in keyword_texts() {
         assert!(
             words.contains(kw),
-            "grammar keyword alternation is missing `{kw}`"
+            "no grammar keyword rule covers reserved word `{kw}`"
         );
     }
 }

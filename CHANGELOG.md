@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-07-26
+
 ### Added
 
 - Rebuilt the VS Code TextMate grammar around the official Snowflake reference material, replacing
@@ -29,6 +31,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
   time travel, `BREAK`/`CONTINUE`/`EXIT`/`ITERATE`/`RAISE` scripting words, and more).
 - Named the object created, altered, or dropped by DDL statements with an `entity.name` scope so
   `CREATE OR REPLACE PROCEDURE db.schema.proc` visibly highlights the procedure name.
+
+### Changed
+
+- Extended the shared built-in type table (`BUILTIN_TYPE_WORDS`) with the thirteen additional
+  official Snowflake type words, so LSP completions, the lexical highlighter, and the Tree-sitter
+  grammar recognize them everywhere the original set was recognized; the Tree-sitter parser was
+  regenerated (tree-sitter-cli 0.26.11) and its corpus updated accordingly.
 
 ## [1.17.2] - 2026-07-22
 
@@ -510,7 +519,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.2...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.2...v1.18.0
 [1.17.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.1...v1.17.2
 [1.17.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.0...v1.17.1
 [1.17.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.16.2...v1.17.0

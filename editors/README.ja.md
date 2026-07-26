@@ -13,9 +13,14 @@ Visual Studio Code 用の Snowflake SQL 構文ハイライト**とフォーマ�
 - ドキュメント・選択範囲のフォーマット（**Format Document** / **Format Selection**）、保存時フォーマット対応
 - オプトイン方式の言語サーバー統合 — 診断、ホバー、補完、セマンティックハイライト、
   アウトライン、折りたたみ（[言語サーバー](#言語サーバーオプション)を参照）
-- Snowflake SQLキーワードと組み込み型
-- Snowflakeスクリプティングと`$$ ... $$`ルーチン本体
-- `LANGUAGE JAVASCRIPT ... $$ ... $$` ルーチン本体内のネイティブ JavaScript ハイライト
+- Snowflake SQLキーワードと公式データ型リファレンス準拠の組み込み型（制御構文・定数・
+  Snowflakeスクリプティングのステータス変数を個別スコープでハイライト）
+- 公式関数リファレンス掲載の組み込み関数900個と、UDF向けの汎用関数呼び出しハイライト
+- `CREATE / ALTER / DROP` の対象オブジェクト名をエンティティとしてハイライト
+- Snowflakeスクリプティングと`$$ ... $$`ルーチン本体 — `LANGUAGE SQL`・`EXECUTE IMMEDIATE`・
+  `AS $$` の本体を不透明な文字列ではなくSQLとしてハイライト
+- `LANGUAGE JAVASCRIPT / PYTHON / JAVA / SCALA ... $$ ... $$` ルーチン本体内の
+  ネイティブ JavaScript / Python / Java / Scala ハイライト
 - 行コメント（`--`, `//`）とブロックコメント（`/* ... */`）
 - 文字列、引用識別子、数値リテラル、および演算子
 - 位置変数`$1`、セッション変数`$name`、バインド変数`:name`、および`?`

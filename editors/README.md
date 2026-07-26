@@ -14,9 +14,15 @@ same engine used by [sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt
 - Document and selection formatting (**Format Document** / **Format Selection**), with format-on-save
 - optional, opt-in language server integration — diagnostics, hover, completion, semantic
   highlighting, outline, folding (see [Language server](#language-server-optional))
-- Snowflake SQL keywords and built-in types
-- Snowflake Scripting and `$$ ... $$` routine bodies
-- native JavaScript highlighting inside `LANGUAGE JAVASCRIPT ... $$ ... $$` routine bodies
+- Snowflake SQL keywords and the built-in types from the official data-type reference, with
+  distinct scopes for control flow, constants, and Snowflake Scripting status variables
+- the 900 built-in functions from the official Snowflake function reference, plus generic
+  function-call highlighting for UDFs
+- `CREATE / ALTER / DROP` object names highlighted as entities
+- Snowflake Scripting and `$$ ... $$` routine bodies — `LANGUAGE SQL`, `EXECUTE IMMEDIATE`,
+  and `AS $$` bodies highlight as SQL instead of an opaque string
+- native JavaScript, Python, Java, and Scala highlighting inside
+  `LANGUAGE JAVASCRIPT / PYTHON / JAVA / SCALA ... $$ ... $$` routine bodies
 - line (`--`, `//`) and block (`/* ... */`) comments
 - strings, quoted identifiers, numeric literals, and operators
 - positional `$1`, session `$name`, bind `:name`, and `?` variables

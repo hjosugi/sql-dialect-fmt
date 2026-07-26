@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.18.0
 
 - Reworked syntax highlighting around the official Snowflake reference material: control-flow
   keywords, constants, Snowflake Scripting status variables and exceptions, and all 900 documented
