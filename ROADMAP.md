@@ -139,11 +139,12 @@
 - ✅ GitHub Release asset: CLI tarball + sha256、Chrome zip、VS Code VSIX を `v*.*.*` release に同梱。旧 `snow-fmt-*` asset は除去済み
 - ✅ VS Code Marketplace / Chrome Web Store publish workflow: tag push で package artifact を作成し、repo variable で opt-in すれば store publish まで自動実行。VS Code Marketplace は初回 listing と v1.16.1 への自動更新を完了し、`VSCE_PAT` + `VSCODE_MARKETPLACE_AUTO_PUBLISH=true` を設定済み。Chrome は Web Store API OAuth credentials と初回 listing/審査が未完了。repo secret/variable は [configure-extension-publishing.sh](scripts/configure-extension-publishing.sh) で投入可
 - ✅ 公式仕様由来の conformance generator（Future Tech Blog の `uroborosql-fmt` / `postgresql-cst-parser` 型の発想を Snowflake 向けに翻訳）: local path / archive から `.sql` と SQL fenced block を抽出し、外部 corpus harness に流して parser/formatter conformance report を生成。将来、機械可読な公式 grammar が得られるなら Pure Rust CST parser 生成の候補にする … [scripts/conformance-report.py](scripts/conformance-report.py)
+- ✅ 外部 grammar oracle の継続監視: grammars-v4 Snowflake examples、Apache Spark SQL tests / `SqlBaseParser.g4` rule、sqlfluff Snowflake/Databricks keyword・segment inventory を出典/revision/license付き report に変換。Snowflake/Databricks別 corpus gateと週次artifactを運用し、name matchはsemantic coverageではないheuristic checklistとして扱う … [scripts/grammar-oracle-report.py](scripts/grammar-oracle-report.py) / [docs/CORPUS.ja.md](docs/CORPUS.ja.md)
 
 ---
 
-### 現状サマリ（2026-07-18）
-**v1.16.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。Formatter の Biome/Ruff 依存は Cargo feature で切り離し可能で、Java/Scala の簡易 brace body formatting は opt-in。
+### 現状サマリ（2026-07-27）
+**v1.18.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。Formatter の Biome/Ruff 依存は Cargo feature で切り離し可能で、Java/Scala の簡易 brace body formatting は opt-in。外部grammarはparser生成入力にせず、週次conformance oracleとして手書きparserのgap検出に利用する。
 
 **継続タスク（個別 issue で追跡）**:
 1. **Store 運用**: VS Code Marketplace は listing・PAT・自動更新を設定済み。Chrome Web Store は初回 item/listing・YouTube Unlisted の実 URL・審査・OAuth credentials・自動更新を完了させる。

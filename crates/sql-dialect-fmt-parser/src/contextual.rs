@@ -248,6 +248,12 @@ contextual_keywords! {
     Distribute => "distribute",
     /// Databricks/Spark `SORT BY`.
     Sort => "sort",
+    /// Databricks/Spark table bucketing: `CLUSTERED BY (...)`.
+    Clustered => "clustered",
+    /// Databricks/Spark table bucketing: `SORTED BY (...)`.
+    Sorted => "sorted",
+    /// Databricks/Spark table bucketing: `INTO n BUCKETS`.
+    Buckets => "buckets",
     /// A `PRIMARY KEY` constraint (also the first word of the two).
     Primary => "primary",
     /// The `KEY` of `PRIMARY KEY` / `FOREIGN KEY`.

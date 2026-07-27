@@ -9,6 +9,19 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Added an attributed external-grammar oracle report for grammars-v4 Snowflake examples, Apache
+  Spark SQL tests/rules, and sqlfluff Snowflake/Databricks keywords/segments. The weekly Corpus
+  workflow now sparse-checks out current upstream heads, runs Snowflake and Databricks conformance
+  corpora, and uploads revision-stamped checklists without treating them as parser-generator input.
+
+### Fixed
+
+- Preserved Databricks/Spark `CREATE TABLE` property order when `USING` is followed by `COMMENT` or
+  a `CLUSTERED BY (...) [SORTED BY (...)] INTO n BUCKETS` specification, as detected by the new
+  upstream Spark corpus oracle.
+
 ## [1.18.0] - 2026-07-26
 
 ### Added

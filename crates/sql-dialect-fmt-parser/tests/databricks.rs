@@ -87,6 +87,51 @@ fn delta_table_options_are_structured_as_create_properties() {
 }
 
 #[test]
+fn table_comment_after_using_is_a_source_order_property() {
+    let parsed = parse_databricks(
+        "CREATE TABLE events (id BIGINT) USING DELTA COMMENT 'events' TBLPROPERTIES ('k' = 'v')",
+    );
+    let properties: Vec<_> = parsed
+        .syntax()
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::CREATE_STMT)
+        .flat_map(|node| node.children().collect::<Vec<_>>())
+        .filter(|node| node.kind() == SyntaxKind::OBJECT_PROPERTY)
+        .map(|node| node.to_string().trim().to_string())
+        .collect();
+    assert_eq!(
+        properties,
+        [
+            "USING DELTA",
+            "COMMENT 'events'",
+            "TBLPROPERTIES ('k' = 'v')"
+        ]
+    );
+}
+
+#[test]
+fn spark_bucket_spec_is_one_source_order_property() {
+    let parsed = parse_databricks(
+        "CREATE TABLE events (id BIGINT, bucket STRING) USING parquet CLUSTERED BY (id) SORTED BY \
+         (bucket ASC) INTO 8 BUCKETS COMMENT 'events'",
+    );
+    let properties: Vec<_> = parsed
+        .syntax()
+        .descendants()
+        .filter(|node| node.kind() == SyntaxKind::OBJECT_PROPERTY)
+        .map(|node| node.to_string().trim().to_string())
+        .collect();
+    assert_eq!(
+        properties,
+        [
+            "USING parquet",
+            "CLUSTERED BY (id) SORTED BY (bucket ASC) INTO 8 BUCKETS",
+            "COMMENT 'events'"
+        ]
+    );
+}
+
+#[test]
 fn sql_scripting_blocks_are_enabled() {
     assert!(has_node("BEGIN\nSELECT 1;\nEND", SyntaxKind::BLOCK_STMT));
     assert!(has_node(

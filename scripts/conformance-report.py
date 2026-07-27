@@ -47,6 +47,15 @@ def parse_args() -> argparse.Namespace:
         help="Optional file cap passed to the corpus harness.",
     )
     parser.add_argument(
+        "--dialect",
+        choices=("snowflake", "databricks"),
+        default="snowflake",
+        help="SQL dialect used by the lexer, parser, and formatter. Defaults to snowflake.",
+    )
+    parser.add_argument("--source-url", help="Canonical upstream URL recorded in the report.")
+    parser.add_argument("--source-revision", help="Upstream commit/tag recorded in the report.")
+    parser.add_argument("--source-license", help="Upstream license recorded in the report.")
+    parser.add_argument(
         "--keep-workdir",
         action="store_true",
         help="Keep the mined corpus directory for debugging.",
@@ -128,8 +137,14 @@ def collect_fenced_sql(source: Path, corpus: Path) -> list[Path]:
     return files
 
 
-def run_harness(corpus: Path, limit: int) -> subprocess.CompletedProcess[str]:
-    command = [str(ROOT / "scripts" / "run-external-corpus.sh"), "--path", str(corpus)]
+def run_harness(corpus: Path, limit: int, dialect: str) -> subprocess.CompletedProcess[str]:
+    command = [
+        str(ROOT / "scripts" / "run-external-corpus.sh"),
+        "--path",
+        str(corpus),
+        "--dialect",
+        dialect,
+    ]
     if limit > 0:
         command.extend(["--limit", str(limit)])
     return subprocess.run(
@@ -150,6 +165,10 @@ def write_report(
     fenced_files: list[Path],
     result: subprocess.CompletedProcess[str] | None,
     limit: int,
+    dialect: str,
+    source_url: str | None,
+    source_revision: str | None,
+    source_license: str | None,
 ) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     mined = sql_files + fenced_files
@@ -158,15 +177,26 @@ def write_report(
         "# Conformance Report",
         "",
         f"- Source: `{source_label}`",
-        f"- Mined corpus: `{corpus}`",
-        f"- SQL files: {len(sql_files)}",
-        f"- SQL fenced blocks: {len(fenced_files)}",
-        f"- Harness limit: {limit if limit > 0 else 'none'}",
-        f"- Harness status: {status}",
-        "",
-        "## Sample Files",
-        "",
+        f"- Dialect: `{dialect}`",
     ]
+    if source_url:
+        lines.append(f"- Upstream: {source_url}")
+    if source_revision:
+        lines.append(f"- Revision: `{source_revision}`")
+    if source_license:
+        lines.append(f"- License: `{source_license}`")
+    lines.extend(
+        [
+            f"- Mined corpus: `{corpus}`",
+            f"- SQL files: {len(sql_files)}",
+            f"- SQL fenced blocks: {len(fenced_files)}",
+            f"- Harness limit: {limit if limit > 0 else 'none'}",
+            f"- Harness status: {status}",
+            "",
+            "## Sample Files",
+            "",
+        ]
+    )
     for path in mined[:30]:
         lines.append(f"- `{path.relative_to(corpus)}`")
     if len(mined) > 30:
@@ -205,10 +235,22 @@ def main() -> int:
 
         result = None
         if mined_count > 0:
-            result = run_harness(corpus, args.limit)
+            result = run_harness(corpus, args.limit, args.dialect)
 
         out = (ROOT / args.out).resolve() if not Path(args.out).is_absolute() else Path(args.out)
-        write_report(out, source_label, corpus, sql_files, fenced_files, result, args.limit)
+        write_report(
+            out,
+            source_label,
+            corpus,
+            sql_files,
+            fenced_files,
+            result,
+            args.limit,
+            args.dialect,
+            args.source_url,
+            args.source_revision,
+            args.source_license,
+        )
         print(f"conformance report written to {out}")
 
         if args.keep_workdir:
