@@ -13,7 +13,7 @@ Snowflake SQL と Databricks SQL のフォーマッタ＋シンタックスハ�
 
 ```sh
 # crates.io から
-cargo install sql-dialect-fmt --version 1.18.0 --locked
+cargo install sql-dialect-fmt --version 1.19.0 --locked
 
 # このリポジトリから直接（`sql-dialect-fmt` バイナリが入る）
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
@@ -39,7 +39,7 @@ CI では同梱の composite action またはコンテナを使えます。
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.18.0 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.19.0 --check .
 ```
 
 ## 使い方
@@ -61,7 +61,7 @@ pre-commit 利用者は次の設定で `--write` または `--check` を使え�
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.18.0
+    rev: v1.19.0
     hooks:
       - id: sql-dialect-fmt
 ```
