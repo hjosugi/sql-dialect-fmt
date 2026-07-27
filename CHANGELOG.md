@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-07-27
+
 ### Added
 
 - Added an attributed external-grammar oracle report for grammars-v4 Snowflake examples, Apache
@@ -532,7 +534,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.18.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.19.0...HEAD
+[1.19.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.2...v1.18.0
 [1.17.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.1...v1.17.2
 [1.17.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.0...v1.17.1
