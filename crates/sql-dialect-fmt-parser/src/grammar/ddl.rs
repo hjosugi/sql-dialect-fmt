@@ -685,8 +685,10 @@ fn at_databricks_table_option(p: &Parser) -> bool {
         || p.nth_contextual(0, ContextualKeyword::Location)
         || p.nth_contextual(0, ContextualKeyword::Tblproperties)
         || p.nth_contextual(0, ContextualKeyword::Options)
+        || p.nth_contextual(0, ContextualKeyword::Comment)
         || (p.nth_contextual(0, ContextualKeyword::Partitioned) && p.nth_at(1, BY_KW))
         || (p.nth_contextual(0, ContextualKeyword::Cluster) && p.nth_at(1, BY_KW))
+        || (p.nth_contextual(0, ContextualKeyword::Clustered) && p.nth_at(1, BY_KW))
 }
 
 fn databricks_table_option(p: &mut Parser) {
@@ -711,6 +713,34 @@ fn databricks_table_option(p: &mut Parser) {
             balanced_parens(p);
         } else {
             databricks_table_option_tail(p);
+        }
+    } else if p.nth_contextual(0, ContextualKeyword::Comment) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        p.eat(EQ);
+        if !at_databricks_table_option_stop(p) && !at_databricks_table_option(p) {
+            p.bump_any();
+        }
+    } else if p.nth_contextual(0, ContextualKeyword::Clustered) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+        p.expect(BY_KW);
+        if p.at(L_PAREN) {
+            balanced_parens(p);
+        }
+        if p.nth_contextual(0, ContextualKeyword::Sorted) {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+            p.expect(BY_KW);
+            if p.at(L_PAREN) {
+                balanced_parens(p);
+            }
+        }
+        if p.at(INTO_KW) {
+            p.bump(INTO_KW);
+            if super::at_expr_start(p) {
+                super::expr(p);
+            }
+            if p.nth_contextual(0, ContextualKeyword::Buckets) {
+                p.bump_as(CONTEXTUAL_KEYWORD);
+            }
         }
     } else if p.nth_contextual(0, ContextualKeyword::Partitioned)
         || p.nth_contextual(0, ContextualKeyword::Cluster)

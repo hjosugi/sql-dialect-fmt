@@ -23,18 +23,26 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use sql_dialect_fmt_formatter::{format, FormatOptions};
-use sql_dialect_fmt_lexer::tokenize;
-use sql_dialect_fmt_parser::parse;
+use sql_dialect_fmt_lexer::tokenize_for_dialect;
+use sql_dialect_fmt_parser::{parse_with_dialect, Dialect};
 use sql_dialect_fmt_syntax::SyntaxKind;
 
 const EXTERNAL_CORPUS_ENV: &str = "SQL_DIALECT_FMT_EXTERNAL_CORPUS";
 const EXTERNAL_CORPUS_LIMIT_ENV: &str = "SQL_DIALECT_FMT_EXTERNAL_CORPUS_LIMIT";
+const EXTERNAL_CORPUS_DIALECT_ENV: &str = "SQL_DIALECT_FMT_EXTERNAL_CORPUS_DIALECT";
 
 /// A single offending file and the invariant it broke, formatted for a clear test failure.
 #[derive(Debug)]
 struct CorpusFailure {
     file: PathBuf,
     reason: String,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct FileOutcome {
+    lex_clean: bool,
+    parse_clean: bool,
+    changed: bool,
 }
 
 impl std::fmt::Display for CorpusFailure {
@@ -44,14 +52,19 @@ impl std::fmt::Display for CorpusFailure {
 }
 
 /// Run every corpus invariant over one file's source text.
-fn check_file(file: &Path, source: &str, options: &FormatOptions) -> Result<(), CorpusFailure> {
+fn check_file(
+    file: &Path,
+    source: &str,
+    options: &FormatOptions,
+) -> Result<FileOutcome, CorpusFailure> {
     let fail = |reason: String| CorpusFailure {
         file: file.to_path_buf(),
         reason,
     };
+    let dialect = options.dialect;
 
     // (1) parse must never panic. Running it is the assertion.
-    let _ = parse(source);
+    let _ = parse_with_dialect(source, dialect);
 
     // (3) idempotency holds for all input, including verbatim fallback.
     let formatted = format(source, options);
@@ -66,11 +79,11 @@ fn check_file(file: &Path, source: &str, options: &FormatOptions) -> Result<(), 
     // The stronger invariants only apply when the toolchain accepts the input cleanly. Input the
     // grammar does not yet model is returned verbatim by `format`, which is trivially lossless and
     // idempotent but should not be held to reparse/round-trip claims.
-    let lex_clean = tokenize(source).errors.is_empty();
-    let parse_clean = parse(source).errors().is_empty();
+    let lex_clean = tokenize_for_dialect(source, dialect).errors.is_empty();
+    let parse_clean = parse_with_dialect(source, dialect).errors().is_empty();
     if lex_clean && parse_clean {
         // (4) reparse-clean: formatted output of clean input must itself parse without errors.
-        let reparse = parse(&formatted);
+        let reparse = parse_with_dialect(&formatted, dialect);
         if !reparse.errors().is_empty() {
             return Err(fail(format!(
                 "formatted output does not reparse cleanly: {:?}",
@@ -80,8 +93,8 @@ fn check_file(file: &Path, source: &str, options: &FormatOptions) -> Result<(), 
 
         // (2) significant-token round-trip: formatting may move whitespace and re-case keywords,
         // but the case-folded significant-token stream must be identical.
-        let before = significant_tokens(source);
-        let after = significant_tokens(&formatted);
+        let before = significant_tokens(source, dialect);
+        let after = significant_tokens(&formatted, dialect);
         if before != after {
             return Err(fail(format!(
                 "significant tokens changed across formatting ({} -> {} tokens)",
@@ -91,15 +104,22 @@ fn check_file(file: &Path, source: &str, options: &FormatOptions) -> Result<(), 
         }
     }
 
-    Ok(())
+    Ok(FileOutcome {
+        lex_clean,
+        parse_clean,
+        changed: formatted != source,
+    })
 }
 
 /// Run [`check_file`] over a set of files, collecting every failure in one report.
-fn run_corpus(files: &[PathBuf], label: &str) {
+fn run_corpus(files: &[PathBuf], label: &str, options: &FormatOptions) {
     assert!(!files.is_empty(), "{label}: no .sql files found");
 
-    let options = FormatOptions::default();
     let mut failures = Vec::new();
+    let mut utf8_files = 0usize;
+    let mut lex_clean = 0usize;
+    let mut parse_clean = 0usize;
+    let mut changed = 0usize;
     for file in files {
         let Ok(bytes) = fs::read(file) else {
             failures.push(CorpusFailure {
@@ -112,8 +132,14 @@ fn run_corpus(files: &[PathBuf], label: &str) {
             // Non-UTF-8 corpora are out of scope for the structural checks.
             continue;
         };
-        if let Err(failure) = check_file(file, &source, &options) {
-            failures.push(failure);
+        utf8_files += 1;
+        match check_file(file, &source, options) {
+            Ok(outcome) => {
+                lex_clean += usize::from(outcome.lex_clean);
+                parse_clean += usize::from(outcome.parse_clean);
+                changed += usize::from(outcome.changed);
+            }
+            Err(failure) => failures.push(failure),
         }
     }
 
@@ -126,6 +152,16 @@ fn run_corpus(files: &[PathBuf], label: &str) {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
+    );
+
+    println!(
+        "corpus summary: dialect={} files={} utf8={} lex_clean={} parse_clean={} changed={}",
+        dialect_name(options.dialect),
+        files.len(),
+        utf8_files,
+        lex_clean,
+        parse_clean,
+        changed
     );
 }
 
@@ -147,7 +183,7 @@ fn sample_corpus_is_clean() {
         files.len()
     );
 
-    run_corpus(&files, "sample_corpus");
+    run_corpus(&files, "sample_corpus", &FormatOptions::default());
 
     // The committed samples are stored in formatter-canonical form: `format(x) == x`.
     let options = FormatOptions::default();
@@ -193,7 +229,8 @@ fn external_corpus_preserves_formatter_invariants() {
     let limit = external_corpus_limit();
     files.truncate(limit);
 
-    run_corpus(&files, "external_corpus");
+    let options = FormatOptions::default().with_dialect(external_corpus_dialect());
+    run_corpus(&files, "external_corpus", &options);
 }
 
 fn external_corpus_roots() -> std::ffi::OsString {
@@ -206,6 +243,20 @@ fn external_corpus_limit() -> usize {
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(usize::MAX)
+}
+
+fn external_corpus_dialect() -> Dialect {
+    match env::var(EXTERNAL_CORPUS_DIALECT_ENV)
+        .unwrap_or_else(|_| "snowflake".to_string())
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "snowflake" => Dialect::Snowflake,
+        "databricks" => Dialect::Databricks,
+        value => panic!(
+            "{EXTERNAL_CORPUS_DIALECT_ENV} must be `snowflake` or `databricks`, got {value:?}"
+        ),
+    }
 }
 
 fn collect_sql_files(path: &Path, out: &mut Vec<PathBuf>) {
@@ -251,13 +302,41 @@ fn is_sql_file(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"))
 }
 
-fn significant_tokens(sql: &str) -> Vec<String> {
-    tokenize(sql)
+fn significant_tokens(sql: &str, dialect: Dialect) -> Vec<String> {
+    tokenize_for_dialect(sql, dialect)
         .tokens
         .into_iter()
         .filter(|token| !token.kind.is_trivia() && token.kind != SyntaxKind::SEMICOLON)
-        .map(|token| token.text.to_ascii_uppercase())
+        .map(|token| {
+            if token.kind == SyntaxKind::DOLLAR_STRING {
+                // SQL/JavaScript/Python routine bodies are deliberately formatted by a nested
+                // formatter. Treat the body as one opaque significant token here; dedicated
+                // embedded-language tests assert its semantic safety, while this corpus check
+                // still proves that every surrounding SQL token stays in order.
+                "<DOLLAR_STRING>".to_string()
+            } else {
+                token.text.to_ascii_uppercase()
+            }
+        })
         .collect()
+}
+
+fn dialect_name(dialect: Dialect) -> &'static str {
+    match dialect {
+        Dialect::Snowflake => "snowflake",
+        Dialect::Databricks => "databricks",
+        _ => "unknown",
+    }
+}
+
+#[test]
+fn significant_token_check_treats_formatted_dollar_bodies_as_opaque() {
+    let before = "EXECUTE IMMEDIATE $$begin select 1; end$$";
+    let after = "EXECUTE IMMEDIATE $$\nBEGIN\n    SELECT 1;\nEND;\n$$";
+    assert_eq!(
+        significant_tokens(before, Dialect::Snowflake),
+        significant_tokens(after, Dialect::Snowflake)
+    );
 }
 
 fn first_diff(a: &str, b: &str) -> usize {

@@ -51,3 +51,50 @@ jobs:
           fi
 
           ./scripts/run-external-corpus.sh "${args[@]}"
+
+  grammar-oracles:
+    name: External grammar oracles
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: grammar-oracles
+      - name: Sparse-checkout upstream oracle sources
+        env:
+          ORACLE_ROOT: ${{ runner.temp }}/sql-dialect-fmt-oracles
+        run: |
+          mkdir -p "$ORACLE_ROOT"
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/antlr/grammars-v4.git "$ORACLE_ROOT/grammars-v4"
+          git -C "$ORACLE_ROOT/grammars-v4" sparse-checkout set sql/snowflake
+
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/apache/spark.git "$ORACLE_ROOT/spark"
+          git -C "$ORACLE_ROOT/spark" sparse-checkout set \
+            sql/api/src/main/antlr4/org/apache/spark/sql/catalyst/parser \
+            sql/core/src/test/resources/sql-tests/inputs
+
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/sqlfluff/sqlfluff.git "$ORACLE_ROOT/sqlfluff"
+          git -C "$ORACLE_ROOT/sqlfluff" sparse-checkout set src/sqlfluff/dialects
+      - name: Generate checklists and run both dialect corpora
+        env:
+          ORACLE_ROOT: ${{ runner.temp }}/sql-dialect-fmt-oracles
+        run: |
+          python3 scripts/grammar-oracle-report.py \
+            --grammars-v4 "$ORACLE_ROOT/grammars-v4" \
+            --spark "$ORACLE_ROOT/spark" \
+            --sqlfluff "$ORACLE_ROOT/sqlfluff" \
+            --run-corpora
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: external-grammar-oracle-reports
+          path: |
+            target/grammar-oracle-report.md
+            target/grammars-v4-snowflake-conformance.md
+            target/spark-databricks-conformance.md
+          if-no-files-found: warn

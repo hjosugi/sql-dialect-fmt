@@ -88,6 +88,23 @@ fn formats_delta_table_options_as_create_properties() {
 }
 
 #[test]
+fn preserves_using_comment_property_order() {
+    assert_databricks_format(
+        "create table events (id bigint) using delta comment 'events' tblproperties ('k' = 'v')",
+        "CREATE TABLE events (id bigint)\n    USING delta\n    COMMENT 'events'\n    TBLPROPERTIES ('k' = 'v');\n",
+    );
+}
+
+#[test]
+fn formats_spark_bucket_spec_without_reordering_properties() {
+    assert_databricks_format(
+        "create table events (id bigint, bucket string) using parquet clustered by (id) sorted by \
+         (bucket asc) into 8 buckets comment 'events'",
+        "CREATE TABLE events (id bigint, bucket string)\n    USING parquet\n    CLUSTERED BY (id) SORTED BY (bucket ASC) INTO 8 BUCKETS\n    COMMENT 'events';\n",
+    );
+}
+
+#[test]
 fn formats_sql_scripting_blocks() {
     assert_databricks_format("begin\nselect 1;\nend", "BEGIN\n    SELECT 1;\nEND;\n");
     assert_databricks_format(

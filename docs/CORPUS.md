@@ -81,6 +81,46 @@ This is the 1.0 lane for official-spec-derived coverage: it does not replace the
 parser, but it gives every docs/examples sweep a repeatable parser-gap report and reuses the same
 losslessness/idempotency invariants as CI.
 
+Pass `--dialect databricks` when the source is a Spark/Databricks corpus. Reports can also retain
+source attribution:
+
+```sh
+scripts/conformance-report.py --path /path/to/spark/sql-tests/inputs \
+  --dialect databricks \
+  --source-url https://github.com/apache/spark \
+  --source-revision COMMIT_SHA \
+  --source-license Apache-2.0
+```
+
+## External Grammar Oracles
+
+`scripts/grammar-oracle-report.py` turns three upstream repositories into reviewable, attributed
+checklists without generating parser code:
+
+- grammars-v4 Snowflake examples and parser rules (the Snowflake grammar files carry an MIT header);
+- Apache Spark `SqlBaseParser.g4` rules and SQL test inputs (Apache-2.0);
+- sqlfluff Snowflake/Databricks keyword sets and dialect-specific segment classes (MIT).
+
+Give it sparse checkouts or extracted archive roots:
+
+```sh
+scripts/grammar-oracle-report.py \
+  --grammars-v4 /path/to/grammars-v4 \
+  --spark /path/to/spark \
+  --sqlfluff /path/to/sqlfluff \
+  --run-corpora
+```
+
+The main report records each Git revision, keyword deltas, SQLFluff segment inventories, and the
+complete Spark parser-rule checklist. With `--run-corpora`, it also runs grammars-v4 examples in
+Snowflake mode and Spark SQL tests in Databricks mode, producing two linked conformance reports.
+Name matches against local Rust rules/nodes are explicitly heuristic: an unmatched name is a review
+candidate, and a matched name is not proof of semantic coverage.
+
+The scheduled `Corpus` workflow sparse-checks out the current upstream heads weekly, uploads all
+three reports as an artifact, and fails if either corpus violates losslessness/idempotency. Pull
+requests run the extractor's unit tests without depending on upstream network state.
+
 ## Continuous Operation
 
 `.github/workflows/corpus.yml` runs on every pull request, on `main`, and weekly. By default it
@@ -107,6 +147,12 @@ rotating to a broader public or private corpus.
 
 The external corpus does not need to be preformatted; only the invariants are checked. The run
 collects every offending file before failing, so one pass gives the full list.
+
+Set `--dialect snowflake|databricks` on the wrapper when running a dialect-specific corpus:
+
+```sh
+scripts/run-external-corpus.sh --path /path/to/spark-sql-tests --dialect databricks
+```
 
 ## Triaging A Failure
 

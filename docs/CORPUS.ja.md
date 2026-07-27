@@ -67,6 +67,46 @@ scripts/conformance-report.py --url https://example.com/docs-or-examples.tar.gz 
 
 これは公式仕様に基づくカバレッジの1.0レーンです：手書きのCSTパーサーを置き換えるものではありませんが、すべてのドキュメント/例のスイープに対して再現可能なパーサーギャップレポートを提供し、CIと同じロスレス性/冪等性の不変条件を再利用します。
 
+Spark/Databricksコーパスには `--dialect databricks` を指定します。レポートには出典も
+記録できます：
+
+```sh
+scripts/conformance-report.py --path /path/to/spark/sql-tests/inputs \
+  --dialect databricks \
+  --source-url https://github.com/apache/spark \
+  --source-revision COMMIT_SHA \
+  --source-license Apache-2.0
+```
+
+## 外部grammar oracle
+
+`scripts/grammar-oracle-report.py` はparser codeを生成せず、次の3 upstream repositoryを
+出典付きのレビュー可能なchecklistへ変換します：
+
+- grammars-v4のSnowflake examples/parser rules（Snowflake grammar file内のMIT header）；
+- Apache Sparkの `SqlBaseParser.g4` rules/SQL test inputs（Apache-2.0）；
+- sqlfluffのSnowflake/Databricks keyword setとdialect固有segment class（MIT）。
+
+sparse checkoutまたは展開済みarchive rootを指定します：
+
+```sh
+scripts/grammar-oracle-report.py \
+  --grammars-v4 /path/to/grammars-v4 \
+  --spark /path/to/spark \
+  --sqlfluff /path/to/sqlfluff \
+  --run-corpora
+```
+
+main reportには各Git revision、keyword差分、SQLFluff segment inventory、Spark parser ruleの
+完全なchecklistが記録されます。`--run-corpora` を付けると、grammars-v4 examplesをSnowflake
+mode、Spark SQL testsをDatabricks modeで実行し、2つのconformance reportも生成します。
+local Rust rule/nodeとのname matchは明示的にheuristicです。unmatched nameはレビュー候補で、
+matched nameもsemantic coverageの証明ではありません。
+
+週次 `Corpus` workflowはcurrent upstream headをsparse checkoutし、3 reportをartifactとして
+uploadします。いずれかのcorpusがlosslessness/idempotencyに違反すれば失敗します。PRでは
+upstream networkに依存せず、extractorのunit testだけを実行します。
+
 ## 継続的運用
 
 `.github/workflows/corpus.yml` はすべてのプルリクエスト、`main`、および週次で実行されます。デフォルトでは、コミットされたサンプルコーパスをチェックします。週次の実行でより広範なプライベートまたは生成されたコーパスをカバーするには、リポジトリ変数を設定します：
@@ -87,6 +127,12 @@ https://github.com/dbt-labs/jaffle-shop/archive/08ef1d578de5b55f226aae34f30d7077
 そのシードは意図的にこのリポジトリにベンダーされていません；より広範な公開またはプライベートコーパスに回転する際には、リポジトリ変数を更新してください。
 
 外部コーパスは事前にフォーマットされている必要はありません；不変条件のみがチェックされます。実行は、失敗する前にすべての問題のあるファイルを収集するため、一度のパスで完全なリストを提供します。
+
+dialect固有corpusを実行する場合はwrapperに `--dialect snowflake|databricks` を指定します：
+
+```sh
+scripts/run-external-corpus.sh --path /path/to/spark-sql-tests --dialect databricks
+```
 
 ## 失敗のトリアージ
 

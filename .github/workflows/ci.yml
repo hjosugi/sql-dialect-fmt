@@ -41,6 +41,9 @@ jobs:
       - name: Publishable Cargo manifests
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: python3 scripts/check-publish-manifests.py
+      - name: Grammar oracle tooling
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: python3 -m unittest discover -s scripts/tests -p "test_*.py"
       - name: Test
         run: cargo test --workspace --locked
       - name: Docs
