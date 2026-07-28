@@ -97,6 +97,8 @@ fn alter_warehouse_task_and_view_forms_parse_clean() {
         "ALTER DATABASE d SET DATA_RETENTION_TIME_IN_DAYS = 7",
         "ALTER MATERIALIZED VIEW mv RENAME TO mv2",
         "ALTER DYNAMIC TABLE dt REFRESH",
+        "ALTER PIPE p REFRESH",
+        "ALTER PIPE IF EXISTS db.sch.p SET PIPE_EXECUTION_PAUSED = TRUE",
     ] {
         clean(sql);
         assert_has_node_kind(sql, SyntaxKind::ALTER_STMT);
@@ -124,7 +126,6 @@ fn case_insensitive_and_lowercase_spellings_parse_clean() {
 fn unmodeled_alter_kinds_stay_lenient_and_round_trip() {
     for sql in [
         "ALTER USER u SET PASSWORD = 'x' MUST_CHANGE_PASSWORD = TRUE",
-        "ALTER PIPE p REFRESH",
         "ALTER STAGE s SET URL = 's3://bucket/'",
         "ALTER ACCOUNT SET STATEMENT_TIMEOUT_IN_SECONDS = 60",
         "ALTER FUNCTION f(INT) RENAME TO g",

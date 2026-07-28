@@ -148,8 +148,20 @@ fn unmodeled_alter_kinds_keep_the_inline_lenient_lowering() {
         fmt("alter user u set default_role = 'ANALYST'"),
         "ALTER USER u SET default_role = 'ANALYST';\n"
     );
-    // `pipe` is not a recognized lenient word today; the historical verbatim casing is kept.
-    assert_eq!(fmt("alter pipe p refresh"), "ALTER pipe p refresh;\n");
+    // `account` is not a recognized lenient word today; the historical verbatim casing is kept.
+    assert_eq!(
+        fmt("alter account set statement_timeout_in_seconds = 60"),
+        "ALTER account SET statement_timeout_in_seconds = 60;\n"
+    );
+}
+
+#[test]
+fn alter_pipe_actions_are_structured() {
+    assert_eq!(fmt("alter pipe p refresh"), "ALTER PIPE p REFRESH;\n");
+    assert_eq!(
+        fmt("alter pipe if exists db.sch.p set pipe_execution_paused = true"),
+        "ALTER PIPE IF EXISTS db.sch.p SET PIPE_EXECUTION_PAUSED = TRUE;\n"
+    );
 }
 
 // ---- invariants over the matrix ----

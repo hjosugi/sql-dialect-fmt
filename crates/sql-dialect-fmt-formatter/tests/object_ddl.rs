@@ -1,8 +1,8 @@
 //! Phase 7 object DDL + access control: `CREATE SCHEMA/DATABASE/WAREHOUSE/STAGE/FILE FORMAT/
-//! SEQUENCE/STREAM/TASK/DYNAMIC TABLE` and `GRANT`/`REVOKE`.
+//! SEQUENCE/STREAM/PIPE/TASK/DYNAMIC TABLE` and `GRANT`/`REVOKE`.
 //!
 //! The matrix crosses *object kind* (schema/database/warehouse/stage/file format/sequence/stream/
-//! task/dynamic table) with *shape* (bare, `OR REPLACE`, `IF NOT EXISTS`, single/multi property,
+//! pipe/task/dynamic table) with *shape* (bare, `OR REPLACE`, `IF NOT EXISTS`, single/multi property,
 //! parenthesized sub-option, `ON` source, `AFTER` predecessors, `WHEN` guard, `AS <query|dml>` body)
 //! and *grant shape* (single/multi privilege, `ALL PRIVILEGES`, object types, `WITH GRANT OPTION`,
 //! `GRANT OPTION FOR`, `CASCADE`/`RESTRICT`, role/user grantees). Every case is asserted to:
@@ -77,8 +77,15 @@ const CASES: &[&str] = &[
     "create stream s on view v show_initial_rows = true",
     "create stream if not exists s on table t comment = 'cdc'",
     "create stream s on stage st",
+    // ---- CREATE PIPE: Snowpipe properties + AS <COPY INTO> body ----
+    "create pipe p as copy into t from @s",
+    "create or replace pipe p auto_ingest = true as copy into t from @s/in/",
+    "create pipe if not exists db.sch.p auto_ingest = false comment = 'load' as copy into db.sch.t from @db.sch.s/in/ file_format = (type = 'PARQUET')",
+    "create or replace pipe p error_integration = ei aws_sns_topic = 'arn:aws:sns:topic' as copy into t from @s on_error = continue",
+    "create or replace pipe p auto_ingest = false as copy into t (a, b) from (select $1:a::STRING, $1:b::STRING from @s/in/ (file_format => ff)) pattern = '.*[.]parquet'",
     // ---- CREATE TASK: WAREHOUSE / SCHEDULE / AFTER / WHEN + AS <sql> body ----
     "create task t warehouse = w schedule = '5 minutes' as select 1",
+    "create task t warehouse = ops.sch.wh schedule = '5 minutes' as select 1",
     "create or replace task t warehouse = w schedule = 'USING CRON 0 9 * * * UTC' as select current_timestamp()",
     "create task child warehouse = w after parent as insert into log select * from src",
     "create task fan after a, b, c as delete from staging where done",
@@ -253,6 +260,38 @@ fn create_task_lays_out_body_structurally() {
            SCHEDULE = '5 minutes'\n    \
            AS\n    \
            SELECT 1;\n",
+    );
+}
+
+#[test]
+fn qualified_property_values_stay_on_the_property_line() {
+    // A dotted value is one name, not three tokens the property region can split across lines.
+    assert_eq!(
+        fmt("create pipe p auto_ingest = true error_integration = ops.notification_int as copy into t from @s"),
+        "CREATE PIPE p\n    \
+           AUTO_INGEST = TRUE\n    \
+           ERROR_INTEGRATION = ops.notification_int\n    \
+           AS\n    \
+           COPY INTO t\n    \
+           FROM @s;\n",
+    );
+    assert_eq!(
+        fmt("create task t warehouse = ops.sch.wh as select 1"),
+        "CREATE TASK t\n    WAREHOUSE = ops.sch.wh\n    AS\n    SELECT 1;\n",
+    );
+}
+
+#[test]
+fn create_pipe_lays_out_the_copy_into_body_structurally() {
+    assert_eq!(
+        fmt("create or replace pipe p auto_ingest = false comment = 'load' as copy into t from @s/in/ file_format = (type = 'PARQUET')"),
+        "CREATE OR REPLACE PIPE p\n    \
+           AUTO_INGEST = FALSE\n    \
+           COMMENT = 'load'\n    \
+           AS\n    \
+           COPY INTO t\n    \
+           FROM @s/in/\n    \
+           FILE_FORMAT = (TYPE = 'PARQUET');\n",
     );
 }
 

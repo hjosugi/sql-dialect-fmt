@@ -54,6 +54,14 @@ impl Dialect {
         matches!(self, Dialect::Snowflake)
     }
 
+    /// Snowpipe DDL: `CREATE [OR REPLACE] PIPE <name> <properties> AS COPY INTO ...` and
+    /// `ALTER PIPE`. Snowflake only — the object does not exist in Databricks, where `pipe` stays an
+    /// ordinary identifier.
+    #[must_use]
+    pub fn supports_pipe_ddl(self) -> bool {
+        matches!(self, Dialect::Snowflake)
+    }
+
     /// `CREATE SEMANTIC VIEW ...` semantic-layer DDL. Snowflake only.
     #[must_use]
     pub fn supports_semantic_view(self) -> bool {
@@ -152,6 +160,7 @@ mod tests {
         assert!(s.supports_dollar_quoting());
         assert!(s.supports_flow_operator());
         assert!(s.supports_copy_into());
+        assert!(s.supports_pipe_ddl());
         assert!(s.supports_double_slash_comments());
         assert!(s.supports_semantic_view());
         assert!(s.supports_scripting_blocks());
@@ -173,6 +182,7 @@ mod tests {
         assert!(!d.supports_dollar_quoting());
         assert!(!d.supports_flow_operator());
         assert!(!d.supports_copy_into());
+        assert!(!d.supports_pipe_ddl());
         assert!(!d.supports_double_slash_comments());
         assert!(!d.supports_semantic_view());
         assert!(d.supports_scripting_blocks());

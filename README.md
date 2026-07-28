@@ -141,7 +141,8 @@ Fine-grained features are available for embedders:
 ## Status
 
 Snowflake support covers SELECT, DML (`INSERT`/`UPDATE`/`DELETE`/`MERGE`), `COPY`, major DDL and
-object DDL, Semantic View, and `CREATE PROCEDURE`/`CREATE FUNCTION` bodies in SQL, JavaScript,
+object DDL (including Snowpipe `CREATE PIPE ... AS COPY INTO`), Semantic View, and
+`CREATE PROCEDURE`/`CREATE FUNCTION` bodies in SQL, JavaScript,
 Python, Java, and Scala. JavaScript/Python embedded body formatting is enabled by default; Java and
 Scala body formatting is opt-in through `embedded-brace-formatters` and otherwise stays verbatim.
 Databricks mode covers LATERAL VIEW, Delta DDL options,

@@ -9,6 +9,26 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Modeled Snowpipe DDL. `CREATE [OR REPLACE] PIPE <name> <properties> AS COPY INTO …` is now an
+  object DDL like `CREATE TASK`/`CREATE STREAM`: each property lands on its own line and the
+  `COPY INTO` body is parsed structurally, so its `FROM` and option clauses lay out instead of
+  collapsing the whole statement onto one line. `ALTER PIPE` joins the structured ALTER kinds, and
+  `AUTO_INGEST` / `AWS_SNS_TOPIC` / `INTEGRATION` up-case in key position.
+
+### Fixed
+
+- Formatted a `COPY INTO <table> (<columns>)` target structurally instead of replaying it verbatim,
+  so a wide load column list wraps to the line width rather than keeping the indentation of the
+  input.
+- Kept the space between a `@stage/path` reference and the staged-file arguments that follow it
+  (`FROM @s/in/ (FILE_FORMAT => ff)`); the arguments are not a call on the path, so they no longer
+  hug it.
+- Kept a qualified option/property value on its property line. `ERROR_INTEGRATION =
+  ops.notification_int`, `WAREHOUSE = db.sch.wh`, and `FILE_FORMAT = db.sch.ff` were split at every
+  `.` and stacked one segment per line, because each `.` and name counted as its own property.
+
 ## [1.19.0] - 2026-07-27
 
 ### Added

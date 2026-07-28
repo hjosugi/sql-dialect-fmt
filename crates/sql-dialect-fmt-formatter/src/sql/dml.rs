@@ -117,18 +117,28 @@ impl Lowerer {
 
     /// A `@stage/path` reference used as a table/source. Its `/` and `.` connectors would be
     /// re-spaced by the generic token walker, so the run is emitted verbatim, with a normal leading
-    /// separator (e.g. the space after `FROM`) and spacing resumed as a value for a trailing alias.
+    /// separator (e.g. the space after `FROM`).
+    ///
+    /// Spacing resumes as the [`STAGE_REF`] kind itself rather than as a plain identifier: a stage
+    /// path is a value (a trailing alias and `,`/`)` space like any other), but the staged-file
+    /// arguments that may follow are not a call on it, so `@s (FILE_FORMAT => f)` keeps the
+    /// separating space instead of hugging into `@s(FILE_FORMAT => f)`.
     pub(super) fn lower_stage_ref(&mut self, node: &SyntaxNode) -> Doc {
         let sep = self.sep_before(AT);
-        self.resume_after(IDENT);
+        self.resume_after(STAGE_REF);
         concat(vec![sep, trimmed_text(node)])
     }
 
-    /// A COPY target/source location, emitted verbatim (preserving `@stage/path`, whose `/` operator
-    /// spacing would mangle) with the leading-trivia space trimmed for idempotency.
+    /// A COPY target/source location. A structured table target (`t (a, b)`) is lowered like any
+    /// other name plus column list, so a wide load list wraps to the line width. Everything else —
+    /// `@stage/path`, whose `/` operator spacing would mangle, and external location literals — is
+    /// emitted verbatim with the leading-trivia space trimmed for idempotency.
     pub(super) fn lower_copy_location(&mut self, node: &SyntaxNode) -> Doc {
+        if node.first_child().is_some_and(|c| c.kind() != STAGE_REF) {
+            return self.lower_children(node);
+        }
         let doc = concat(vec![space(), trimmed_text(node)]);
-        self.resume_after(IDENT);
+        self.resume_after(STAGE_REF);
         doc
     }
 }
