@@ -162,6 +162,8 @@ contextual_keywords! {
     Sequence => "sequence",
     /// `CREATE STREAM ...`.
     Stream => "stream",
+    /// `CREATE PIPE ... AS COPY INTO ...` / `ALTER PIPE ...` — Snowpipe DDL.
+    Pipe => "pipe",
     /// `CREATE DYNAMIC TABLE ...`.
     Dynamic => "dynamic",
     /// `CREATE SEMANTIC VIEW ...`.

@@ -1,5 +1,5 @@
 //! Phase 7 object DDL + access control parsing: `CREATE SCHEMA/DATABASE/WAREHOUSE/STAGE/FILE FORMAT/
-//! SEQUENCE/STREAM/TASK/DYNAMIC TABLE` and `GRANT`/`REVOKE`.
+//! SEQUENCE/STREAM/PIPE/TASK/DYNAMIC TABLE` and `GRANT`/`REVOKE`.
 //!
 //! Every accepted form must parse diagnostic-free, round-trip byte-for-byte, and expose the
 //! structural nodes the formatter relies on (OBJECT_PROPERTY, STREAM_SOURCE, TASK_AFTER, the
@@ -101,6 +101,35 @@ fn create_dynamic_table_keeps_query_body_structural() {
 }
 
 #[test]
+fn create_pipe_keeps_the_copy_into_body_structural() {
+    // A Snowpipe definition is `<properties> AS <COPY INTO>`; the body must reach the COPY rule so
+    // its `FROM`/option clauses lay out instead of collapsing into the header token run.
+    let sql = "CREATE OR REPLACE PIPE p AUTO_INGEST = TRUE COMMENT = 'load' AS COPY INTO t FROM @s/path/ FILE_FORMAT = (TYPE = 'PARQUET')";
+    clean(sql);
+    assert_has_node_kind(sql, SyntaxKind::OBJECT_PROPERTY);
+    assert_has_node_kind(sql, SyntaxKind::COPY_STMT);
+    assert_has_node_kind(sql, SyntaxKind::COPY_OPTION);
+    assert_has_node_kind(sql, SyntaxKind::STAGE_REF);
+
+    for sql in [
+        "CREATE PIPE p AS COPY INTO t FROM @s",
+        "CREATE PIPE IF NOT EXISTS db.sch.p AUTO_INGEST = FALSE AS COPY INTO db.sch.t FROM @db.sch.s/in/",
+        "CREATE OR REPLACE PIPE p ERROR_INTEGRATION = ei AWS_SNS_TOPIC = 'arn:aws:sns:topic' AS COPY INTO t FROM @s",
+    ] {
+        clean(sql);
+        assert_has_node_kind(sql, SyntaxKind::COPY_STMT);
+    }
+
+    // The transform shape from the issue report: a column list, a `SELECT ... FROM @stage` source,
+    // and a trailing PATTERN option.
+    let transform = "CREATE OR REPLACE PIPE p AUTO_INGEST = FALSE AS COPY INTO t (a, b) FROM (SELECT $1:a::STRING, $1:b::STRING FROM @s/in/ (FILE_FORMAT => ff)) PATTERN = '.*[.]parquet'";
+    clean(transform);
+    assert_has_node_kind(transform, SyntaxKind::COLUMN_LIST);
+    assert_has_node_kind(transform, SyntaxKind::SUBQUERY);
+    assert_has_node_kind(transform, SyntaxKind::COPY_OPTION);
+}
+
+#[test]
 fn create_semantic_view_parses_clauses_and_items() {
     let sql = "CREATE OR REPLACE SEMANTIC VIEW sv TABLES(orders AS mart.orders PRIMARY KEY(order_id)) RELATIONSHIPS(order_customer AS orders(customer_id) REFERENCES customers) FACTS(PUBLIC orders.net_amount AS net_amount) DIMENSIONS(PUBLIC orders.order_date AS order_date) METRICS(PUBLIC orders.revenue AS SUM(orders.net_amount)) COMMENT = 'semantic model' AI_SQL_GENERATION 'Use revenue for sales questions.' AI_QUESTION_CATEGORIZATION 'Classify revenue questions.' AI_VERIFIED_QUERIES(top_revenue AS(QUESTION 'Top revenue?' VERIFIED_AT 1767225600 ONBOARDING_QUESTION TRUE VERIFIED_BY 'analyst@example.com' SQL 'SELECT 1')) WITH TAG(governance.owner = 'analytics') COPY GRANTS";
     clean(sql);
@@ -170,7 +199,7 @@ fn revoke_shapes_parse_and_expose_revoke_nodes() {
 fn object_kind_words_are_still_usable_as_identifiers() {
     // None of the contextual object/grant words (schema, stage, stream, role, …) are reserved, so
     // they remain valid column/table names.
-    clean("SELECT schema, stage, stream, dynamic, role, cascade FROM t");
+    clean("SELECT schema, stage, stream, pipe, dynamic, role, cascade FROM t");
     clean("SELECT t.sequence FROM warehouses t");
     clean("SELECT file, format FROM stage_table");
 }
@@ -178,6 +207,7 @@ fn object_kind_words_are_still_usable_as_identifiers() {
 #[test]
 fn case_insensitive_keywords_and_lowercase_spelling() {
     clean("create or replace task t warehouse = w schedule = '5 minutes' as select 1");
+    clean("create or replace pipe p auto_ingest = false as copy into t from @s");
     clean("Grant Select On Table t To Role r With Grant Option");
     clean("ReVoKe Select On Table t From Role r");
 }
@@ -200,6 +230,11 @@ fn broken_and_partial_input_round_trips_without_panic() {
         "CREATE DYNAMIC TABLE dt TARGET_LAG = '1 minute' WAREHOUSE = w AS",
         "CREATE MASKING POLICY p AS (v STRING) RETURNS STRING ->",
         "CREATE TAG t ALLOWED_VALUES 'a',",
+        "CREATE PIPE",
+        "CREATE PIPE p AUTO_INGEST =",
+        "CREATE PIPE p AS",
+        "CREATE PIPE p AS COPY INTO",
+        "CREATE PIPE p AS COPY INTO t FROM",
     ] {
         // round-trip (tolerating diagnostics); the helper panics if the tree loses bytes.
         recovers(s);

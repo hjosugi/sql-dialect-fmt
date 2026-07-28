@@ -47,6 +47,7 @@ const CASES: &[&str] = &[
     "copy into t from @s file_format = (type = csv skip_header = 1 field_delimiter = ',')",
     "copy into t from @s file_format = (type = json strip_outer_array = true)",
     "copy into t from @s file_format = (format_name = my_db.my_schema.my_ff)",
+    "copy into t from @s file_format = my_db.my_schema.my_ff",
     "copy into t from @s file_format = (type = csv null_if = ('', 'null', '\\n'))",
     // ---- load: PATTERN / FILES ----
     "copy into t from @s pattern = '.*[.]csv'",
@@ -155,6 +156,18 @@ fn golden_unload_with_partition_and_header() {
          PARTITION BY (dt)\n\
          FILE_FORMAT = (TYPE = CSV)\n\
          HEADER = TRUE;\n"
+    );
+}
+
+#[test]
+fn golden_qualified_option_value_stays_on_one_line() {
+    assert_eq!(
+        fmt("copy into t from @s file_format = my_db.my_schema.my_ff on_error = continue"),
+        // Option *keys* up-case; the values keep the author's spelling.
+        "COPY INTO t\n\
+         FROM @s\n\
+         FILE_FORMAT = my_db.my_schema.my_ff\n\
+         ON_ERROR = continue;\n"
     );
 }
 

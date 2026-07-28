@@ -7,7 +7,7 @@ use crate::parser::{ContextualKeyword, Parser};
 
 use super::{
     at_block_start, at_stmt_terminator, balanced_parens, balanced_token_run_until, block_stmt,
-    call_stmt, column_list, dml, expr, name_ref, query_expr, type_name,
+    call_stmt, column_list, copy_stmt, dml, expr, name_ref, option_value, query_expr, type_name,
 };
 
 const CREATE_MODIFIER_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
@@ -147,7 +147,8 @@ pub(super) fn create_stmt(p: &mut Parser) {
 
 /// At the keyword/word that names the kind of object being created: a reserved object keyword
 /// (`TABLE`, `VIEW`, `PROCEDURE`, `FUNCTION`, `TASK`, `WAREHOUSE`) or one of the contextual object
-/// words (`SCHEMA`, `DATABASE`, `STAGE`, `SEQUENCE`, `STREAM`, `DYNAMIC` table, `FILE` format).
+/// words (`SCHEMA`, `DATABASE`, `STAGE`, `SEQUENCE`, `STREAM`, `PIPE`, `DYNAMIC` table,
+/// `FILE` format).
 fn at_object_kind(p: &Parser) -> bool {
     p.at(TABLE_KW)
         || p.at(VIEW_KW)
@@ -158,10 +159,13 @@ fn at_object_kind(p: &Parser) -> bool {
 }
 
 /// At a Phase-7 "named object" kind — the property-region creates this rule structures
-/// (`SCHEMA`/`DATABASE`/`WAREHOUSE`/`STAGE`/`SEQUENCE`/`STREAM`/`TASK`/`DYNAMIC TABLE`/
+/// (`SCHEMA`/`DATABASE`/`WAREHOUSE`/`STAGE`/`SEQUENCE`/`STREAM`/`PIPE`/`TASK`/`DYNAMIC TABLE`/
 /// `SEMANTIC VIEW`/`FILE FORMAT`).
 fn at_named_object_kind(p: &Parser) -> bool {
-    p.at(TASK_KW) || p.at(WAREHOUSE_KW) || p.nth_any_contextual(0, NAMED_OBJECT_CONTEXTUAL_WORDS)
+    p.at(TASK_KW)
+        || p.at(WAREHOUSE_KW)
+        || (p.dialect().supports_pipe_ddl() && p.nth_contextual(0, ContextualKeyword::Pipe))
+        || p.nth_any_contextual(0, NAMED_OBJECT_CONTEXTUAL_WORDS)
 }
 
 /// `CREATE MASKING POLICY` / `CREATE ROW ACCESS POLICY`.
@@ -176,8 +180,8 @@ fn at_policy_object_kind(p: &Parser) -> bool {
 /// `CREATE [OR REPLACE] [modifiers] <kind> [IF NOT EXISTS] <name> <property>* [<clause>]* [AS <body>]`
 /// for the object kinds whose body is a property region rather than a column list:
 /// SCHEMA / DATABASE / WAREHOUSE / STAGE / SEQUENCE / FILE FORMAT, plus the body-bearing
-/// STREAM (`ON TABLE …`), TASK (`SCHEDULE = … AFTER … AS <sql>`), and DYNAMIC TABLE
-/// (`TARGET_LAG = … WAREHOUSE = … AS <query>`).
+/// STREAM (`ON TABLE …`), TASK (`SCHEDULE = … AFTER … AS <sql>`), DYNAMIC TABLE
+/// (`TARGET_LAG = … WAREHOUSE = … AS <query>`), and PIPE (`AUTO_INGEST = … AS COPY INTO …`).
 ///
 /// The object-kind word and any optional column list are kept inline on the `CREATE_STMT` header;
 /// each property (`KEY = value`, `KEY = ( … )`, or a bare flag word) becomes an [`OBJECT_PROPERTY`],
@@ -376,7 +380,7 @@ fn object_property(p: &mut Parser) {
         if p.at(L_PAREN) {
             balanced_parens(p); // KEY = ( sub-option = value, … ) — e.g. FILE_FORMAT = (TYPE = 'CSV')
         } else if !at_create_body(p) && !at_stmt_terminator(p) {
-            p.bump_any(); // a single literal / bare-word / @stage value
+            option_value(p); // a literal / bare-word / qualified-name / @stage value
         }
         // Some values carry trailing units as separate words: `START WITH 1`, `INCREMENT BY 1`.
         while at_property_value_tail(p) {
@@ -475,10 +479,12 @@ fn task_after(p: &mut Parser) {
 }
 
 /// The `<body>` after `AS` in a body-bearing object DDL: a query (TASK over a SELECT, DYNAMIC TABLE),
-/// a DML statement (TASK), a scripting block, or a parenthesized query. Parsed structurally so it
-/// lays out like a standalone statement.
+/// a DML statement (TASK), a `COPY INTO` load (PIPE), a scripting block, or a parenthesized query.
+/// Parsed structurally so it lays out like a standalone statement.
 fn create_body(p: &mut Parser) {
-    if p.at(SELECT_KW)
+    if p.dialect().supports_copy_into() && p.at(COPY_KW) {
+        copy_stmt(p);
+    } else if p.at(SELECT_KW)
         || p.at(WITH_KW)
         || p.at(VALUES_KW)
         || (p.at(L_PAREN) && (p.nth_at(1, SELECT_KW) || p.nth_at(1, WITH_KW)))
@@ -531,11 +537,14 @@ fn at_create_query_body(p: &Parser) -> bool {
                 && (p.nth_at(2, SELECT_KW) || p.nth_at(2, WITH_KW) || p.nth_at(2, VALUES_KW))))
 }
 
-/// At an `AS` that introduces a statement/query body (a task's DML, a dynamic-table query, a
-/// procedural block) rather than an inline option like `CREATE DATABASE d AS REPLICA OF …`.
+/// At an `AS` that introduces a statement/query body (a task's DML, a dynamic-table query, a pipe's
+/// `COPY INTO`, a procedural block) rather than an inline option like
+/// `CREATE DATABASE d AS REPLICA OF …`. `COPY` must be followed by `INTO` so a `COPY GRANTS`-style
+/// option word is never mistaken for a body.
 fn at_create_body(p: &Parser) -> bool {
     p.at(AS_KW)
-        && (p.nth_at(1, SELECT_KW)
+        && ((p.dialect().supports_copy_into() && p.nth_at(1, COPY_KW) && p.nth_at(2, INTO_KW))
+            || p.nth_at(1, SELECT_KW)
             || p.nth_at(1, WITH_KW)
             || p.nth_at(1, VALUES_KW)
             || p.nth_at(1, INSERT_KW)
@@ -875,13 +884,14 @@ const ALTER_RUN_CONTEXTUAL_WORDS: &[ContextualKeyword] = &[
 
 /// The object kinds whose ALTER statements this parser structures (issue #30): the common
 /// Snowflake/Databricks `ALTER TABLE / VIEW / SESSION / WAREHOUSE / TASK` plus the kinds that
-/// share the same `<name> <action>[, <action>]*` shape (`SCHEMA`, `DATABASE`, `MATERIALIZED VIEW`,
-/// `DYNAMIC TABLE`). Everything else keeps the historical lenient token run.
+/// share the same `<name> <action>[, <action>]*` shape (`SCHEMA`, `DATABASE`, `PIPE`,
+/// `MATERIALIZED VIEW`, `DYNAMIC TABLE`). Everything else keeps the historical lenient token run.
 fn at_alter_object_kind(p: &Parser) -> bool {
     p.at(TABLE_KW)
         || p.at(VIEW_KW)
         || p.at(WAREHOUSE_KW)
         || p.at(TASK_KW)
+        || (p.dialect().supports_pipe_ddl() && p.nth_contextual(0, ContextualKeyword::Pipe))
         || p.nth_contextual(0, ContextualKeyword::Session)
         || p.nth_contextual(0, ContextualKeyword::Schema)
         || p.nth_contextual(0, ContextualKeyword::Database)
@@ -918,8 +928,8 @@ pub(super) fn alter_stmt(p: &mut Parser) {
 }
 
 /// The object-kind word(s) after `ALTER`: reserved kinds bump as keywords, the contextual kinds
-/// (`SESSION`, `SCHEMA`, `DATABASE`, and the first word of `MATERIALIZED VIEW`/`DYNAMIC TABLE`)
-/// are tagged for up-casing.
+/// (`SESSION`, `SCHEMA`, `DATABASE`, `PIPE`, and the first word of `MATERIALIZED VIEW`/
+/// `DYNAMIC TABLE`) are tagged for up-casing.
 fn alter_object_kind_words(p: &mut Parser) {
     if p.nth_contextual(0, ContextualKeyword::Materialized) {
         p.bump_as(CONTEXTUAL_KEYWORD); // MATERIALIZED
@@ -930,7 +940,7 @@ fn alter_object_kind_words(p: &mut Parser) {
     } else if p.at_keyword() {
         p.bump_any(); // TABLE / VIEW / WAREHOUSE / TASK
     } else {
-        p.bump_as(CONTEXTUAL_KEYWORD); // SESSION / SCHEMA / DATABASE
+        p.bump_as(CONTEXTUAL_KEYWORD); // SESSION / SCHEMA / DATABASE / PIPE
     }
 }
 

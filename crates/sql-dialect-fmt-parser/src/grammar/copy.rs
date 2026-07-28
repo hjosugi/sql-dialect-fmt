@@ -4,7 +4,7 @@ use sql_dialect_fmt_syntax::SyntaxKind::*;
 
 use crate::parser::Parser;
 
-use super::{at_stmt_terminator, balanced_parens, subquery};
+use super::{at_stmt_terminator, balanced_parens, column_list, name_ref, option_value, subquery};
 
 // ---- COPY INTO (Phase 6) ----
 
@@ -88,8 +88,14 @@ fn at_stage_ref_boundary(p: &Parser) -> bool {
     keyword_boundary && !p.nth_at(1, SLASH) && !p.nth_at(1, DOT)
 }
 
-/// A COPY target/source: a parenthesized query, or a location captured as a verbatim token run up
-/// to `FROM`, the first option, or the statement end.
+/// A COPY target/source: a parenthesized query, a `@stage/path` reference, a table name with an
+/// optional column list, or — for anything else (an external `'s3://…'` location, a malformed
+/// operand) — a verbatim token run up to `FROM`, the first option, or the statement end.
+///
+/// The table form is structured (a [`NAME_REF`] plus a [`COLUMN_LIST`], like `INSERT INTO t (…)`)
+/// so a wide load list wraps to the line width instead of being replayed at whatever indentation
+/// the input happened to use. Stage paths stay verbatim because their `/` would be re-spaced as a
+/// division operator.
 fn copy_operand(p: &mut Parser) {
     if p.at(L_PAREN) {
         subquery(p);
@@ -101,6 +107,14 @@ fn copy_operand(p: &mut Parser) {
         m.complete(p, COPY_LOCATION);
         return;
     }
+    if p.at_name() && !at_copy_option_start(p) {
+        name_ref(p);
+        if p.at(L_PAREN) {
+            column_list(p);
+        }
+    }
+    // Any residue (an external location literal, or an unmodeled tail after the table name) stays a
+    // lossless flat run.
     while !p.at(FROM_KW) && !at_stmt_terminator(p) && !at_copy_option_start(p) {
         p.bump_any();
     }
@@ -126,7 +140,7 @@ pub(super) fn copy_option(p: &mut Parser) {
             if p.at(L_PAREN) {
                 balanced_parens(p);
             } else if !at_stmt_terminator(p) {
-                p.bump_any(); // a single literal / bare word value
+                option_value(p); // a literal / bare-word / qualified-name value
             }
         }
     }

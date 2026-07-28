@@ -104,6 +104,18 @@ fn name_ref(p: &mut Parser) -> CompletedMarker {
     m.complete(p, NAME_REF)
 }
 
+/// One `KEY = <value>` option/property value: a possibly qualified name (`ops.notification_int`,
+/// `db.sch.my_format`) captured as a single [`NAME_REF`], or any other single literal/bare word.
+/// Without this the `.` connectors are ordinary tokens and each segment lands on its own line when
+/// the properties stack.
+fn option_value(p: &mut Parser) {
+    if p.at_name() {
+        name_ref(p);
+    } else {
+        p.bump_any();
+    }
+}
+
 fn column_list(p: &mut Parser) {
     let m = p.start();
     p.bump(L_PAREN);
