@@ -25,6 +25,10 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    outputs:
+      # The resolved `vX.Y.Z`, so the downstream jobs work the same whether this
+      # run came from a tag push or a dispatch (where no tag ref exists yet).
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -150,7 +154,6 @@ jobs:
     name: Docker image
     needs: release
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -165,10 +168,15 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # `value=` feeds the resolved version in, so the semver tags are
+          # identical on a dispatch, where github.ref is a branch rather than the
+          # tag. The v-prefixed tag comes from the ref on a push and from the
+          # explicit raw entry on a dispatch.
           tags: |
             type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.version }}
+            type=raw,value=${{ needs.release.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
@@ -182,7 +190,6 @@ jobs:
     name: Release binary (${{ matrix.target }})
     needs: release
     runs-on: ${{ matrix.os }}
-    if: ${{ github.event_name == 'push' }}
     strategy:
       fail-fast: false
       matrix:
@@ -203,7 +210,12 @@ jobs:
             target: x86_64-unknown-linux-musl
             setup_cross: false
     steps:
+      # The `release` job has already created the tag by this point (on a
+      # dispatch it is created at the run's commit), so both trigger types can
+      # build from the tag itself.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.version }}
       - name: Install cross-compilation tools
         if: ${{ matrix.setup_cross }}
         uses: taiki-e/setup-cross-toolchain-action@v1
@@ -218,6 +230,8 @@ jobs:
           tar: unix
           zip: windows
           checksum: sha256
+          # Defaults to github.ref, which is a branch on a dispatch.
+          ref: refs/tags/${{ needs.release.outputs.version }}
 
   publish-crates:
     name: Publish crates.io
