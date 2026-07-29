@@ -9,6 +9,20 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Added `scripts/release.sh`, a one-command release driver covering `RELEASING.md`
+  steps 1-6: preflight, version bump, changelog heading, green gate, extension
+  packaging, release commit, tag, and push. `--dry-run` prints the plan without
+  touching anything, and `--via-ci` dispatches the Release workflow instead of pushing
+  a tag, for credentials that cannot create tag refs.
+
+### Fixed
+
+- A `workflow_dispatch` run of the Release workflow now produces the same artifacts as
+  a tag push. The Docker image and the cross-platform release binaries were gated on
+  `github.event_name == 'push'`, so a dispatched release silently shipped without them.
+
 ## [1.20.0] - 2026-07-29
 
 ### Added

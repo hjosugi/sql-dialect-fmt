@@ -36,6 +36,47 @@ Published to crates.io (in dependency order):
 
 ## Release procedure
 
+### The short version
+
+```sh
+scripts/release.sh X.Y.Z
+```
+
+That is the whole runbook: preflight, version bump, changelog heading, the green
+gate, extension packaging, the release commit, the tag, and the push that fires the
+Release workflow. Publication itself stays with the workflow and its
+`*_AUTO_PUBLISH` repository variables — the script never uploads a package.
+
+Rehearse first with `--dry-run`, which prints every command and changes nothing:
+
+```sh
+scripts/release.sh X.Y.Z --dry-run
+```
+
+Useful flags:
+
+| flag | effect |
+| --- | --- |
+| `--dry-run` | Print the plan, run nothing |
+| `--via-ci` | Skip the local tag push; dispatch the Release workflow instead (needs `gh`). Use when tag pushes are blocked for your credentials. |
+| `--publish-crates` | With `--via-ci`, also publish to crates.io in that run |
+| `--no-gate` | Skip the slow test/lint/doc/bench gate; CI still runs it |
+| `--no-push` | Commit and tag locally, push nothing |
+| `--branch <name>` | Release from a branch other than `main` |
+
+The preflight refuses to continue on a dirty worktree, off the release branch, behind
+`origin`, or when the version is already tagged locally or on the remote.
+
+Releasing without a local tag push at all — the `--via-ci` path — is also available
+straight from the GitHub UI: **Actions → Release → Run workflow**, with `version`
+set to `vX.Y.Z`. The workflow creates the tag at the selected commit, and produces
+the same assets as a tag push (GitHub Release, Docker image, cross-platform
+binaries, extension packages).
+
+### The steps it runs
+
+Reference for when something fails partway, or when a release needs hand-driving.
+
 1. **Bump the release version.** Use the updater so the workspace version, internal dependency
    versions, `Cargo.lock`, extension package versions, Homebrew formula tag, and install examples
    stay in sync:
@@ -105,6 +146,10 @@ Published to crates.io (in dependency order):
    git tag vX.Y.Z
    git push && git push --tags
    ```
+
+   Steps 1-6 are exactly what `scripts/release.sh X.Y.Z` automates. If your credentials
+   cannot create tag refs, use `scripts/release.sh X.Y.Z --via-ci` (or the workflow
+   dispatch) instead — the Release workflow creates the tag server-side.
 
 7. **Publish in dependency order.** Each `cargo publish` must complete and the new
    version must be indexed before publishing a dependent crate. The helper publishes the
