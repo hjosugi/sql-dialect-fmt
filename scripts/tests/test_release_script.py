@@ -264,6 +264,14 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("publish_crates=false", result.stdout)
         # A dispatch must not also create a local tag; the workflow makes it.
         self.assertNotIn("git tag v1.21.0", result.stdout)
+        self.assertIn("Nothing was dispatched", result.stdout)
+
+    def test_dry_run_never_claims_it_pushed(self) -> None:
+        repo = self.make_repo()
+        result = self.run_in_repo(repo, "1.21.0", "--dry-run")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("Pushed v1.21.0.", result.stdout)
+        self.assertIn("Nothing was committed, tagged, or pushed", result.stdout)
 
     def test_via_ci_without_gh_is_refused_before_any_mutation(self) -> None:
         repo = self.make_repo()

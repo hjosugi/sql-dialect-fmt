@@ -128,7 +128,8 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   die "tag $TAG already exists locally"
 fi
 
-git fetch --quiet origin "$RELEASE_BRANCH" || warn "could not fetch origin/$RELEASE_BRANCH"
+git fetch --quiet origin "$RELEASE_BRANCH" 2>/dev/null ||
+  warn "could not fetch origin/$RELEASE_BRANCH; skipping the up-to-date check"
 if git rev-parse -q --verify "refs/remotes/origin/$RELEASE_BRANCH" >/dev/null; then
   behind="$(git rev-list --count "HEAD..origin/$RELEASE_BRANCH")"
   [ "$behind" = "0" ] ||
@@ -210,12 +211,20 @@ if [ "$VIA_CI" = true ]; then
     -f "version=$TAG" \
     -f "publish_crates=$PUBLISH_CRATES"
   echo
-  echo "Dispatched. The workflow creates $TAG at the pushed commit."
-  echo "Watch it with: gh run watch \$(gh run list --workflow=release.yml --limit=1 --json databaseId -q '.[0].databaseId')"
+  if [ "$DRY_RUN" = true ]; then
+    echo "Dry run complete. Nothing was dispatched."
+  else
+    echo "Dispatched. The workflow creates $TAG at the pushed commit."
+    echo "Watch it with: gh run watch \$(gh run list --workflow=release.yml --limit=1 --json databaseId -q '.[0].databaseId')"
+  fi
 else
   log "Pushing $TAG"
   run git push origin "$TAG"
   echo
-  echo "Pushed $TAG. The Release workflow builds the assets and publishes"
-  echo "according to the repository's *_AUTO_PUBLISH variables."
+  if [ "$DRY_RUN" = true ]; then
+    echo "Dry run complete. Nothing was committed, tagged, or pushed."
+  else
+    echo "Pushed $TAG. The Release workflow builds the assets and publishes"
+    echo "according to the repository's *_AUTO_PUBLISH variables."
+  fi
 fi
