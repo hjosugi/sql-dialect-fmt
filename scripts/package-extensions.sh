@@ -10,7 +10,18 @@ rm -f \
   "$DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip" \
   "$DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
 
-rustup target add wasm32-unknown-unknown >/dev/null
+if command -v rustup >/dev/null 2>&1; then
+  rustup target add wasm32-unknown-unknown >/dev/null
+else
+  # Distribution-packaged Rust toolchains (for example Arch's `rust` + `rust-wasm`) do not ship
+  # rustup. Accept them when the target standard library is already installed instead of failing
+  # before Cargo gets a chance to build the extension.
+  wasm_target_libdir="$(rustc --print target-libdir --target wasm32-unknown-unknown 2>/dev/null || true)"
+  if [ -z "$wasm_target_libdir" ] || [ ! -d "$wasm_target_libdir" ]; then
+    echo "error: wasm32-unknown-unknown is not installed; use rustup target add or your distribution's Rust wasm package" >&2
+    exit 1
+  fi
+fi
 "$ROOT_DIR/scripts/build-chrome-extension.sh"
 # Reuses the cached wasm build above and vendors it into editors/ for the VSIX.
 "$ROOT_DIR/scripts/build-vscode-extension.sh"

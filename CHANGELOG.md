@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.20.1] - 2026-07-30
+
 ### Added
 
 - Added `scripts/release.sh`, a one-command release driver covering `RELEASING.md`
@@ -26,6 +28,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
   (`CREATE PIPE … AS (COPY INTO …)`) structurally, preserving the wrapper while laying
   out the inner `FROM` and COPY options instead of reporting parse errors and replaying
   the body unchanged.
+- Allowed extension packaging with distribution-provided Rust wasm targets when `rustup`
+  is not installed, while still failing clearly when `wasm32-unknown-unknown` is absent.
 
 ## [1.20.0] - 2026-07-29
 
@@ -574,7 +578,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.1...HEAD
+[1.20.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.0...v1.20.1
 [1.20.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.17.2...v1.18.0
