@@ -115,6 +115,7 @@ fn create_pipe_keeps_the_copy_into_body_structural() {
         "CREATE PIPE p AS COPY INTO t FROM @s",
         "CREATE PIPE IF NOT EXISTS db.sch.p AUTO_INGEST = FALSE AS COPY INTO db.sch.t FROM @db.sch.s/in/",
         "CREATE OR REPLACE PIPE p ERROR_INTEGRATION = ei AWS_SNS_TOPIC = 'arn:aws:sns:topic' AS COPY INTO t FROM @s",
+        "CREATE PIPE p AS (COPY INTO t FROM @s MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE INCLUDE_METADATA = (c1 = METADATA$START_SCAN_TIME, c2 = METADATA$FILENAME) FILE_FORMAT = (TYPE = 'JSON'))",
     ] {
         clean(sql);
         assert_has_node_kind(sql, SyntaxKind::COPY_STMT);

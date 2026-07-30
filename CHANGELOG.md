@@ -22,6 +22,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 - A `workflow_dispatch` run of the Release workflow now produces the same artifacts as
   a tag push. The Docker image and the cross-platform release binaries were gated on
   `github.event_name == 'push'`, so a dispatched release silently shipped without them.
+- Parsed and formatted Snowflake's parenthesized pipe body variant
+  (`CREATE PIPE … AS (COPY INTO …)`) structurally, preserving the wrapper while laying
+  out the inner `FROM` and COPY options instead of reporting parse errors and replaying
+  the body unchanged.
 
 ## [1.20.0] - 2026-07-29
 

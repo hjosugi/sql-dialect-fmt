@@ -83,6 +83,7 @@ const CASES: &[&str] = &[
     "create pipe if not exists db.sch.p auto_ingest = false comment = 'load' as copy into db.sch.t from @db.sch.s/in/ file_format = (type = 'PARQUET')",
     "create or replace pipe p error_integration = ei aws_sns_topic = 'arn:aws:sns:topic' as copy into t from @s on_error = continue",
     "create or replace pipe p auto_ingest = false as copy into t (a, b) from (select $1:a::STRING, $1:b::STRING from @s/in/ (file_format => ff)) pattern = '.*[.]parquet'",
+    "create pipe p as (copy into t from @s match_by_column_name = CASE_INSENSITIVE include_metadata = (c1 = METADATA$START_SCAN_TIME, c2 = METADATA$FILENAME) file_format = (type = 'JSON'))",
     // ---- CREATE TASK: WAREHOUSE / SCHEDULE / AFTER / WHEN + AS <sql> body ----
     "create task t warehouse = w schedule = '5 minutes' as select 1",
     "create task t warehouse = ops.sch.wh schedule = '5 minutes' as select 1",
@@ -292,6 +293,21 @@ fn create_pipe_lays_out_the_copy_into_body_structurally() {
            COPY INTO t\n    \
            FROM @s/in/\n    \
            FILE_FORMAT = (TYPE = 'PARQUET');\n",
+    );
+}
+
+#[test]
+fn create_pipe_parenthesized_copy_body_stays_structural() {
+    assert_eq!(
+        fmt("create pipe p as (copy into t from @s match_by_column_name = CASE_INSENSITIVE include_metadata = (c1 = METADATA$START_SCAN_TIME, c2 = METADATA$FILENAME) file_format = (type = 'JSON'))"),
+        "CREATE PIPE p AS\n\
+         (\n    \
+             COPY INTO t\n    \
+             FROM @s\n    \
+             MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE\n    \
+             INCLUDE_METADATA = (c1 = METADATA$START_SCAN_TIME, c2 = METADATA$FILENAME)\n    \
+             FILE_FORMAT = (TYPE = 'JSON')\n\
+         );\n",
     );
 }
 

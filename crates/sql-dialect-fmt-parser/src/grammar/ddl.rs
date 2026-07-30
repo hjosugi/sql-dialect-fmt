@@ -484,6 +484,19 @@ fn task_after(p: &mut Parser) {
 fn create_body(p: &mut Parser) {
     if p.dialect().supports_copy_into() && p.at(COPY_KW) {
         copy_stmt(p);
+    } else if p.dialect().supports_copy_into()
+        && p.at(L_PAREN)
+        && p.nth_at(1, COPY_KW)
+        && p.nth_at(2, INTO_KW)
+    {
+        // Snowflake also accepts `CREATE PIPE ... AS (COPY INTO ...)`. Keep the wrapper as a
+        // SUBQUERY-shaped node so the formatter preserves and indents the parentheses while the
+        // inner COPY statement still receives its structural lowering.
+        let m = p.start();
+        p.bump(L_PAREN);
+        copy_stmt(p);
+        p.expect(R_PAREN);
+        m.complete(p, SUBQUERY);
     } else if p.at(SELECT_KW)
         || p.at(WITH_KW)
         || p.at(VALUES_KW)
@@ -544,6 +557,10 @@ fn at_create_query_body(p: &Parser) -> bool {
 fn at_create_body(p: &Parser) -> bool {
     p.at(AS_KW)
         && ((p.dialect().supports_copy_into() && p.nth_at(1, COPY_KW) && p.nth_at(2, INTO_KW))
+            || (p.dialect().supports_copy_into()
+                && p.nth_at(1, L_PAREN)
+                && p.nth_at(2, COPY_KW)
+                && p.nth_at(3, INTO_KW))
             || p.nth_at(1, SELECT_KW)
             || p.nth_at(1, WITH_KW)
             || p.nth_at(1, VALUES_KW)

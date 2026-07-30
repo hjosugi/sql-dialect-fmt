@@ -20,7 +20,9 @@ pub(super) fn copy_stmt(p: &mut Parser) {
     if p.eat(FROM_KW) {
         copy_operand(p);
     }
-    while !at_stmt_terminator(p) {
+    // `CREATE PIPE ... AS (COPY INTO ...)` wraps the COPY statement in parentheses. The closing
+    // paren belongs to that outer body node, not to a COPY option.
+    while !at_stmt_terminator(p) && !p.at(R_PAREN) {
         copy_option(p);
     }
     m.complete(p, COPY_STMT);
