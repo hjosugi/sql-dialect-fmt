@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.22.1
+
+- Preserved non-space control characters inside quoted SQL tokens in the bundled Wasm formatter.
+- Added an output safety postcondition so comment and punctuation layout can never return a
+  different meaningful token sequence; unsafe candidates remain byte-for-byte unchanged.
+- Made malformed delimiter and prefix chains recover without parser panics in debug or release
+  builds.
+
 ## 1.22.0
 
 - Standardized bundled Wasm and optional LSP formatting on the same 80-column, two-space,

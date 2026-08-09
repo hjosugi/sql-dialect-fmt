@@ -11,9 +11,9 @@
 mod support;
 
 use sql_dialect_fmt_formatter::{format, CommaStyle, KeywordCase, LineEnding, SelectItemLayout};
-use sql_dialect_fmt_lexer::tokenize;
+use sql_dialect_fmt_lexer::{tokenize, tokenize_for_dialect};
 use sql_dialect_fmt_parser::parse;
-use sql_dialect_fmt_syntax::SyntaxKind;
+use sql_dialect_fmt_syntax::{Dialect, SyntaxKind};
 use sql_dialect_fmt_test_fixtures::EASY_CASES;
 #[cfg(feature = "embedded-javascript")]
 use sql_dialect_fmt_test_fixtures::{
@@ -1409,6 +1409,68 @@ fn lexically_invalid_input_is_verbatim() {
 fn multiline_tokens_with_line_trailing_space_are_verbatim() {
     let sql = "$$ \n$$ ";
     assert_eq!(fmt(sql), sql);
+}
+
+#[test]
+fn quoted_control_whitespace_is_never_trimmed_from_a_token() {
+    // 60-second formatter fuzz regression. `str::trim_end` classified the vertical tab as
+    // removable line whitespace even though it was part of the quoted token.
+    let sql = "aj'\\\u{4}\rj\u{b}\n'";
+    let options = adaptive_options().with_dialect(Dialect::Databricks);
+    let once = format(sql, &options);
+    let meaningful = |source: &str| {
+        tokenize_for_dialect(source, Dialect::Databricks)
+            .tokens
+            .into_iter()
+            .filter(|token| !token.kind.is_trivia() && token.kind != SyntaxKind::SEMICOLON)
+            .map(|token| (token.kind, token.text.to_string()))
+            .collect::<Vec<_>>()
+    };
+
+    assert!(once.contains('\u{b}'));
+    assert_eq!(meaningful(sql), meaningful(&once));
+    assert_eq!(format(&once, &options), once);
+}
+
+#[test]
+fn token_boundary_change_falls_back_to_the_clean_source() {
+    // 60-second formatter fuzz regression. Moving a line comment beside a standalone minus could
+    // form a new `--` comment and swallow that meaningful token. The formatter's output
+    // postcondition must reject any candidate whose significant token kinds changed.
+    let sql = "-z%-\n---]\n--\u{2}----:\r--\nKjz%-\n---]\n:\r--\n--%\ngj";
+    let options = adaptive_options();
+    assert!(parse(sql).errors().is_empty());
+    assert_eq!(format(sql, &options), sql);
+}
+
+#[test]
+fn nested_statement_leading_blank_line_is_idempotent() {
+    // 60-second formatter fuzz regression. Leading trivia can be nested under the statement's
+    // first structural child; scanning only direct children preserved a CR-only blank line on the
+    // first pass but failed to see the formatter's equivalent LF blank line on the second.
+    let sql = "1>k?4\r\r\r\r->>kk>k";
+    let once = fmt(sql);
+    assert_eq!(fmt(&once), once);
+}
+
+#[test]
+fn adjacent_line_comment_is_separated_on_the_first_pass() {
+    // Minimized 60-second formatter fuzz regression. The first pass moved a leading comment next
+    // to `+`; only the second pass inserted the normal separator.
+    let sql = "+\n--\u{2}\n:K";
+    let options = adaptive_options().with_dialect(Dialect::Databricks);
+    let once = format(sql, &options);
+    assert_eq!(once, "+ --\u{2}\n:K;\n");
+    assert_eq!(format(&once, &options), once);
+}
+
+#[test]
+fn mixed_line_endings_inside_a_quoted_token_are_not_normalized() {
+    // 60-second formatter fuzz regression. Auto line-ending selection must not rewrite mixed line
+    // endings that are part of a meaningful quoted token.
+    let sql = "'\r\n\nR--s\no'";
+    let options = adaptive_options().with_dialect(Dialect::Databricks);
+    assert_eq!(format(sql, &options), sql);
 }
 
 #[test]

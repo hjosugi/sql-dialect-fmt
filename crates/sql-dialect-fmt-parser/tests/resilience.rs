@@ -59,13 +59,35 @@ fn malformed_fuzz_operator_chains_recover_without_exhausting_parser_fuel() {
             Dialect::Databricks,
             ":+++++++++++++++++++++++++++++++++++\0/\u{1}",
         ),
+        (
+            Dialect::Databricks,
+            "wmt+++++++++++++++++++++++++++++++++h\"\"\"",
+        ),
     ];
 
     for (dialect, source) in cases {
         let parsed = parse_with_dialect(source, dialect);
         assert_eq!(parsed.syntax().to_string(), source);
-        assert!(!parsed.errors().is_empty());
+        assert!(
+            parsed
+                .errors()
+                .iter()
+                .all(|error| !error.message.contains("parser fuel exhausted")),
+            "legitimate prefix unwinding must not exhaust parser fuel: {:?}",
+            parsed.errors()
+        );
     }
+}
+
+#[test]
+fn deeply_malformed_delimiters_recover_without_panicking() {
+    // A 60-second parser fuzz regression. Finite recursive unwinding at the final malformed
+    // delimiter used to consume the lookahead budget and trigger a debug-only assertion. Fuel
+    // exhaustion is now an ordinary recovery diagnostic, never a process-level panic.
+    let source = "{;;{{{{{{{{{{{{{{{{{{{{{{{{{{[{{{{{{[{{/;z";
+    let parsed = parse_with_dialect(source, Dialect::Snowflake);
+    assert_eq!(parsed.syntax().to_string(), source);
+    assert!(!parsed.errors().is_empty());
 }
 
 #[test]

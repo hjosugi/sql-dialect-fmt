@@ -29,6 +29,7 @@ pub use doc::{print, Doc, PrintOptions};
 pub use range::{format_range, RangeEdit};
 use sql_dialect_fmt_parser::ParseError;
 pub use sql_dialect_fmt_syntax::Dialect;
+use sql_dialect_fmt_syntax::SyntaxKind;
 
 use sql::Ctx;
 
@@ -248,10 +249,36 @@ pub fn format(source: &str, options: &FormatOptions) -> String {
 
 /// Format SQL and return parse diagnostics from the same lex/parse pass.
 pub fn format_with_diagnostics(source: &str, options: &FormatOptions) -> FormatResult {
-    if let Some(result) = format_directive_regions(source, options) {
+    if let Some(mut result) = format_directive_regions(source, options) {
+        // Region formatting assembles several independently safe documents with verbatim spans.
+        // Validate their final concatenation too, because a boundary between regions can still
+        // place two punctuation tokens beside each other.
+        if !preserves_meaningful_token_kinds(source, &result.formatted, options.dialect) {
+            result.formatted = source.to_string();
+        }
         return result;
     }
     format_plain_with_diagnostics(source, options, 0)
+}
+
+fn preserves_meaningful_token_kinds(source: &str, candidate: &str, dialect: Dialect) -> bool {
+    if source == candidate {
+        return true;
+    }
+    let source_lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(source, dialect);
+    let candidate_lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(candidate, dialect);
+    if !source_lexed.errors.is_empty() || !candidate_lexed.errors.is_empty() {
+        return false;
+    }
+    let meaningful_kinds = |lexed: &sql_dialect_fmt_lexer::Lexed<'_>| {
+        lexed
+            .tokens
+            .iter()
+            .filter(|token| !token.kind.is_trivia() && token.kind != SyntaxKind::SEMICOLON)
+            .map(|token| token.kind)
+            .collect::<Vec<_>>()
+    };
+    meaningful_kinds(&source_lexed) == meaningful_kinds(&candidate_lexed)
 }
 
 fn format_plain_with_diagnostics(
@@ -262,6 +289,12 @@ fn format_plain_with_diagnostics(
     let ctx = options.ctx();
     let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(source, ctx.dialect);
     let has_lex_errors = !lexed.errors.is_empty();
+    let meaningful_source_signature = lexed
+        .tokens
+        .iter()
+        .filter(|token| !token.kind.is_trivia() && token.kind != SyntaxKind::SEMICOLON)
+        .map(|token| (token.kind, token.text.to_ascii_uppercase()))
+        .collect::<Vec<_>>();
     let has_multiline_trailing_space = lexed.tokens.iter().any(|token| {
         !token.kind.is_trivia() && multiline_token_has_line_trailing_space(token.text)
     });
@@ -277,6 +310,12 @@ fn format_plain_with_diagnostics(
         };
     }
     let root = parse.syntax();
+    let meaningful_source_text_rewrites = root
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| !token.kind().is_trivia() && token.kind() != SyntaxKind::SEMICOLON)
+        .map(|token| sql::token_text_may_be_reformatted(&token))
+        .collect::<Vec<_>>();
     let doc = if has_multiline_trailing_space {
         let Some(prepared) = sql::prepare_routine_bodies_with_trailing_space(&root, ctx) else {
             return FormatResult {
@@ -289,10 +328,73 @@ fn format_plain_with_diagnostics(
         sql::lower_source(&root, ctx)
     };
     let printed = print(&doc, &options.print_options());
+    let formatted = separate_adjacent_comments(
+        apply_line_ending(&printed, source, options.line_ending),
+        ctx.dialect,
+    );
+    let formatted_lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(&formatted, ctx.dialect);
+    let meaningful_formatted_signature = formatted_lexed
+        .tokens
+        .iter()
+        .filter(|token| !token.kind.is_trivia() && token.kind != SyntaxKind::SEMICOLON)
+        .map(|token| (token.kind, token.text.to_ascii_uppercase()))
+        .collect::<Vec<_>>();
+    // Layout can move comments and whitespace across token boundaries. Re-lex every candidate
+    // output as a final safety postcondition: if punctuation would merge into a different token
+    // (for example a standalone `-` adjacent to a `--` comment), preserve the clean source rather
+    // than returning SQL with changed meaning. Keeping this inside the formatter gives every
+    // CLI/editor/Wasm caller the same guarantee rather than relying only on fuzz assertions.
+    let meaningful_kinds_match = meaningful_source_signature
+        .iter()
+        .map(|(kind, _)| kind)
+        .eq(meaningful_formatted_signature.iter().map(|(kind, _)| kind));
+    // Embedded routine-body formatting intentionally rewrites only a structurally identified body
+    // token. Every other token must preserve its case-normalized text, which catches line-ending
+    // and control-character changes inside otherwise same-kind quoted tokens.
+    let meaningful_text_matches = meaningful_source_signature.len()
+        == meaningful_formatted_signature.len()
+        && meaningful_source_signature.len() == meaningful_source_text_rewrites.len()
+        && meaningful_source_signature
+            .iter()
+            .zip(&meaningful_formatted_signature)
+            .zip(meaningful_source_text_rewrites)
+            .all(|((source_token, formatted_token), may_rewrite)| {
+                may_rewrite || source_token == formatted_token
+            });
+    if !formatted_lexed.errors.is_empty() || !meaningful_kinds_match || !meaningful_text_matches {
+        return FormatResult {
+            formatted: source.to_string(),
+            parse_errors,
+        };
+    }
     FormatResult {
-        formatted: apply_line_ending(&printed, source, options.line_ending),
+        formatted,
         parse_errors,
     }
+}
+
+/// Ensure an emitted comment cannot touch the preceding significant token. Such adjacency is
+/// lexically valid (`+-- comment` is still PLUS + COMMENT) but the next formatting pass inserts a
+/// space, violating the fixed-point contract. Reconstructing from the lossless token stream keeps
+/// quoted text untouched and handles both line and block comments without scanning their spelling.
+fn separate_adjacent_comments(formatted: String, dialect: Dialect) -> String {
+    let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(&formatted, dialect);
+    if !lexed.errors.is_empty() {
+        return formatted;
+    }
+    let mut separated = String::with_capacity(formatted.len());
+    for token in lexed.tokens {
+        if token.kind.is_comment()
+            && separated
+                .chars()
+                .next_back()
+                .is_some_and(|previous| !previous.is_whitespace())
+        {
+            separated.push(' ');
+        }
+        separated.push_str(token.text);
+    }
+    separated
 }
 
 fn format_directive_regions(source: &str, options: &FormatOptions) -> Option<FormatResult> {

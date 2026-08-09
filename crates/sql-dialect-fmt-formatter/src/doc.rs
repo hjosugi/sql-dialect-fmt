@@ -28,8 +28,8 @@ pub enum Doc {
     /// tracking and indentation stay correct. The display width is folded in at construction time
     /// (via [`text`]) so the fit/break measurement never re-scans the string.
     Text(Cow<'static, str>, usize),
-    /// A verbatim slice of source that may contain newlines, reproduced byte-for-byte (modulo the
-    /// printer's per-line right trim in the final output pass). This is the vehicle for verbatim fallback
+    /// A verbatim slice of source that may contain newlines, reproduced byte-for-byte (modulo
+    /// generated trailing spaces and tabs at physical line ends). This is the vehicle for verbatim fallback
     /// regions without smuggling embedded `\n`s through [`Doc::Text`], which would corrupt column
     /// tracking. Each contained newline re-bases the column to the current indentation.
     ///
@@ -475,8 +475,10 @@ fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> b
     }
 }
 
-/// Render `doc` to a string. Trailing whitespace is trimmed from every line and the result ends
-/// with exactly one newline (or is empty), so the output is stable under re-formatting.
+/// Render `doc` to a string. Generated trailing spaces and tabs are trimmed from every line and
+/// the result ends with exactly one newline (or is empty), so the output is stable under
+/// re-formatting. Other Unicode whitespace and control characters can be meaningful inside an
+/// opaque source token and are therefore preserved.
 pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
     let mut out = String::new();
     let mut col = 0usize;
@@ -628,19 +630,21 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
     finalize(out)
 }
 
-/// Trim trailing whitespace from each line, drop leading/trailing blank lines, and ensure a single
-/// trailing newline. This keeps output stable under re-formatting regardless of verbatim spans.
+/// Trim trailing spaces and tabs from each line, drop leading/trailing blank lines, and ensure a
+/// single trailing newline. Restricting the trim set is essential for byte-preserving source
+/// slices: `str::trim_end` would also delete vertical tabs, form feeds, and other characters that
+/// may occur inside a quoted SQL token.
 ///
-/// Single streaming pass: each line is `trim_end`ed; leading blank lines are skipped, and interior
-/// blank lines are buffered as `pending_blanks` so any run of them that turns out to be trailing is
-/// dropped rather than emitted. Equivalent to the former collect-join-trim, without the temporary
-/// `Vec<&str>` or the intermediate joined `String`.
+/// Single streaming pass: each line is right-trimmed; leading blank lines are skipped, and
+/// interior blank lines are buffered as `pending_blanks` so any run of them that turns out to be
+/// trailing is dropped rather than emitted. Equivalent to the former collect-join-trim, without
+/// the temporary `Vec<&str>` or the intermediate joined `String`.
 fn finalize(raw: String) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut started = false;
     let mut pending_blanks = 0usize;
     for line in raw.lines() {
-        let line = line.trim_end();
+        let line = line.trim_end_matches([' ', '\t']);
         if line.is_empty() {
             if started {
                 pending_blanks += 1;
@@ -879,12 +883,20 @@ mod tests {
     #[test]
     fn finalize_drops_leading_and_trailing_blank_lines_but_keeps_interior() {
         // Leading and trailing blank lines vanish; an interior blank-line run is preserved; every
-        // line is right-trimmed. Equivalent to the previous collect/join/trim implementation.
+        // line has generated spaces and tabs right-trimmed.
         let raw = String::from("\n  \na  \n\n\nb \n\n  \n");
         assert_eq!(finalize(raw), "a\n\n\nb\n");
         assert_eq!(finalize(String::new()), "");
         assert_eq!(finalize(String::from("   \n  ")), "");
         assert_eq!(finalize(String::from("only")), "only\n");
+    }
+
+    #[test]
+    fn finalize_preserves_non_space_control_characters_in_source_slices() {
+        assert_eq!(
+            finalize(String::from("quoted\u{b}\nform-feed\u{c}\n")),
+            "quoted\u{b}\nform-feed\u{c}\n"
+        );
     }
 
     #[test]

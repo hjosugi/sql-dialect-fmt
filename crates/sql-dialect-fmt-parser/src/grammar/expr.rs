@@ -4,7 +4,7 @@
 use sql_dialect_fmt_syntax::SyntaxKind;
 use sql_dialect_fmt_syntax::SyntaxKind::*;
 
-use crate::parser::{CompletedMarker, ContextualKeyword, Parser};
+use crate::parser::{CompletedMarker, ContextualKeyword, Marker, Parser};
 
 use super::{name, name_ref, order_by_clause, query_expr, subquery};
 
@@ -243,34 +243,50 @@ fn like_rhs(p: &mut Parser) {
 
 fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
     if p.at(NOT_KW) {
-        let m = p.start();
-        p.bump(NOT_KW);
-        if expr_bp(p, BP_PREFIX_NOT).is_none() {
-            m.complete(p, PREFIX_EXPR);
-            return None;
+        let mut prefixes = Vec::new();
+        while p.at(NOT_KW) {
+            let m = p.start();
+            p.bump(NOT_KW);
+            prefixes.push(m);
         }
-        return Some(m.complete(p, PREFIX_EXPR));
+        let operand = expr_bp(p, BP_PREFIX_NOT);
+        return complete_prefix_chain(p, prefixes, operand);
     }
-    if p.at(PRIOR_KW) {
-        // `CONNECT BY PRIOR <col> = <col>`: PRIOR is a tight unary prefix on a value.
-        let m = p.start();
-        p.bump(PRIOR_KW);
-        if expr_bp(p, BP_PREFIX_NEG).is_none() {
-            m.complete(p, PREFIX_EXPR);
-            return None;
+    if p.at(PRIOR_KW) || p.at(MINUS) || p.at(PLUS) {
+        // `PRIOR` and signs all bind tightly. Consume an equal-precedence prefix chain before
+        // parsing its operand so every suspended Pratt frame does not re-run the full postfix /
+        // predicate lookahead at the same boundary while it unwinds. Besides being linear, this
+        // keeps adversarial-but-bounded chains inside the parser's no-progress budget.
+        let mut prefixes = Vec::new();
+        while p.at(PRIOR_KW) || p.at(MINUS) || p.at(PLUS) {
+            let m = p.start();
+            p.bump_any();
+            prefixes.push(m);
         }
-        return Some(m.complete(p, PREFIX_EXPR));
-    }
-    if p.at(MINUS) || p.at(PLUS) {
-        let m = p.start();
-        p.bump_any();
-        if expr_bp(p, BP_PREFIX_NEG).is_none() {
-            m.complete(p, PREFIX_EXPR);
-            return None;
-        }
-        return Some(m.complete(p, PREFIX_EXPR));
+        let operand = expr_bp(p, BP_PREFIX_NEG);
+        return complete_prefix_chain(p, prefixes, operand);
     }
     primary(p)
+}
+
+/// Close already-consumed prefix markers from the innermost to the outermost. Marker construction
+/// order preserves the original nesting, while returning the outer marker gives the Pratt loop the
+/// same left-hand side it received from the former recursive implementation.
+fn complete_prefix_chain(
+    p: &mut Parser,
+    prefixes: Vec<Marker>,
+    operand: Option<CompletedMarker>,
+) -> Option<CompletedMarker> {
+    let operand_was_valid = operand.is_some();
+    let mut completed = operand;
+    for marker in prefixes.into_iter().rev() {
+        completed = Some(marker.complete(p, PREFIX_EXPR));
+    }
+    if operand_was_valid {
+        completed
+    } else {
+        None
+    }
 }
 
 fn primary(p: &mut Parser) -> Option<CompletedMarker> {

@@ -2,7 +2,7 @@
 //!
 //! The grammar (in [`crate::grammar`]) drives this via a small vocabulary: `at`/`eat`/`bump`
 //! for tokens, `start`/`complete`/`precede` for nodes. A `fuel` counter turns any accidental
-//! non-advancing loop into a debug assertion instead of a hang.
+//! non-advancing loop into a recoverable end-of-input boundary instead of a hang or panic.
 
 use std::cell::Cell;
 
@@ -76,12 +76,6 @@ impl<'a> Parser<'a> {
         if self.pos + n >= self.input.len() {
             return SyntaxKind::EOF;
         }
-        debug_assert_ne!(
-            self.fuel.get(),
-            0,
-            "parser stuck — no progress at pos {}",
-            self.pos
-        );
         if self.fuel.get() == 0 {
             if self.exhausted_fuel_at.get().is_none() {
                 self.exhausted_fuel_at.set(Some(self.pos));

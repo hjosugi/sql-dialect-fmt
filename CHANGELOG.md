@@ -9,6 +9,25 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.22.1] - 2026-08-09
+
+### Changed
+
+- Added a formatter-level output postcondition: every candidate is re-lexed and falls back to the
+  clean source if layout would change the meaningful token-kind sequence. CLI, editor, LSP, and
+  Wasm callers now share this protection rather than relying on fuzz assertions alone.
+
+### Fixed
+
+- Preserved vertical tabs, form feeds, and other non-space control characters inside quoted source
+  tokens; final line cleanup now removes only generated trailing spaces and tabs.
+- Made parser fuel exhaustion a recoverable diagnostic in debug and release builds instead of a
+  debug-only panic, and collapsed equal-precedence prefix chains into one linear parse step.
+- Prevented comment reflow from swallowing a standalone minus when it would become adjacent to a
+  double-dash line comment.
+- Added all seven 60-second fuzz failures as permanent parser and formatter regressions, then passed
+  the accumulated lexer, parser, and formatter corpora for 60 seconds each.
+
 ## [1.22.0] - 2026-08-09
 
 ### Added
@@ -634,7 +653,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.1...HEAD
+[1.22.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.21.0...v1.22.0
 [1.21.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.1...v1.21.0
 [1.20.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.0...v1.20.1

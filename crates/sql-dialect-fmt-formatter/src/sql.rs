@@ -33,7 +33,10 @@ mod scripting;
 mod spacing;
 
 use comments::{directive_comment_same_line_after_stmt, CommentInfo, Comments};
-pub(crate) use routine_body::{prepare_routine_bodies_with_trailing_space, PreparedRoutineBodies};
+pub(crate) use routine_body::{
+    prepare_routine_bodies_with_trailing_space, token_text_may_be_reformatted,
+    PreparedRoutineBodies,
+};
 use spacing::{is_value_end, must_separate_to_preserve_tokens, needs_space};
 
 fn rendered_source(text_value: String) -> Doc {
@@ -135,7 +138,7 @@ fn statement_has_leading_blank_line(stmt: &SyntaxNode) -> bool {
     let mut saw_newline = false;
     let mut line_has_content = false;
     for token in stmt
-        .children_with_tokens()
+        .descendants_with_tokens()
         .filter_map(|element| element.into_token())
     {
         match token.kind() {

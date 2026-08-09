@@ -583,10 +583,23 @@ fn is_sql_scripting_body(source: &str) -> bool {
     })
 }
 
-/// Format a multiline token with trailing whitespace only when it is the body of a supported
-/// routine and the declared language formatter accepts it. The caller caches the returned body so
-/// the safety pass and lowering pass share one embedded-formatter invocation.
-fn format_token_with_trailing_space(token: &SyntaxToken, ctx: Ctx) -> Option<String> {
+/// Whether this exact source token occupies a position whose text the formatter may intentionally
+/// replace. The formatter-level output postcondition uses this narrow structural allowlist; plain
+/// string and dollar-string literals remain byte-checked even in files that also contain routines.
+pub(crate) fn token_text_may_be_reformatted(token: &SyntaxToken) -> bool {
+    if routine_body_language_for_token(token).is_some() {
+        return true;
+    }
+    token.kind() == DOLLAR_STRING
+        && token.parent().is_some_and(|parent| {
+            parent.kind() == LITERAL
+                && parent
+                    .parent()
+                    .is_some_and(|grandparent| grandparent.kind() == EXECUTE_STMT)
+        })
+}
+
+fn routine_body_language_for_token(token: &SyntaxToken) -> Option<RoutineBodyLanguage> {
     if !matches!(token.kind(), DOLLAR_STRING | STRING) {
         return None;
     }
@@ -605,13 +618,18 @@ fn format_token_with_trailing_space(token: &SyntaxToken, ctx: Ctx) -> Option<Str
             continue;
         }
         if candidate == token {
-            if previous != Some(AS_KW) {
-                return None;
-            }
-            let language = routine_body_language(&parent).unwrap_or(RoutineBodyLanguage::Sql);
-            return format_embedded_body_token(token.text(), language, ctx);
+            return (previous == Some(AS_KW))
+                .then(|| routine_body_language(&parent).unwrap_or(RoutineBodyLanguage::Sql));
         }
         previous = Some(candidate.kind());
     }
     None
+}
+
+/// Format a multiline token with trailing whitespace only when it is the body of a supported
+/// routine and the declared language formatter accepts it. The caller caches the returned body so
+/// the safety pass and lowering pass share one embedded-formatter invocation.
+fn format_token_with_trailing_space(token: &SyntaxToken, ctx: Ctx) -> Option<String> {
+    let language = routine_body_language_for_token(token)?;
+    format_embedded_body_token(token.text(), language, ctx)
 }
