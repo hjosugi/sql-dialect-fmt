@@ -8,7 +8,7 @@ Use the [playground](playground.md) to run the WebAssembly formatter in the brow
 CLI for local and CI usage.
 
 ```sh
-cargo install sql-dialect-fmt --version 1.20.1 --locked
+cargo install sql-dialect-fmt --version 1.21.0 --locked
 sql-dialect-fmt --check sql/**/*.sql
 sql-dialect-fmt --write sql/**/*.sql
 ```
@@ -19,8 +19,8 @@ sql-dialect-fmt --write sql/**/*.sql
 - Snowflake Scripting and routine bodies in SQL, JavaScript, Python, Java, and Scala.
 - Databricks mode for backtick identifiers, LATERAL VIEW, Delta DDL options, time travel,
   higher-order function lambdas, and SQL scripting blocks.
-- LSP, semantic tokens, hover text, Tree-sitter grammar, VS Code packaging, and Chrome/WASM
-  extension packaging.
+- LSP, semantic tokens, hover text, and a bundled VS Code/WASM extension. Tree-sitter work is
+  retained but paused outside the active workspace and CI.
 
 The detailed tracker lives in `spec/seed/features.json`; run:
 

@@ -5,8 +5,10 @@ use sql_dialect_fmt_syntax::{SyntaxKind, SyntaxNode};
 use SyntaxKind::*;
 
 use crate::doc::{
-    concat, empty, group, group_expanded, indent, join, line, soft_line, space, text, Doc,
+    concat, empty, group, group_expanded, hard_line, if_group_breaks, indent, join, line,
+    soft_line, space, text, Doc,
 };
+use crate::CommaStyle;
 
 use super::Lowerer;
 
@@ -99,7 +101,10 @@ impl Lowerer {
         };
         let items = self.lower_items(node.children());
         self.resume_after(R_PAREN);
-        concat(vec![open_sep, bracketed(prefix, items, trailing)])
+        concat(vec![
+            open_sep,
+            bracketed(prefix, items, trailing, self.ctx.comma_style),
+        ])
     }
 
     pub(super) fn lower_delimited_list(
@@ -116,7 +121,14 @@ impl Lowerer {
         self.resume_after(close);
         concat(vec![
             open_sep,
-            delimited(open_text, close_text, empty(), items, trailing),
+            delimited(
+                open_text,
+                close_text,
+                empty(),
+                items,
+                trailing,
+                self.ctx.comma_style,
+            ),
         ])
     }
 
@@ -249,7 +261,10 @@ impl Lowerer {
                         let trailing = has_trailing_comma(inner);
                         let items = self.lower_items(inner.children());
                         self.resume_after(R_PAREN);
-                        parts.push(concat(vec![open_sep, bracketed(empty(), items, trailing)]));
+                        parts.push(concat(vec![
+                            open_sep,
+                            bracketed(empty(), items, trailing, self.ctx.comma_style),
+                        ]));
                     } else {
                         // A subquery or query expression: keep the parentheses, render inline.
                         self.reset();
@@ -309,8 +324,13 @@ fn logical_chain_operator(node: &SyntaxNode) -> Option<SyntaxKind> {
 /// Build `( items )`: flat when it fits, one-per-line when it does not, and force-exploded (with
 /// the preserved trailing comma) when `trailing` is set. An exploded list propagates the break to
 /// its ancestors, so a multiline collection never sits inline.
-pub(super) fn bracketed(prefix: Doc, items: Vec<Doc>, trailing: bool) -> Doc {
-    delimited("(", ")", prefix, items, trailing)
+pub(super) fn bracketed(
+    prefix: Doc,
+    items: Vec<Doc>,
+    trailing: bool,
+    comma_style: CommaStyle,
+) -> Doc {
+    delimited("(", ")", prefix, items, trailing, comma_style)
 }
 
 fn delimited(
@@ -319,15 +339,22 @@ fn delimited(
     prefix: Doc,
     items: Vec<Doc>,
     trailing: bool,
+    comma_style: CommaStyle,
 ) -> Doc {
     if items.is_empty() {
         return concat(vec![text(open), prefix, text(close)]);
     }
-    let joined = join(item_sep(), items);
-    let body = if trailing {
-        concat(vec![soft_line(), joined, text(",")])
+    let align_leading_items = comma_style == CommaStyle::Leading && items.len() > 1;
+    let joined = join(item_sep(comma_style), items);
+    let leading_alignment = if align_leading_items {
+        if_group_breaks(text("  "), empty())
     } else {
-        concat(vec![soft_line(), joined])
+        empty()
+    };
+    let body = if trailing {
+        concat(vec![soft_line(), leading_alignment, joined, text(",")])
+    } else {
+        concat(vec![soft_line(), leading_alignment, joined])
     };
     // `prefix` (e.g. an aggregate `DISTINCT`) hugs the open paren, before the (soft) first break.
     let content = concat(vec![
@@ -352,9 +379,23 @@ pub(super) fn has_trailing_comma(node: &SyntaxNode) -> bool {
         .is_some_and(|el| el.kind() == COMMA)
 }
 
-/// The separator between comma-list items: a comma, then a space (flat) or newline (broken).
-pub(super) fn item_sep() -> Doc {
-    concat(vec![text(","), line()])
+/// Width-sensitive separator between comma-list items.
+pub(super) fn item_sep(comma_style: CommaStyle) -> Doc {
+    match comma_style {
+        CommaStyle::Trailing => concat(vec![text(","), line()]),
+        CommaStyle::Leading => if_group_breaks(
+            concat(vec![line(), text(", ")]),
+            concat(vec![text(","), space()]),
+        ),
+    }
+}
+
+/// Separator for lists that are always one-item-per-line.
+pub(super) fn hard_item_sep(comma_style: CommaStyle) -> Doc {
+    match comma_style {
+        CommaStyle::Trailing => concat(vec![text(","), hard_line()]),
+        CommaStyle::Leading => concat(vec![hard_line(), text(", ")]),
+    }
 }
 
 /// Does a parenthesized list end with `, )` — a tolerated trailing comma? (The last two significant

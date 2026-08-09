@@ -9,24 +9,18 @@ should point to the layer that regressed.
 ## Standard Gates
 
 ```sh
-cargo fmt --all --check
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+task fmt:check
+task test
+task clippy
 ```
 
-Tree-sitter grammar checks:
-
-```sh
-cd tree-sitter-snowflake
-npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter generate
-npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter test
-```
+Tree-sitter is paused and is not part of the standard gate.
 
 VS Code extension checks:
 
 ```sh
-./scripts/build-vscode-extension.sh
-python3 scripts/check-vsix-package.py path/to/sql-dialect-fmt.vsix
+task vscode:build
+task vscode:package
 ```
 
 The build script compiles the real Wasm formatter, bundles the extension host, and runs the
@@ -97,13 +91,7 @@ Hover:
 - concise summaries for procedures, tasks, types, and properties
 - broken mid-edit SQL should not panic
 
-Tree-sitter:
-
-- corpus examples for public grammar behavior
-- query compilation
-- real capture execution for important highlight scopes
-- generated `src/parser.c` and `src/node-types.json` committed with grammar changes
-- body delimiter rule changes reflected in corpus and generated parser files
+Tree-sitter is retained for later work but has no active test obligations while paused.
 
 VS Code:
 
@@ -124,8 +112,7 @@ bar. The current minimum count is kept in `MINIMUM_EMBEDDED_EASY_CASES` so new
 fixtures do not require updating every consumer test:
 
 - CLI tests verify golden fixture discovery and profile mapping.
-- Lexer/highlight/tree-sitter tests require every embedded fixture to be clean
-  and lossless.
+- Lexer/highlight tests require every embedded fixture to be clean and lossless.
 - Parser fixture tests require every embedded fixture to recover losslessly; add
   focused `clean` parser tests as grammar support lands.
 - Add narrow table-driven tests beside the crate that owns the behavior when a

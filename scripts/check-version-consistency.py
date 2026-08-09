@@ -52,9 +52,6 @@ def main() -> int:
         'editors/package-lock.json packages[""]': editor_package_lock["packages"][""][
             "version"
         ],
-        "extensions/chrome/manifest.json": load_json_version(
-            ROOT / "extensions" / "chrome" / "manifest.json"
-        ),
         "Formula/sql-dialect-fmt.rb": load_homebrew_formula_version(
             ROOT / "Formula" / "sql-dialect-fmt.rb"
         ),

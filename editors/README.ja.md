@@ -33,7 +33,7 @@ Visual Studio Code 用の Snowflake SQL 構文ハイライト**とフォーマ�
 
 ## フォーマット
 
-この拡張機能は `snowflake-sql` ドキュメント用のフォーマッタを登録するため、**Format Document**、**Format Selection**、および `"editor.formatOnSave"` がそのまま動作します。フォーマットは完全にローカルで実行されます。バンドルされた WebAssembly ビルドのフォーマッタは、CLI と Snowsight ブラウザ拡張機能を動かしているのと同じエンジンです。ネットワークには何も送信されません。
+この拡張機能は `snowflake-sql` ドキュメント用のフォーマッタを登録するため、**Format Document**、**Format Selection**、および `"editor.formatOnSave"` がそのまま動作します。CLI/LSP と同じ formatter を WebAssembly として同梱し、完全にローカルで実行します。ネットワークには何も送信されません。
 
 フォーマットは機械的に**ロスレスかつ冪等**です — パースできない入力は変更されずにそのまま通過し、`format(format(x)) == format(x)` が成り立ちます。
 
@@ -51,9 +51,13 @@ Visual Studio Code 用の Snowflake SQL 構文ハイライト**とフォーマ�
 | 設定 | デフォルト | 説明 |
 | --- | --- | --- |
 | `sqlDialectFmt.dialect` | `snowflake` | SQLダイアレクト（`snowflake` または `databricks`）。 |
-| `sqlDialectFmt.lineWidth` | `100` | 折り返し前の目標行幅。 |
-| `sqlDialectFmt.indentWidth` | `4` | インデントレベルあたりのスペース数。 |
-| `sqlDialectFmt.uppercaseKeywords` | `true` | SQLキーワードを大文字化する。 |
+| `sqlDialectFmt.lineWidth` | `80` | 折り返し前の目標行幅。 |
+| `sqlDialectFmt.useEditorIndentation` | `true` | active editor の `tabSize` を使う。 |
+| `sqlDialectFmt.indentWidth` | `2` | editor indentation を無効にした場合のスペース数。 |
+| `sqlDialectFmt.keywordCase` | `upper` | SQL keyword を `upper` / `lower` / `preserve` に統一。 |
+| `sqlDialectFmt.selectItemLayout` | `vertical` | SELECT 項目を縦配置。`auto` なら行幅で判断。 |
+| `sqlDialectFmt.commaStyle` | `trailing` | 折返し時の comma を `trailing` / `leading` から選択。 |
+| `sqlDialectFmt.lineEnding` | `auto` | 入力改行を維持、または `lf` / `crlf` を強制。 |
 | `sqlDialectFmt.lsp.enabled` | `false` | `sql-dialect-fmt-lsp` 言語サーバーへのオプトイン（下記参照）。 |
 | `sqlDialectFmt.lsp.path` | `""` | `sql-dialect-fmt-lsp` のパス。空なら `PATH` から検索。 |
 
@@ -103,8 +107,7 @@ stdio 上で LSP を話すローカルプロセスであり、ネットワーク
 
 - [`nvim/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/nvim) — 小さな Neovim プラグイン：`snowflake-sql` ファイルタイプ、LSP セットアップ、
   および CLI ベースのフォーマット用 conform.nvim / null-ls レシピ。
-- [`zed/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/zed) — Zed 拡張機能（開発インストール）：バンドルされた tree-sitter 文法と
-  言語サーバーによる Snowflake SQL 言語。
+- [`zed/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/zed) — 保留中の Tree-sitter source に依存する Zed integration。
 - [`helix/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/helix) — Helix 用のドキュメント化された `languages.toml` スニペット
   （プラグインシステムなし）。
 

@@ -34,7 +34,7 @@ sql-dialect-fmt-parser       resilient rowan CST
   v
 future formatter/LSP  Doc IR, semantic tokens, diagnostics
 
-tree-sitter-snowflakeは、Tree-sitterを直接消費するツールのための並行エディタ文法です。意図的に許容的でトークン中心です。
+tree-sitter-snowflake は保留中の並行 editor grammar です。将来の再評価用に source を保持しますが、active Cargo workspace・CI・release scope からは除外します。
 ```
 
 ## 構文とレキサー
@@ -76,7 +76,7 @@ tree-sitter-snowflakeは、Tree-sitterを直接消費するツールのための
 
 `sql-dialect-fmt-hover`はLSPに依存しません。バイト範囲、タイトル、本文、種類、およびオプションのドキュメントURLを持つ小さな`Hover`モデルを返します。将来のLSPサーバーは、このモデルを複製するのではなく適応させるべきです。
 
-`tree-sitter-snowflake`はエディタとコードホストのためのものです。新しいスノーフレーク構文の下で堅牢であるべきです。折りたたみ、注入、選択などの実際のエディタ機能を改善する場合にのみ、構造を徐々に追加してください。
+`tree-sitter-snowflake` は現在保留中です。VS Code と core formatter 品質が優先の間は拡張せず、別 scope として後で再評価します。
 
 ## スノーフレーク構文の追加
 

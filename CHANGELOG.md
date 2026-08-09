@@ -9,6 +9,34 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-08-09
+
+### Added
+
+- Added first-class `keyword_case`, `select_item_layout`, `comma_style`, and `line_ending`
+  formatter options across the Rust API, project config, CLI, LSP, raw Wasm ABI, and VS Code
+  settings. VS Code now defaults to an 80-column, editor-indented, vertical `SELECT` layout and
+  supports upper, lower, or preserved keyword case plus leading or trailing commas.
+- Added a go-task build interface for formatting, checking, testing, linting, measuring build
+  speed, and building or packaging the VS Code extension.
+
+### Changed
+
+- Split VS Code configuration parsing and Wasm execution into focused modules, validate the
+  complete Wasm API at load time, and keep Wasm and optional-LSP formatting behavior in sync,
+  including `useEditorIndentation = false`.
+- Centralized wrapped-list separators so comma placement applies consistently to SELECT items,
+  expressions, CTEs, DDL definitions, semantic-view lists, and multi-action ALTER statements.
+- Paused Tree-sitter outside the active Cargo workspace, CI, and release scope. JavaScript and
+  Python embedded-body formatters are now explicit `external-formatters` opt-ins, removing
+  Tree-sitter, Biome, and Ruff from the default dependency graph and cutting a clean all-target
+  check from 57.509 seconds to 26.557 seconds in the release benchmark.
+
+### Removed
+
+- Removed the Chrome extension, Chrome Web Store assets and publishing automation. Distribution
+  now focuses on the bundled VS Code extension.
+
 ## [1.20.1] - 2026-07-30
 
 ### Added
@@ -578,7 +606,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.1...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.21.0...HEAD
+[1.21.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.1...v1.21.0
 [1.20.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.0...v1.20.1
 [1.20.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.18.0...v1.19.0

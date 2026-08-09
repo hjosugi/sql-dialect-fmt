@@ -24,7 +24,11 @@ arguments are searched recursively for `*.sql` files while common generated dire
 | `--dialect snowflake\|databricks` | Select SQL dialect. |
 | `--line-width N` | Target print width. |
 | `--indent-width N` | Spaces per indent level. |
-| `--no-uppercase` | Preserve keyword casing instead of upper-casing keywords. |
+| `--keyword-case upper\|lower\|preserve` | Choose recognized keyword casing. |
+| `--select-item-layout auto\|vertical` | Keep short SELECT lists inline or put one item per line. |
+| `--comma-style trailing\|leading` | Place commas at the end or start of wrapped list lines. |
+| `--line-ending auto\|lf\|crlf` | Preserve or select output line endings. |
+| `--no-uppercase` | Deprecated shorthand for preserving keyword casing. |
 | `--stdin-filepath PATH` | Use a path for stdin config discovery and diagnostics. |
 | `--no-config` | Ignore `sql-dialect-fmt.toml`. |
 | `--write` | Rewrite path arguments in place. |
@@ -47,7 +51,7 @@ brew install sql-dialect-fmt
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.20.1 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.21.0 --check .
 ```
 
 ## pre-commit
@@ -55,7 +59,7 @@ docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.20.1 
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.20.1
+    rev: v1.21.0
     hooks:
       - id: sql-dialect-fmt
 ```

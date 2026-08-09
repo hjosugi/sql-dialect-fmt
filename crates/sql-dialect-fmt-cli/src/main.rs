@@ -30,7 +30,9 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use sql_dialect_fmt_encoding::DecodedText;
-use sql_dialect_fmt_formatter::{format_range, FormatOptions, KeywordCase, LineEnding};
+use sql_dialect_fmt_formatter::{
+    format_range, CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+};
 use sql_dialect_fmt_lint::LintOptions;
 use sql_dialect_fmt_parser::{Dialect, ParseError};
 use sql_dialect_fmt_text::{LineColumn, LineIndex};
@@ -95,6 +97,8 @@ struct Overrides {
     uppercase_keywords: Option<bool>,
     keyword_case: Option<KeywordCase>,
     line_ending: Option<LineEnding>,
+    select_item_layout: Option<SelectItemLayout>,
+    comma_style: Option<CommaStyle>,
     dialect: Option<Dialect>,
 }
 
@@ -114,6 +118,12 @@ impl Overrides {
         }
         if let Some(line_ending) = self.line_ending {
             options.line_ending = line_ending;
+        }
+        if let Some(select_item_layout) = self.select_item_layout {
+            options.select_item_layout = select_item_layout;
+        }
+        if let Some(comma_style) = self.comma_style {
+            options.comma_style = comma_style;
         }
         if let Some(dialect) = self.dialect {
             options.dialect = dialect;
@@ -824,6 +834,13 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
             "--line-ending" => {
                 overrides.line_ending = Some(take_line_ending(&mut args, "--line-ending")?)
             }
+            "--select-item-layout" => {
+                overrides.select_item_layout =
+                    Some(take_select_item_layout(&mut args, "--select-item-layout")?)
+            }
+            "--comma-style" => {
+                overrides.comma_style = Some(take_comma_style(&mut args, "--comma-style")?)
+            }
             "--dialect" => overrides.dialect = Some(take_dialect(&mut args, "--dialect")?),
             "--line-width" => overrides.line_width = Some(take_usize(&mut args, "--line-width")?),
             "--indent-width" => {
@@ -854,6 +871,13 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
                         }
                         "--line-ending" => {
                             overrides.line_ending = Some(parse_line_ending_flag(value)?)
+                        }
+                        "--select-item-layout" => {
+                            overrides.select_item_layout =
+                                Some(parse_select_item_layout_flag(value)?)
+                        }
+                        "--comma-style" => {
+                            overrides.comma_style = Some(parse_comma_style_flag(value)?)
                         }
                         "--stdin-filepath" => stdin_filepath = Some(parse_path_flag(flag, value)?),
                         "--range" => range = Some(parse_range(flag, value)?),
@@ -948,6 +972,26 @@ fn take_line_ending<I: Iterator<Item = OsString>>(
     parse_line_ending_flag(value.to_string_lossy().as_ref())
 }
 
+fn take_select_item_layout<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<SelectItemLayout, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a select item layout"))?;
+    parse_select_item_layout_flag(value.to_string_lossy().as_ref())
+}
+
+fn take_comma_style<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<CommaStyle, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a comma style"))?;
+    parse_comma_style_flag(value.to_string_lossy().as_ref())
+}
+
 fn take_path<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<PathBuf, String> {
     let value = args
         .next()
@@ -989,6 +1033,14 @@ fn parse_keyword_case_flag(value: &str) -> Result<KeywordCase, String> {
 
 fn parse_line_ending_flag(value: &str) -> Result<LineEnding, String> {
     config::parse_line_ending(value)
+}
+
+fn parse_select_item_layout_flag(value: &str) -> Result<SelectItemLayout, String> {
+    config::parse_select_item_layout(value)
+}
+
+fn parse_comma_style_flag(value: &str) -> Result<CommaStyle, String> {
+    config::parse_comma_style(value)
 }
 
 fn parse_usize(flag: &str, value: &str) -> Result<usize, String> {
@@ -1044,6 +1096,9 @@ OPTIONS:
                            Keyword case: upper, lower, or preserve (default upper)
         --line-ending NAME
                            Output line endings: auto, lf, or crlf (default lf)
+        --select-item-layout NAME
+                           SELECT items: auto or vertical (default auto)
+        --comma-style NAME Wrapped-list commas: trailing or leading (default trailing)
         --uppercase       Upper-case SQL keywords (the default)
         --no-uppercase    Do not upper-case SQL keywords
         --no-config       Ignore any sql-dialect-fmt.toml; use defaults and flags only
@@ -1116,6 +1171,10 @@ mod tests {
             "lower",
             "--line-ending",
             "crlf",
+            "--select-item-layout",
+            "vertical",
+            "--comma-style",
+            "leading",
             "a.sql",
         ]);
         assert_eq!(args.overrides.line_width, Some(80));
@@ -1123,6 +1182,11 @@ mod tests {
         assert_eq!(args.overrides.uppercase_keywords, Some(false));
         assert_eq!(args.overrides.keyword_case, Some(KeywordCase::Lower));
         assert_eq!(args.overrides.line_ending, Some(LineEnding::Crlf));
+        assert_eq!(
+            args.overrides.select_item_layout,
+            Some(SelectItemLayout::Vertical)
+        );
+        assert_eq!(args.overrides.comma_style, Some(CommaStyle::Leading));
         assert_eq!(args.paths, vec![PathBuf::from("a.sql")]);
     }
 
@@ -1134,12 +1198,19 @@ mod tests {
             "--dialect=snowflake",
             "--keyword-case=preserve",
             "--line-ending=auto",
+            "--select-item-layout=auto",
+            "--comma-style=trailing",
         ]);
         assert_eq!(args.overrides.line_width, Some(70));
         assert_eq!(args.overrides.indent_width, Some(2));
         assert_eq!(args.overrides.dialect, Some(Dialect::Snowflake));
         assert_eq!(args.overrides.keyword_case, Some(KeywordCase::Preserve));
         assert_eq!(args.overrides.line_ending, Some(LineEnding::Auto));
+        assert_eq!(
+            args.overrides.select_item_layout,
+            Some(SelectItemLayout::Auto)
+        );
+        assert_eq!(args.overrides.comma_style, Some(CommaStyle::Trailing));
     }
 
     #[test]
@@ -1222,6 +1293,8 @@ mod tests {
     fn invalid_keyword_case_and_line_ending_args_error() {
         assert!(parse_args(["--keyword-case", "title"].map(Into::into)).is_err());
         assert!(parse_args(["--line-ending", "native"].map(Into::into)).is_err());
+        assert!(parse_args(["--select-item-layout", "grid"].map(Into::into)).is_err());
+        assert!(parse_args(["--comma-style", "middle"].map(Into::into)).is_err());
     }
 
     #[test]

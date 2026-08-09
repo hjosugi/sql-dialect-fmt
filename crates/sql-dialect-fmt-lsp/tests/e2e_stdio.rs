@@ -15,6 +15,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use serde_json::{json, Value};
+#[cfg(feature = "external-formatters")]
 use sql_dialect_fmt_test_fixtures::{
     javascript_routine_trailing_whitespace_input, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED,
 };
@@ -329,6 +330,7 @@ fn did_open_publishes_lint_diagnostics_and_formatting_edits_the_document() {
 }
 
 #[test]
+#[cfg(feature = "external-formatters")]
 fn formatting_realistic_javascript_routine_uses_the_embedded_formatter_over_stdio() {
     let (mut server, _) = Server::start(json!({}), json!(null));
     let input = javascript_routine_trailing_whitespace_input();
@@ -608,6 +610,68 @@ fn nearest_config_file_is_discovered_and_editor_settings_win() {
         }),
     );
     assert_eq!(edits[0]["newText"], "SELECT a, b\nFROM t;\n");
+
+    server.shutdown();
+}
+
+#[test]
+fn editor_style_settings_drive_vertical_selects_and_leading_commas() {
+    let (mut server, _) = Server::start(
+        json!({}),
+        json!({
+            "sqlDialectFmt": {
+                "keywordCase": "lower",
+                "selectItemLayout": "vertical",
+                "commaStyle": "leading"
+            }
+        }),
+    );
+    did_open(
+        &mut server,
+        TEST_URI,
+        1,
+        "SELECT customer_id, customer_name FROM customers",
+    );
+    server.notification("textDocument/publishDiagnostics");
+
+    let edits = server.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": TEST_URI },
+            "options": { "tabSize": 2, "insertSpaces": true },
+        }),
+    );
+    assert_eq!(
+        edits[0]["newText"],
+        "select\n    customer_id\n  , customer_name\nfrom customers;\n"
+    );
+
+    server.shutdown();
+}
+
+#[test]
+fn explicit_indent_width_wins_when_editor_indentation_is_disabled() {
+    let (mut server, _) = Server::start(
+        json!({}),
+        json!({
+            "sqlDialectFmt": {
+                "indentWidth": 6,
+                "useEditorIndentation": false,
+                "selectItemLayout": "vertical"
+            }
+        }),
+    );
+    did_open(&mut server, TEST_URI, 1, "select a, b from t");
+    server.notification("textDocument/publishDiagnostics");
+
+    let edits = server.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": TEST_URI },
+            "options": { "tabSize": 2, "insertSpaces": true },
+        }),
+    );
+    assert_eq!(edits[0]["newText"], "SELECT\n      a,\n      b\nFROM t;\n");
 
     server.shutdown();
 }

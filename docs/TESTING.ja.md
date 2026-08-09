@@ -8,24 +8,18 @@
 ## 標準ゲート
 
 ```sh
-cargo fmt --all --check
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+task fmt:check
+task test
+task clippy
 ```
 
-Tree-sitter文法チェック:
-
-```sh
-cd tree-sitter-snowflake
-npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter generate
-npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter test
-```
+Tree-sitter は保留中で、standard gate には含めません。
 
 VS Code拡張チェック:
 
 ```sh
-./scripts/build-vscode-extension.sh
-python3 scripts/check-vsix-package.py path/to/sql-dialect-fmt.vsix
+task vscode:build
+task vscode:package
 ```
 
 build script は実際の Wasm formatter をコンパイルし、extension host を bundle して、
@@ -93,13 +87,7 @@ cargo +nightly fuzz run parser_lossless -- -max_total_time=60
 - 手続き、タスク、型、およびプロパティの簡潔な要約
 - 編集中の壊れたSQLはパニックを引き起こさないべき
 
-Tree-sitter:
-
-- 公開文法の動作に対するコーパス例
-- クエリコンパイル
-- 重要なハイライトスコープのための実際のキャプチャ実行
-- 文法変更と共にコミットされた生成された `src/parser.c` と `src/node-types.json`
-- コーパスと生成されたパーサーファイルに反映されたボディ区切りルールの変更
+Tree-sitter は後日の作業用に source を保持しますが、保留中は active test の対象外です。
 
 VS Code:
 
@@ -115,7 +103,7 @@ VS Code:
 キュレーションされたSQLフィクスチャは `sql-dialect-fmt-test-fixtures` に保存され、`EASY_CASES` を通じて公開されます。このコーパスは常にオンの最小ゲートであり、全体の品質基準ではありません。現在の最小カウントは `MINIMUM_EMBEDDED_EASY_CASES` に保持されているため、新しいフィクスチャはすべての消費者テストを更新する必要はありません:
 
 - CLIテストはゴールデンフィクスチャの発見とプロファイルマッピングを検証します。
-- レキサー/ハイライト/Tree-sitterテストは、すべての埋め込まれたフィクスチャがクリーンでロスレスであることを要求します。
+- レキサー/ハイライトテストは、すべての埋め込まれたフィクスチャがクリーンでロスレスであることを要求します。
 - パーサーフィクスチャテストは、すべての埋め込まれたフィクスチャがロスレスに回復することを要求します。文法サポートが追加されると、焦点を当てた `clean` パーサーテストを追加します。
 - バグがフィクスチャよりも特定のときは、その動作を所有するクレートの隣に狭いテーブル駆動テストを追加します。
 

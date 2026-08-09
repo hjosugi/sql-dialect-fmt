@@ -4,10 +4,10 @@
 
 ## Testing
 
-- [ ] `cargo fmt --all --check`
-- [ ] `cargo test --workspace`
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings`
-- [ ] Tree-sitter generated/tested, if grammar changed
+- [ ] `task fmt:check`
+- [ ] `task check`
+- [ ] `task test`
+- [ ] `task clippy`
 - [ ] VS Code bundle/TextMate/Wasm integration tests and VSIX validation, if editor packaging changed
 
 ## Notes

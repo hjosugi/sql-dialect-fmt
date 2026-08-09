@@ -56,6 +56,26 @@ pub enum LineEnding {
     Crlf,
 }
 
+/// How top-level `SELECT` items are laid out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SelectItemLayout {
+    /// Keep a short list beside `SELECT`; wrap it only when it exceeds [`FormatOptions::line_width`].
+    Auto,
+    /// Put the list below `SELECT` with one item per line.
+    Vertical,
+}
+
+/// Where commas are placed when a comma-separated list wraps across lines.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CommaStyle {
+    /// Attach the comma to the preceding item (`item,`).
+    Trailing,
+    /// Attach the comma to the following item (`, item`).
+    Leading,
+}
+
 /// Options controlling formatting. Opinionated and intentionally small.
 ///
 /// This type is `#[non_exhaustive]`: future releases may add knobs without it being a breaking
@@ -89,6 +109,10 @@ pub struct FormatOptions {
     pub keyword_case: KeywordCase,
     /// Output line-ending policy.
     pub line_ending: LineEnding,
+    /// Layout policy for top-level `SELECT` items.
+    pub select_item_layout: SelectItemLayout,
+    /// Placement of commas in wrapped comma-separated lists.
+    pub comma_style: CommaStyle,
     /// The SQL dialect to parse and format. Defaults to [`Dialect::Snowflake`].
     pub dialect: Dialect,
 }
@@ -101,6 +125,8 @@ impl Default for FormatOptions {
             uppercase_keywords: true,
             keyword_case: KeywordCase::Upper,
             line_ending: LineEnding::Lf,
+            select_item_layout: SelectItemLayout::Auto,
+            comma_style: CommaStyle::Trailing,
             dialect: Dialect::Snowflake,
         }
     }
@@ -151,6 +177,20 @@ impl FormatOptions {
         self
     }
 
+    /// Choose whether top-level `SELECT` items use width-aware or always-vertical layout.
+    #[must_use]
+    pub fn with_select_item_layout(mut self, select_item_layout: SelectItemLayout) -> Self {
+        self.select_item_layout = select_item_layout;
+        self
+    }
+
+    /// Choose whether wrapped lists use trailing or leading commas.
+    #[must_use]
+    pub fn with_comma_style(mut self, comma_style: CommaStyle) -> Self {
+        self.comma_style = comma_style;
+        self
+    }
+
     /// Set the SQL dialect to parse and format, returning the updated options so calls can be
     /// chained.
     #[must_use]
@@ -171,6 +211,8 @@ impl FormatOptions {
             keyword_case: self.effective_keyword_case(),
             line_width: self.line_width,
             indent_width: self.indent_width,
+            select_item_layout: self.select_item_layout,
+            comma_style: self.comma_style,
             dialect: self.dialect,
         }
     }

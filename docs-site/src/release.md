@@ -6,11 +6,11 @@ version and internal dependency versions are centralized in `[workspace.dependen
 ## Release Gate
 
 ```sh
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+task test
+task clippy
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo bench -p sql-dialect-fmt-formatter --bench format -- --test
-cargo fmt --all --check
+task fmt:check
 scripts/run-external-corpus.sh --sample
 scripts/conformance-report.py --path crates/sql-dialect-fmt-formatter/tests/corpus_sample \
   --out target/conformance-report.md
@@ -18,8 +18,8 @@ scripts/conformance-report.py --path crates/sql-dialect-fmt-formatter/tests/corp
 
 ## Assets
 
-`scripts/package-extensions.sh` builds the Chrome extension zip and VS Code VSIX under
-`target/dist/`. Version tags create the GitHub Release, publish release binaries, and push the GHCR
+`task vscode:package` builds and validates the VS Code VSIX under `target/dist/`. Version tags
+create the GitHub Release, publish release binaries, and push the GHCR
 image. Store publishing remains gated by repository variables and secrets documented in
 `docs/STORE_PUBLISHING.md`.
 

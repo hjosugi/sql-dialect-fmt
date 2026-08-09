@@ -13,13 +13,12 @@
 ## 現在の状態
 
 - 最新の GitHub release は `v1.9.0`。
-- CLI / formatter / parser / LSP / tree-sitter / VS Code extension /
-  Chrome extension / release asset workflow は実用配布レーンに乗っている。
+- CLI / formatter / parser / LSP / VS Code extension / release asset workflow を active scope
+  とし、Tree-sitter は source を保持したまま保留している。
 - crates.io publish は release workflow 上で opt-in のため、GitHub release と
   crates.io の公開版は一致しないことがある。公開判断は
   [RELEASING.md](RELEASING.md) と `scripts/publish-crates.sh` を確認する。
-- Store 配布（VS Code Marketplace / Chrome Web Store）は workflow と helper
-  を持つが、初回 listing・審査・publisher 権限は各 store 側の管理画面作業を含む。
+- Store 配布（VS Code Marketplace）は workflow と helper を持つ。
 - 細かい未完了項目はこのファイルでは追跡しない。GitHub Issues の
   `enhancement` / `formatter` / `parser` / `lsp` / `docs` / `release`
   などのラベルを真実の源にする。

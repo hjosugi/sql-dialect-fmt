@@ -30,9 +30,9 @@ use lsp_types::{
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
     DocumentOnTypeFormattingOptions, DocumentOnTypeFormattingParams, DocumentRangeFormattingParams,
     DocumentSymbolOptions, DocumentSymbolParams, DocumentSymbolResponse, FoldingRange,
-    FoldingRangeParams, Hover, HoverParams, HoverProviderCapability, InitializeParams, OneOf,
-    Position, PositionEncodingKind, PublishDiagnosticsParams, Range, SemanticTokens,
-    SemanticTokensDeltaParams, SemanticTokensFullDeltaResult, SemanticTokensLegend,
+    FoldingRangeParams, FormattingOptions, Hover, HoverParams, HoverProviderCapability,
+    InitializeParams, OneOf, Position, PositionEncodingKind, PublishDiagnosticsParams, Range,
+    SemanticTokens, SemanticTokensDeltaParams, SemanticTokensFullDeltaResult, SemanticTokensLegend,
     SemanticTokensOptions, SemanticTokensParams, SemanticTokensRangeParams,
     SemanticTokensRangeResult, SemanticTokensServerCapabilities, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
@@ -40,7 +40,9 @@ use lsp_types::{
 };
 use serde::Deserialize;
 use sql_dialect_fmt_config::Config;
-use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
+use sql_dialect_fmt_formatter::{
+    CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+};
 use sql_dialect_fmt_lsp::{
     apply_change_with_encoding, completion_items, diagnostic_lint_code,
     diagnostics_with_lint_options, document_symbols_with_encoding, folding_ranges,
@@ -140,12 +142,18 @@ struct FormatterSettings {
     line_width: Option<usize>,
     #[serde(alias = "indent_width")]
     indent_width: Option<usize>,
+    #[serde(alias = "use_editor_indentation")]
+    use_editor_indentation: Option<bool>,
     #[serde(alias = "uppercase_keywords")]
     uppercase_keywords: Option<bool>,
     #[serde(alias = "keyword_case")]
     keyword_case: Option<String>,
     #[serde(alias = "line_ending")]
     line_ending: Option<String>,
+    #[serde(alias = "select_item_layout")]
+    select_item_layout: Option<String>,
+    #[serde(alias = "comma_style")]
+    comma_style: Option<String>,
     dialect: Option<String>,
     #[serde(default)]
     lint: LintSettings,
@@ -182,6 +190,9 @@ impl FormatterSettings {
         if other.indent_width.is_some() {
             self.indent_width = other.indent_width;
         }
+        if other.use_editor_indentation.is_some() {
+            self.use_editor_indentation = other.use_editor_indentation;
+        }
         if other.uppercase_keywords.is_some() {
             self.uppercase_keywords = other.uppercase_keywords;
         }
@@ -190,6 +201,12 @@ impl FormatterSettings {
         }
         if other.line_ending.is_some() {
             self.line_ending = other.line_ending.clone();
+        }
+        if other.select_item_layout.is_some() {
+            self.select_item_layout = other.select_item_layout.clone();
+        }
+        if other.comma_style.is_some() {
+            self.comma_style = other.comma_style.clone();
         }
         if other.dialect.is_some() {
             self.dialect = other.dialect.clone();
@@ -275,8 +292,28 @@ fn apply_editor_format(options: &mut FormatOptions, settings: &FormatterSettings
     if let Some(line_ending) = settings.line_ending.as_deref().and_then(parse_line_ending) {
         *options = (*options).with_line_ending(line_ending);
     }
+    if let Some(select_item_layout) = settings
+        .select_item_layout
+        .as_deref()
+        .and_then(parse_select_item_layout)
+    {
+        *options = (*options).with_select_item_layout(select_item_layout);
+    }
+    if let Some(comma_style) = settings.comma_style.as_deref().and_then(parse_comma_style) {
+        *options = (*options).with_comma_style(comma_style);
+    }
     if let Some(dialect) = settings.dialect.as_deref().and_then(parse_dialect) {
         options.dialect = dialect;
+    }
+}
+
+fn apply_request_indentation(
+    options: &mut FormatOptions,
+    request: &FormattingOptions,
+    settings: &FormatterSettings,
+) {
+    if settings.use_editor_indentation.unwrap_or(true) && request.insert_spaces {
+        options.indent_width = (request.tab_size as usize).max(1);
     }
 }
 
@@ -380,29 +417,23 @@ fn hex_value(byte: u8) -> Option<u8> {
 }
 
 fn parse_dialect(value: &str) -> Option<Dialect> {
-    match value.to_ascii_lowercase().as_str() {
-        "snowflake" => Some(Dialect::Snowflake),
-        "databricks" => Some(Dialect::Databricks),
-        _ => None,
-    }
+    sql_dialect_fmt_config::parse_dialect(value).ok()
 }
 
 fn parse_keyword_case(value: &str) -> Option<KeywordCase> {
-    match value.to_ascii_lowercase().as_str() {
-        "upper" => Some(KeywordCase::Upper),
-        "lower" => Some(KeywordCase::Lower),
-        "preserve" => Some(KeywordCase::Preserve),
-        _ => None,
-    }
+    sql_dialect_fmt_config::parse_keyword_case(value).ok()
 }
 
 fn parse_line_ending(value: &str) -> Option<LineEnding> {
-    match value.to_ascii_lowercase().as_str() {
-        "auto" => Some(LineEnding::Auto),
-        "lf" => Some(LineEnding::Lf),
-        "crlf" => Some(LineEnding::Crlf),
-        _ => None,
-    }
+    sql_dialect_fmt_config::parse_line_ending(value).ok()
+}
+
+fn parse_select_item_layout(value: &str) -> Option<SelectItemLayout> {
+    sql_dialect_fmt_config::parse_select_item_layout(value).ok()
+}
+
+fn parse_comma_style(value: &str) -> Option<CommaStyle> {
+    sql_dialect_fmt_config::parse_comma_style(value).ok()
 }
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
@@ -555,9 +586,7 @@ fn formatting(
         return Vec::new();
     };
     let mut options = state.effective_options(&params.text_document.uri);
-    if params.options.insert_spaces {
-        options.indent_width = (params.options.tab_size as usize).max(1);
-    }
+    apply_request_indentation(&mut options, &params.options, &state.editor);
     format_edits_with_encoding(&document.text, &options, state.position_encoding)
 }
 
@@ -570,9 +599,7 @@ fn range_formatting(
         return Vec::new();
     };
     let mut options = state.effective_options(&params.text_document.uri);
-    if params.options.insert_spaces {
-        options.indent_width = (params.options.tab_size as usize).max(1);
-    }
+    apply_request_indentation(&mut options, &params.options, &state.editor);
     format_range_edits_with_encoding(
         &document.text,
         params.range,
@@ -591,9 +618,7 @@ fn on_type_formatting(
         return Vec::new();
     };
     let mut options = state.effective_options(uri);
-    if params.options.insert_spaces {
-        options.indent_width = (params.options.tab_size as usize).max(1);
-    }
+    apply_request_indentation(&mut options, &params.options, &state.editor);
     on_type_formatting_edits_with_encoding(
         &document.text,
         params.text_document_position.position,
@@ -1024,7 +1049,9 @@ mod tests {
                     "sqlDialectFmt": {
                         "dialect": "databricks",
                         "keywordCase": "lower",
-                        "lineEnding": "crlf"
+                        "lineEnding": "crlf",
+                        "selectItemLayout": "vertical",
+                        "commaStyle": "leading"
                     }
                 }),
             },
@@ -1037,6 +1064,8 @@ mod tests {
         assert_eq!(options.dialect, Dialect::Databricks);
         assert_eq!(options.keyword_case, KeywordCase::Lower);
         assert_eq!(options.line_ending, LineEnding::Crlf);
+        assert_eq!(options.select_item_layout, SelectItemLayout::Vertical);
+        assert_eq!(options.comma_style, CommaStyle::Leading);
         let params = recv_diagnostics(&client);
         assert_eq!(params.uri, uri);
         assert_eq!(params.version, Some(4));

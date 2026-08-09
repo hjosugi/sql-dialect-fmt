@@ -11,6 +11,11 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Language Server Protocol server for Snowflake SQL formatting, diagnostics, symbols, completion, and semantic tokens."
+
+[features]
+default = []
+external-formatters = ["sql-dialect-fmt-formatter/external-formatters"]
+
 [[bin]]
 name = "sql-dialect-fmt-lsp"
 path = "src/main.rs"

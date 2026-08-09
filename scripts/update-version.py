@@ -21,7 +21,6 @@ DOC_VERSION_FILES = [
 ]
 JSON_VERSION_FILES = [
     ROOT / "editors" / "package.json",
-    ROOT / "extensions" / "chrome" / "manifest.json",
 ]
 LOCKED_WORKSPACE_PACKAGES = {
     "sql-dialect-fmt",
@@ -38,7 +37,6 @@ LOCKED_WORKSPACE_PACKAGES = {
     "sql-dialect-fmt-test-fixtures",
     "sql-dialect-fmt-test-support",
     "sql-dialect-fmt-text",
-    "sql-dialect-fmt-tree-sitter",
     "sql-dialect-fmt-wasm",
 }
 

@@ -32,6 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           key: release
@@ -40,6 +42,9 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: editors/package-lock.json
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
       - name: Resolve version
         id: version
         run: |
@@ -57,27 +62,18 @@ jobs:
           asset="sql-dialect-fmt-${{ steps.version.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz"
           tar -czf "$asset" -C target/release sql-dialect-fmt
           sha256sum "$asset" > "$asset.sha256"
-      - name: Package editor extensions
-        run: ./scripts/package-extensions.sh "${{ steps.version.outputs.package_version }}"
+      - name: Package VS Code extension through go-task
+        run: task vscode:package VERSION="${{ steps.version.outputs.package_version }}"
       - name: Resolve extension publish plan
         id: publish
         env:
-          AUTO_ALL: ${{ vars.EXTENSIONS_AUTO_PUBLISH || 'false' }}
           AUTO_VSCODE: ${{ vars.VSCODE_MARKETPLACE_AUTO_PUBLISH || 'false' }}
-          AUTO_CHROME: ${{ vars.CHROME_WEBSTORE_AUTO_PUBLISH || 'false' }}
         run: |
           vscode=false
-          chrome=false
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            if [ "$AUTO_ALL" = "true" ] || [ "$AUTO_VSCODE" = "true" ]; then
-              vscode=true
-            fi
-            if [ "$AUTO_ALL" = "true" ] || [ "$AUTO_CHROME" = "true" ]; then
-              chrome=true
-            fi
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$AUTO_VSCODE" = "true" ]; then
+            vscode=true
           fi
           echo "vscode=$vscode" >> "$GITHUB_OUTPUT"
-          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
       - name: Validate VS Code Marketplace credentials
         if: ${{ steps.publish.outputs.vscode == 'true' }}
         env:
@@ -86,15 +82,6 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
         run: ./scripts/check-publishing-credentials.sh vscode
-      - name: Validate Chrome Web Store credentials
-        if: ${{ steps.publish.outputs.chrome == 'true' }}
-        env:
-          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID || vars.CHROME_PUBLISHER_ID }}
-          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID || vars.CHROME_EXTENSION_ID }}
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-        run: ./scripts/check-publishing-credentials.sh chrome
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -110,7 +97,6 @@ jobs:
               --clobber \
               "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz" \
               "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256" \
-              "target/dist/sql-dialect-fmt-$v-chrome.zip" \
               "target/dist/sql-dialect-fmt-$v.vsix"
           else
             # When dispatched, the tag does not exist yet; --target creates it at this commit.
@@ -122,7 +108,6 @@ jobs:
               --generate-notes \
               "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz" \
               "sql-dialect-fmt-$v-x86_64-unknown-linux-gnu.tar.gz.sha256" \
-              "target/dist/sql-dialect-fmt-$v-chrome.zip" \
               "target/dist/sql-dialect-fmt-$v.vsix"
           fi
       - name: Azure login for VS Code Marketplace
@@ -139,17 +124,6 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           VSCE_AUTH_MODE: ${{ vars.VSCE_AUTH_MODE || 'pat' }}
         run: ./scripts/publish-vscode-marketplace.sh "target/dist/sql-dialect-fmt-${{ steps.version.outputs.version }}.vsix"
-      - name: Publish Chrome Web Store
-        if: ${{ steps.publish.outputs.chrome == 'true' }}
-        env:
-          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID || vars.CHROME_PUBLISHER_ID }}
-          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID || vars.CHROME_EXTENSION_ID }}
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          CHROME_SKIP_UPLOAD: ${{ vars.CHROME_SKIP_UPLOAD || 'false' }}
-        run: ./scripts/publish-chrome-webstore.sh "target/dist/sql-dialect-fmt-${{ steps.version.outputs.version }}-chrome.zip"
-
   docker:
     name: Docker image
     needs: release

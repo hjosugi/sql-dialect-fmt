@@ -1,0 +1,74 @@
+version: "3"
+
+set: [errexit, nounset, pipefail]
+
+tasks:
+  default:
+    desc: List the supported project tasks
+    cmds:
+      - task --list
+
+  fmt:
+    desc: Format Rust sources
+    cmds:
+      - cargo fmt --all
+
+  fmt:check:
+    desc: Check Rust source formatting
+    cmds:
+      - cargo fmt --all --check
+
+  check:
+    desc: Fast type-check of active Rust workspace library and binary targets
+    cmds:
+      - cargo check --workspace --locked
+
+  check:all:
+    desc: Type-check every active target, including tests and benchmarks
+    cmds:
+      - cargo check --workspace --all-targets --locked
+
+  test:
+    desc: Run the active Rust workspace tests
+    cmds:
+      - cargo test --workspace --locked
+
+  clippy:
+    desc: Run the Rust linter with warnings denied
+    cmds:
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  vscode:build:
+    desc: Build the bundled Wasm formatter and VS Code extension
+    cmds:
+      - ./scripts/build-vscode-extension.sh
+
+  vscode:test:
+    desc: Build and run VS Code extension integration tests
+    cmds:
+      - task: vscode:build
+
+  vscode:package:
+    desc: Build and validate the release VSIX
+    vars:
+      VERSION:
+        sh: ./scripts/workspace-version.sh
+    cmds:
+      - ./scripts/package-extensions.sh {{.VERSION}}
+
+  build:measure:
+    desc: Measure the active workspace check time
+    cmds:
+      - >-
+        bash -c 'TIMEFORMAT="cargo-check elapsed=%3R user=%3U sys=%3S";
+        time cargo check --workspace --all-targets --locked'
+
+  ci:
+    desc: Run the main local CI gates
+    cmds:
+      # Cargo commands share one target directory, so run them in order instead of making
+      # go-task compile competing dependency graphs concurrently.
+      - task: fmt:check
+      - task: check
+      - task: test
+      - task: clippy

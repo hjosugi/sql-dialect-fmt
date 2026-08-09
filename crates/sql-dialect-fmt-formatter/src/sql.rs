@@ -19,7 +19,7 @@ use SyntaxKind::*;
 use crate::doc::{
     break_parent, concat, empty, hard_line, line_suffix, source_code_slice, space, text, Doc,
 };
-use crate::KeywordCase;
+use crate::{CommaStyle, KeywordCase, SelectItemLayout};
 
 mod comments;
 mod ddl;
@@ -51,6 +51,8 @@ pub(crate) struct Ctx {
     pub keyword_case: KeywordCase,
     pub line_width: usize,
     pub indent_width: usize,
+    pub select_item_layout: SelectItemLayout,
+    pub comma_style: CommaStyle,
     /// The SQL dialect being formatted. Used to parse the source with matching grammar/lexing
     /// rules; dialect-specific lowering will gate on this in later phases.
     pub dialect: Dialect,

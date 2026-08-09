@@ -1,14 +1,13 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
 const Module = require("node:module");
 const path = require("node:path");
 const test = require("node:test");
 
 const EDITORS_DIR = path.resolve(__dirname, "..");
 
-function vscodeMock() {
+function vscodeMock(settings = {}) {
   const documentProviders = [];
   const rangeProviders = [];
 
@@ -45,14 +44,23 @@ function vscodeMock() {
       workspace: {
         getConfiguration() {
           return {
-            get(_key, fallback) {
-              return fallback;
+            get(key, fallback) {
+              return Object.hasOwn(settings, key) ? settings[key] : fallback;
+            },
+            inspect(key) {
+              return Object.hasOwn(settings, key) ? { workspaceValue: settings[key] } : {};
             },
           };
         },
         onDidChangeConfiguration() {
           return new Disposable();
         },
+      },
+      commands: {
+        registerCommand() {
+          return new Disposable();
+        },
+        executeCommand() {},
       },
       languages: {
         registerDocumentFormattingEditProvider(_selector, provider) {
@@ -80,8 +88,13 @@ async function waitFor(predicate) {
   assert.fail("extension activation did not register its formatter");
 }
 
-test("bundled VS Code provider formats the realistic regression through packaged WASM", async () => {
-  const mock = vscodeMock();
+test("bundled provider applies the complete VS Code format configuration through Wasm", async () => {
+  const mock = vscodeMock({
+    keywordCase: "lower",
+    selectItemLayout: "vertical",
+    commaStyle: "leading",
+    lineEnding: "lf",
+  });
   const originalLoad = Module._load;
   Module._load = function load(request, parent, isMain) {
     if (request === "vscode") {
@@ -109,15 +122,12 @@ test("bundled VS Code provider formats the realistic regression through packaged
   await waitFor(() => mock.documentProviders.length === 1);
   assert.equal(mock.rangeProviders.length, 1);
 
-  const fixtureDir = path.resolve(
-    EDITORS_DIR,
-    "../crates/sql-dialect-fmt-test-fixtures/fixtures/regressions/",
-    "javascript_routine_trailing_whitespace",
-  );
-  const input = fs
-    .readFileSync(path.join(fixtureDir, "input.sql"), "utf8")
-    .replace("__SQL_DIALECT_FMT_TRAILING_WHITESPACE__", "   \n\t\n   ");
-  const expected = fs.readFileSync(path.join(fixtureDir, "expected.sql"), "utf8");
+  const input = "SELECT customer_id,customer_name FROM customers";
+  const expected =
+    "select\n" +
+    "      customer_id\n" +
+    "    , customer_name\n" +
+    "from customers;\n";
   const document = {
     getText() {
       return input;
@@ -127,7 +137,10 @@ test("bundled VS Code provider formats the realistic regression through packaged
     },
   };
 
-  const edits = await mock.documentProviders[0].provideDocumentFormattingEdits(document);
+  const edits = await mock.documentProviders[0].provideDocumentFormattingEdits(document, {
+    insertSpaces: true,
+    tabSize: 4,
+  });
   assert.equal(edits.length, 1, "formatter should replace the broken input");
   assert.equal(edits[0].newText, expected);
   assert.equal(edits[0].range.start.offset, 0);

@@ -8,31 +8,28 @@ small, careful changes are especially valuable.
 Required:
 
 - Rust stable
-- Node.js, when working on `tree-sitter-snowflake` or the VS Code extension
+- [go-task](https://taskfile.dev/)
+- Node.js, when working on the VS Code extension
 
 Run the core checks:
 
 ```sh
-cargo fmt --all --check
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+task fmt:check
+task check
+task test
+task clippy
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo bench -p sql-dialect-fmt-formatter --bench format -- --test
 ```
 
-Run Tree-sitter checks:
-
-```sh
-cd tree-sitter-snowflake
-npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter generate
-npm exec --package tree-sitter-cli@0.26.9 -- tree-sitter test
-```
+Tree-sitter sources are retained but paused outside the active workspace, CI, and release scope.
 
 For VS Code extension changes, build the real Wasm artifact and run the bundled-provider and
 TextMate integration tests:
 
 ```sh
-./scripts/build-vscode-extension.sh
+task vscode:build
+task vscode:package
 ```
 
 `cargo test --workspace` must stay self-contained. Stable SQL fixtures belong in
@@ -55,8 +52,7 @@ pre-commit run --all-files
 - `sql-dialect-fmt-highlight`: lexical highlight classification.
 - `sql-dialect-fmt-hover`: editor/LSP-ready hover strings for Snowflake concepts.
 - `sql-dialect-fmt-config`: shared `sql-dialect-fmt.toml` model and discovery for the CLI and LSP.
-- `sql-dialect-fmt-tree-sitter`: Rust bindings for the generated Tree-sitter grammar.
-- `tree-sitter-snowflake`: grammar package and editor queries.
+- `sql-dialect-fmt-tree-sitter` / `tree-sitter-snowflake`: retained, paused grammar sources.
 
 For the longer map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -73,15 +69,15 @@ For the longer map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - Add hover text for a Snowflake type, task property, or procedure option.
 - Add a focused lexer/parser regression test for a small Snowflake example.
-- Improve Tree-sitter highlight captures.
+- Improve formatter configuration or VS Code integration behavior.
 - Clarify docs where you got confused.
 
 ## Pull Request Checklist
 
-- [ ] `cargo fmt --all --check`
-- [ ] `cargo test --workspace`
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings`
+- [ ] `task fmt:check`
+- [ ] `task check`
+- [ ] `task test`
+- [ ] `task clippy`
 - [ ] `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`
-- [ ] Tree-sitter grammar regenerated and tested, if `tree-sitter-snowflake/` changed
 - [ ] VS Code bundle/TextMate/Wasm integration tests and VSIX validation, if `editors/` changed
 - [ ] Docs updated, if behavior or public API changed

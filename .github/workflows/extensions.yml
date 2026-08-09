@@ -1,4 +1,4 @@
-name: Extension Packages
+name: VS Code Extension
 
 on:
   workflow_dispatch:
@@ -8,19 +8,10 @@ on:
         required: false
         default: ""
       publish:
-        description: "Publish to VS Code Marketplace and Chrome Web Store."
+        description: "Publish to VS Code Marketplace."
         required: true
         default: false
         type: boolean
-      publish_target:
-        description: "Store target when publish=true."
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - vscode
-          - chrome
 
 permissions:
   contents: read
@@ -28,98 +19,51 @@ permissions:
 
 jobs:
   package:
-    name: Package and optionally publish extensions
+    name: Package and optionally publish VS Code extension
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          key: extensions
+          key: vscode-extension
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: editors/package-lock.json
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
       - name: Resolve package version
         id: version
         run: |
-          if [ -n "${{ github.event.inputs.version || '' }}" ]; then
-            version="${{ github.event.inputs.version }}"
-          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
-            version="${GITHUB_REF_NAME#v}"
-          else
+          version="${{ github.event.inputs.version }}"
+          if [ -z "$version" ]; then
             version="$(./scripts/workspace-version.sh)"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Check version consistency
         run: python3 scripts/check-version-consistency.py "${{ steps.version.outputs.version }}"
-      - name: Resolve publish plan
-        id: publish
-        env:
-          INPUT_PUBLISH: ${{ inputs.publish || 'false' }}
-          INPUT_TARGET: ${{ inputs.publish_target || 'all' }}
-          AUTO_ALL: ${{ vars.EXTENSIONS_AUTO_PUBLISH || 'false' }}
-          AUTO_VSCODE: ${{ vars.VSCODE_MARKETPLACE_AUTO_PUBLISH || 'false' }}
-          AUTO_CHROME: ${{ vars.CHROME_WEBSTORE_AUTO_PUBLISH || 'false' }}
-        run: |
-          vscode=false
-          chrome=false
-
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_PUBLISH" = "true" ]; then
-            case "$INPUT_TARGET" in
-              all)
-                vscode=true
-                chrome=true
-                ;;
-              vscode) vscode=true ;;
-              chrome) chrome=true ;;
-              *)
-                echo "::error::unknown publish_target: $INPUT_TARGET"
-                exit 1
-                ;;
-            esac
-          fi
-
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            if [ "$AUTO_ALL" = "true" ] || [ "$AUTO_VSCODE" = "true" ]; then
-              vscode=true
-            fi
-            if [ "$AUTO_ALL" = "true" ] || [ "$AUTO_CHROME" = "true" ]; then
-              chrome=true
-            fi
-          fi
-
-          echo "vscode=$vscode" >> "$GITHUB_OUTPUT"
-          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
-          echo "VS Code Marketplace publish: $vscode"
-          echo "Chrome Web Store publish: $chrome"
+      - name: Build and validate VSIX through go-task
+        run: task vscode:package VERSION="${{ steps.version.outputs.version }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sql-dialect-fmt-vscode-v${{ steps.version.outputs.version }}
+          path: target/dist/sql-dialect-fmt-v${{ steps.version.outputs.version }}.vsix
+          if-no-files-found: error
       - name: Validate VS Code Marketplace credentials
-        if: ${{ steps.publish.outputs.vscode == 'true' }}
+        if: ${{ inputs.publish }}
         env:
           VSCE_AUTH_MODE: ${{ vars.VSCE_AUTH_MODE || 'pat' }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
         run: ./scripts/check-publishing-credentials.sh vscode
-      - name: Validate Chrome Web Store credentials
-        if: ${{ steps.publish.outputs.chrome == 'true' }}
-        env:
-          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID || vars.CHROME_PUBLISHER_ID }}
-          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID || vars.CHROME_EXTENSION_ID }}
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-        run: ./scripts/check-publishing-credentials.sh chrome
-      - name: Build Chrome zip and VSIX
-        run: ./scripts/package-extensions.sh "${{ steps.version.outputs.version }}"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: sql-dialect-fmt-extension-packages-v${{ steps.version.outputs.version }}
-          path: target/dist/*
-          if-no-files-found: error
       - name: Azure login for VS Code Marketplace
-        if: ${{ steps.publish.outputs.vscode == 'true' && vars.VSCE_AUTH_MODE == 'azure' }}
+        if: ${{ inputs.publish && vars.VSCE_AUTH_MODE == 'azure' }}
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
@@ -127,18 +71,8 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
           allow-no-subscriptions: true
       - name: Publish VS Code Marketplace
-        if: ${{ steps.publish.outputs.vscode == 'true' }}
+        if: ${{ inputs.publish }}
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           VSCE_AUTH_MODE: ${{ vars.VSCE_AUTH_MODE || 'pat' }}
         run: ./scripts/publish-vscode-marketplace.sh "target/dist/sql-dialect-fmt-v${{ steps.version.outputs.version }}.vsix"
-      - name: Publish Chrome Web Store
-        if: ${{ steps.publish.outputs.chrome == 'true' }}
-        env:
-          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID || vars.CHROME_PUBLISHER_ID }}
-          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID || vars.CHROME_EXTENSION_ID }}
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          CHROME_SKIP_UPLOAD: ${{ vars.CHROME_SKIP_UPLOAD || 'false' }}
-        run: ./scripts/publish-chrome-webstore.sh "target/dist/sql-dialect-fmt-v${{ steps.version.outputs.version }}-chrome.zip"

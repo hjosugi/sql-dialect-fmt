@@ -11,7 +11,9 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Deserializer};
-use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase, LineEnding};
+use sql_dialect_fmt_formatter::{
+    CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+};
 use sql_dialect_fmt_parser::Dialect;
 
 /// The file name the CLI looks for when walking up directories.
@@ -34,6 +36,12 @@ pub struct Config {
     /// Output line-ending policy.
     #[serde(default, deserialize_with = "deserialize_line_ending")]
     pub line_ending: Option<LineEnding>,
+    /// Top-level `SELECT` list layout.
+    #[serde(default, deserialize_with = "deserialize_select_item_layout")]
+    pub select_item_layout: Option<SelectItemLayout>,
+    /// Placement of commas in wrapped lists.
+    #[serde(default, deserialize_with = "deserialize_comma_style")]
+    pub comma_style: Option<CommaStyle>,
     /// SQL dialect to parse and format.
     #[serde(default, deserialize_with = "deserialize_dialect")]
     pub dialect: Option<Dialect>,
@@ -74,6 +82,26 @@ pub fn parse_line_ending(value: &str) -> Result<LineEnding, String> {
     }
 }
 
+pub fn parse_select_item_layout(value: &str) -> Result<SelectItemLayout, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "auto" => Ok(SelectItemLayout::Auto),
+        "vertical" => Ok(SelectItemLayout::Vertical),
+        _ => Err(format!(
+            "select_item_layout expects one of: auto, vertical; got {value:?}"
+        )),
+    }
+}
+
+pub fn parse_comma_style(value: &str) -> Result<CommaStyle, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "trailing" => Ok(CommaStyle::Trailing),
+        "leading" => Ok(CommaStyle::Leading),
+        _ => Err(format!(
+            "comma_style expects one of: trailing, leading; got {value:?}"
+        )),
+    }
+}
+
 fn deserialize_dialect<'de, D>(deserializer: D) -> Result<Option<Dialect>, D::Error>
 where
     D: Deserializer<'de>,
@@ -101,6 +129,28 @@ where
     let value = Option::<String>::deserialize(deserializer)?;
     value
         .map(|value| parse_line_ending(&value).map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+fn deserialize_select_item_layout<'de, D>(
+    deserializer: D,
+) -> Result<Option<SelectItemLayout>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .map(|value| parse_select_item_layout(&value).map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+fn deserialize_comma_style<'de, D>(deserializer: D) -> Result<Option<CommaStyle>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .map(|value| parse_comma_style(&value).map_err(serde::de::Error::custom))
         .transpose()
 }
 
@@ -136,6 +186,12 @@ impl Config {
         }
         if let Some(line_ending) = self.line_ending {
             options.line_ending = line_ending;
+        }
+        if let Some(select_item_layout) = self.select_item_layout {
+            options.select_item_layout = select_item_layout;
+        }
+        if let Some(comma_style) = self.comma_style {
+            options.comma_style = comma_style;
         }
         if let Some(dialect) = self.dialect {
             options.dialect = dialect;
@@ -204,7 +260,7 @@ mod tests {
     #[test]
     fn parses_all_keys() {
         let cfg = Config::parse(
-            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\nkeyword_case = \"lower\"\nline_ending = \"crlf\"\ndialect = \"databricks\"\nexclude = [\"target/**\"]\n",
+            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\nkeyword_case = \"lower\"\nline_ending = \"crlf\"\nselect_item_layout = \"vertical\"\ncomma_style = \"leading\"\ndialect = \"databricks\"\nexclude = [\"target/**\"]\n",
         )
         .expect("valid");
         assert_eq!(cfg.line_width, Some(80));
@@ -212,6 +268,8 @@ mod tests {
         assert_eq!(cfg.uppercase_keywords, Some(false));
         assert_eq!(cfg.keyword_case, Some(KeywordCase::Lower));
         assert_eq!(cfg.line_ending, Some(LineEnding::Crlf));
+        assert_eq!(cfg.select_item_layout, Some(SelectItemLayout::Vertical));
+        assert_eq!(cfg.comma_style, Some(CommaStyle::Leading));
         assert_eq!(cfg.dialect, Some(Dialect::Databricks));
         assert_eq!(cfg.exclude, vec!["target/**"]);
     }
@@ -229,6 +287,8 @@ mod tests {
         assert_eq!(cfg.uppercase_keywords, None);
         assert_eq!(cfg.keyword_case, None);
         assert_eq!(cfg.line_ending, None);
+        assert_eq!(cfg.select_item_layout, None);
+        assert_eq!(cfg.comma_style, None);
         assert_eq!(cfg.dialect, None);
         assert!(cfg.exclude.is_empty());
     }

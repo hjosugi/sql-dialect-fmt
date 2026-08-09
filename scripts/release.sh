@@ -49,7 +49,7 @@ Steps (RELEASING.md 1-6):
   5. commit+tag   "release: v<version>" and tag v<version>
   6. push         branch and tag, or a Release workflow dispatch with --via-ci
 
-Publication (crates.io, VS Code Marketplace, Chrome Web Store) stays with the
+Publication (crates.io and VS Code Marketplace) stays with the
 Release workflow and its *_AUTO_PUBLISH repository variables. This script never
 uploads a package itself.
 EOF

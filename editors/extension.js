@@ -2,7 +2,7 @@
 //
 // The extension contributes a document (and range) formatter for the `snowflake-sql` language.
 // Formatting runs entirely locally: the bundled `vendor/sql_dialect_fmt_wasm.wasm` module is the
-// same WebAssembly build the Chrome extension uses, loaded here through Node's `WebAssembly` API.
+// same Rust formatter used by the CLI and LSP, loaded here through Node's `WebAssembly` API.
 // There is no network access, telemetry, or remote formatting — the SQL never leaves the machine.
 //
 // Optionally (`sqlDialectFmt.lsp.enabled`, off by default), the extension starts the
@@ -18,15 +18,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
+const { readFormatterOptions } = require("./src/config");
+const { formatText, resetWasm } = require("./src/wasm-formatter");
+
 const LANGUAGE_ID = "snowflake-sql";
 const CONFIG_SECTION = "sqlDialectFmt";
 const SERVER_BINARY_NAME = "sql-dialect-fmt-lsp";
-// `sqlDialectFmt` settings forwarded to the language server. `lsp.*` is client-only.
-const SERVER_SETTING_KEYS = ["dialect", "lineWidth", "indentWidth", "uppercaseKeywords", "lint"];
-
-// Instantiating the WebAssembly module is deferred until the first format request and then cached
-// for the lifetime of the extension host.
-let wasmInstancePromise = null;
 
 // Client-mode state: either the WebAssembly formatter providers are registered, or the language
 // server client is running — never both. Transitions are serialized through `modeTransition`.
@@ -40,6 +37,15 @@ function activate(context) {
   context.subscriptions.push(
     outputChannel,
     new vscode.Disposable(disposeWasmProviders),
+    vscode.commands.registerCommand("sqlDialectFmt.openSettings", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "@ext:sql-dialect-fmt.snowflake-sql-sql-dialect-fmt",
+      ),
+    ),
+    vscode.commands.registerCommand("sqlDialectFmt.restartLanguageServer", () =>
+      scheduleModeSync(context),
+    ),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(`${CONFIG_SECTION}.lsp`)) {
         scheduleModeSync(context);
@@ -50,7 +56,7 @@ function activate(context) {
 }
 
 function deactivate() {
-  wasmInstancePromise = null;
+  resetWasm();
   const client = lspClient;
   lspClient = null;
   return client ? client.stop() : undefined;
@@ -220,14 +226,11 @@ async function stopLspClient() {
 /** Settings snapshot forwarded to the server (`initializationOptions`, nested per its schema). */
 function serverSettingsSnapshot() {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-  const snapshot = {};
-  for (const key of SERVER_SETTING_KEYS) {
-    const value = config.get(key);
-    if (value !== undefined) {
-      snapshot[key] = value;
-    }
-  }
-  return snapshot;
+  return {
+    ...readFormatterOptions(config),
+    useEditorIndentation: config.get("useEditorIndentation", true) !== false,
+    lint: config.get("lint", {}),
+  };
 }
 
 /** Register the WebAssembly document/range formatters unless they are already registered. */
@@ -238,13 +241,13 @@ function ensureWasmProviders(context) {
   const selector = { language: LANGUAGE_ID };
   wasmProviderRegistrations = [
     vscode.languages.registerDocumentFormattingEditProvider(selector, {
-      provideDocumentFormattingEdits(document) {
-        return formatDocument(context, document);
+      provideDocumentFormattingEdits(document, options) {
+        return formatDocument(context, document, options);
       },
     }),
     vscode.languages.registerDocumentRangeFormattingEditProvider(selector, {
-      provideDocumentRangeFormattingEdits(document, range) {
-        return formatRange(context, document, range);
+      provideDocumentRangeFormattingEdits(document, range, options) {
+        return formatRange(context, document, range, options);
       },
     }),
   ];
@@ -307,10 +310,10 @@ function log(message) {
 }
 
 /** Format the whole document and return a single replacement edit (or nothing when unchanged). */
-async function formatDocument(context, document) {
+async function formatDocument(context, document, editorOptions) {
   try {
     const original = document.getText();
-    const formatted = await formatText(context, original, readOptions());
+    const formatted = await formatText(context, original, readOptions(editorOptions));
     if (formatted === original) {
       return [];
     }
@@ -326,10 +329,10 @@ async function formatDocument(context, document) {
 }
 
 /** Format the selected range. Unparseable fragments pass through unchanged (the format is lossless). */
-async function formatRange(context, document, range) {
+async function formatRange(context, document, range, editorOptions) {
   try {
     const original = document.getText(range);
-    let formatted = await formatText(context, original, readOptions());
+    let formatted = await formatText(context, original, readOptions(editorOptions));
     // The formatter always emits a trailing newline. When the selection is an inline fragment that
     // did not end with one, dropping it keeps a "Format Selection" from splicing a stray newline in.
     if (!original.endsWith("\n") && formatted.endsWith("\n")) {
@@ -346,117 +349,9 @@ async function formatRange(context, document, range) {
 }
 
 /** Resolve formatter options from the `sqlDialectFmt.*` workspace settings. */
-function readOptions() {
+function readOptions(editorOptions) {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-  return {
-    dialect: config.get("dialect", "snowflake") === "databricks" ? "databricks" : "snowflake",
-    lineWidth: normalizeInteger(config.get("lineWidth", 100), 100),
-    indentWidth: normalizeInteger(config.get("indentWidth", 4), 4),
-    uppercaseKeywords: config.get("uppercaseKeywords", true) !== false,
-  };
-}
-
-/** Run `source` through the WebAssembly formatter and return the formatted UTF-8 text. */
-async function formatText(context, source, options) {
-  const instance = await loadWasm(context);
-  const api = instance.exports;
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  const input = encoder.encode(source);
-  const inputPtr = api.sql_dialect_fmt_alloc(input.length);
-
-  try {
-    // Views are taken after each call that may grow (and therefore detach) the memory buffer.
-    new Uint8Array(api.memory.buffer, inputPtr, input.length).set(input);
-    const format = api.sql_dialect_fmt_format_with_dialect || api.sql_dialect_fmt_format;
-    const dialect = options.dialect === "databricks" ? 1 : 0;
-    const status = format(
-      inputPtr,
-      input.length,
-      options.lineWidth,
-      options.indentWidth,
-      options.uppercaseKeywords ? 1 : 0,
-      dialect,
-    );
-
-    if (status !== 0) {
-      throw new Error(`formatter returned status ${status}`);
-    }
-
-    const resultPtr = api.sql_dialect_fmt_result_ptr();
-    const resultLen = api.sql_dialect_fmt_result_len();
-    return decoder.decode(new Uint8Array(api.memory.buffer, resultPtr, resultLen));
-  } finally {
-    api.sql_dialect_fmt_dealloc(inputPtr, input.length);
-    api.sql_dialect_fmt_clear_result();
-  }
-}
-
-/** Compile and instantiate the bundled WebAssembly formatter, memoizing the instance. */
-function loadWasm(context) {
-  if (!wasmInstancePromise) {
-    wasmInstancePromise = (async () => {
-      const wasmPath = context.asAbsolutePath(path.join("vendor", "sql_dialect_fmt_wasm.wasm"));
-      let bytes;
-      try {
-        bytes = await fs.promises.readFile(wasmPath);
-      } catch (error) {
-        throw new Error(`could not read the bundled formatter at ${wasmPath}: ${messageOf(error)}`);
-      }
-      const module = await WebAssembly.compile(bytes);
-      return WebAssembly.instantiate(module, wasmImportsFor(module));
-    })().catch((error) => {
-      // Do not cache a failed load; a later attempt should be able to retry.
-      wasmInstancePromise = null;
-      throw error;
-    });
-  }
-  return wasmInstancePromise;
-}
-
-// The raw (non-`wasm-bindgen`) build normally imports nothing, but tolerate the placeholder imports
-// a `wasm-bindgen` toolchain would emit so the loader keeps working across build configurations.
-function wasmImportsFor(module) {
-  const imports = {};
-  for (const item of WebAssembly.Module.imports(module)) {
-    imports[item.module] ||= {};
-
-    if (item.kind !== "function") {
-      throw new Error(`unsupported WASM import ${item.module}.${item.name}`);
-    }
-
-    if (item.module === "__wbindgen_placeholder__" && item.name === "__wbindgen_describe") {
-      imports[item.module][item.name] = () => {};
-    } else if (
-      item.module === "__wbindgen_placeholder__" &&
-      item.name.startsWith("__wbg___wbindgen_throw_")
-    ) {
-      imports[item.module][item.name] = (ptr, len) => {
-        throw new Error(`wasm-bindgen throw at ${ptr}:${len}`);
-      };
-    } else if (
-      item.module === "__wbindgen_externref_xform__" &&
-      item.name === "__wbindgen_externref_table_set_null"
-    ) {
-      imports[item.module][item.name] = () => {};
-    } else if (
-      item.module === "__wbindgen_externref_xform__" &&
-      item.name === "__wbindgen_externref_table_grow"
-    ) {
-      imports[item.module][item.name] = () => -1;
-    } else {
-      throw new Error(`unsupported WASM import ${item.module}.${item.name}`);
-    }
-  }
-  return imports;
-}
-
-function normalizeInteger(value, fallback) {
-  const number = Number(value);
-  if (!Number.isInteger(number) || number <= 0) {
-    return fallback;
-  }
-  return number;
+  return readFormatterOptions(config, editorOptions);
 }
 
 function reportError(error) {

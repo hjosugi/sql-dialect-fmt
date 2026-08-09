@@ -32,9 +32,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: rust-${{ matrix.os }}
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
       - name: Format
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: cargo fmt --all --check
+        run: task fmt:check
       - name: Hover tables in sync with spec seeds
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: python3 scripts/generate-hover-tables.py --check
@@ -45,7 +48,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: python3 -m unittest discover -s scripts/tests -p "test_*.py"
       - name: Test
-        run: cargo test --workspace --locked
+        run: task test
       - name: Docs
         if: ${{ matrix.os == 'ubuntu-latest' }}
         env:
@@ -56,7 +59,7 @@ jobs:
         run: cargo bench --locked -p sql-dialect-fmt-formatter --bench format -- --test
       - name: Clippy
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: task clippy
 
   msrv:
     name: MSRV (1.94.0)
@@ -69,8 +72,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: msrv-${{ env.MSRV }}
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
       - name: Check workspace
-        run: cargo check --workspace --all-targets --locked
+        run: task check
 
   formatter-features:
     name: Formatter features (${{ matrix.name }})
@@ -112,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Validate Marketplace and Web Store assets
+      - name: Validate VS Code Marketplace assets
         run: python3 scripts/check-store-assets.py
 
   wasm:
@@ -145,8 +151,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: editors/package-lock.json
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
       - name: Build bundle and run TextMate/Wasm integration tests
-        run: ./scripts/build-vscode-extension.sh
+        run: task vscode:build
       - name: Package VSIX
         working-directory: editors
         run: |
@@ -198,22 +207,3 @@ jobs:
           files: target/coverage/lcov.info
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: true
-
-  tree-sitter:
-    name: Tree-sitter
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: tree-sitter-snowflake/package.json
-      - name: Generate parser
-        working-directory: tree-sitter-snowflake
-        run: npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter generate
-      - name: Test grammar
-        working-directory: tree-sitter-snowflake
-        run: npm exec --package tree-sitter-cli@0.26.11 -- tree-sitter test
-      - name: Generated files are committed
-        run: git diff --exit-code -- tree-sitter-snowflake/src

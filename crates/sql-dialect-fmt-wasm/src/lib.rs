@@ -1,13 +1,15 @@
-//! Raw WebAssembly bindings for browser extension use.
+//! Raw WebAssembly bindings for the bundled VS Code formatter.
 //!
-//! This crate deliberately avoids `wasm-bindgen` so the Chrome extension can load a single local
+//! This crate deliberately avoids `wasm-bindgen` so the VS Code extension can load a single local
 //! `.wasm` file without generated JavaScript glue. JavaScript owns input buffers allocated through
 //! `sql_dialect_fmt_alloc`; this module owns the last formatted result until the next call or
 //! `sql_dialect_fmt_clear_result`.
 
 use std::{cell::RefCell, mem, ptr, slice, str};
 
-use sql_dialect_fmt_formatter::{format, Dialect, FormatOptions};
+use sql_dialect_fmt_formatter::{
+    format, CommaStyle, Dialect, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+};
 
 thread_local! {
     static LAST_RESULT: RefCell<Option<Box<[u8]>>> = const { RefCell::new(None) };
@@ -83,6 +85,39 @@ pub unsafe extern "C" fn sql_dialect_fmt_format_with_dialect(
     format_bytes(bytes, line_width, indent_width, uppercase_keywords, dialect)
 }
 
+/// Format UTF-8 SQL with the complete stable editor option set.
+///
+/// Enum values use `0` as the conventional/default variant and fall back to that variant when an
+/// unknown value is received, keeping older extension hosts forwards-compatible with newer Wasm.
+///
+/// # Safety
+///
+/// `ptr` must point to `len` initialized bytes in Wasm memory for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn sql_dialect_fmt_format_with_options(
+    ptr: u32,
+    len: u32,
+    line_width: u32,
+    indent_width: u32,
+    keyword_case: u32,
+    select_item_layout: u32,
+    comma_style: u32,
+    line_ending: u32,
+    dialect: u32,
+) -> u32 {
+    let bytes = slice::from_raw_parts(ptr as *const u8, len as usize);
+    format_bytes_with_options(
+        bytes,
+        line_width,
+        indent_width,
+        keyword_case,
+        select_item_layout,
+        comma_style,
+        line_ending,
+        dialect,
+    )
+}
+
 /// The safe core of the format ABI: validate `bytes` as UTF-8, format with the decoded raw
 /// options, and stash the result for the `result_ptr`/`result_len` accessors. Split out so the
 /// exact option decoding (clamping, dialect fallback) is testable without Wasm linear memory.
@@ -91,6 +126,29 @@ fn format_bytes(
     line_width: u32,
     indent_width: u32,
     uppercase_keywords: u32,
+    dialect: u32,
+) -> u32 {
+    format_bytes_with_options(
+        bytes,
+        line_width,
+        indent_width,
+        if uppercase_keywords == 0 { 2 } else { 0 },
+        0,
+        0,
+        1,
+        dialect,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn format_bytes_with_options(
+    bytes: &[u8],
+    line_width: u32,
+    indent_width: u32,
+    keyword_case: u32,
+    select_item_layout: u32,
+    comma_style: u32,
+    line_ending: u32,
     dialect: u32,
 ) -> u32 {
     clear_last_result();
@@ -102,11 +160,44 @@ fn format_bytes(
     let options = FormatOptions::default()
         .with_line_width(line_width.max(1) as usize)
         .with_indent_width(indent_width.clamp(1, 16) as usize)
-        .with_uppercase_keywords(uppercase_keywords != 0)
+        .with_keyword_case(keyword_case_from_u32(keyword_case))
+        .with_select_item_layout(select_item_layout_from_u32(select_item_layout))
+        .with_comma_style(comma_style_from_u32(comma_style))
+        .with_line_ending(line_ending_from_u32(line_ending))
         .with_dialect(dialect_from_u32(dialect));
 
     store_last_result(format(source, &options).into_bytes().into_boxed_slice());
     0
+}
+
+fn keyword_case_from_u32(value: u32) -> KeywordCase {
+    match value {
+        1 => KeywordCase::Lower,
+        2 => KeywordCase::Preserve,
+        _ => KeywordCase::Upper,
+    }
+}
+
+fn select_item_layout_from_u32(value: u32) -> SelectItemLayout {
+    match value {
+        1 => SelectItemLayout::Vertical,
+        _ => SelectItemLayout::Auto,
+    }
+}
+
+fn comma_style_from_u32(value: u32) -> CommaStyle {
+    match value {
+        1 => CommaStyle::Leading,
+        _ => CommaStyle::Trailing,
+    }
+}
+
+fn line_ending_from_u32(value: u32) -> LineEnding {
+    match value {
+        0 => LineEnding::Auto,
+        2 => LineEnding::Crlf,
+        _ => LineEnding::Lf,
+    }
 }
 
 fn dialect_from_u32(dialect: u32) -> Dialect {
@@ -176,6 +267,7 @@ fn last_result_len() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "external-formatters")]
     use sql_dialect_fmt_test_fixtures::{
         javascript_routine_trailing_whitespace_input,
         JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED,
@@ -255,6 +347,33 @@ mod tests {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn format_to_string_with_options(
+        source: &str,
+        line_width: u32,
+        indent_width: u32,
+        keyword_case: u32,
+        select_item_layout: u32,
+        comma_style: u32,
+        line_ending: u32,
+        dialect: u32,
+    ) -> String {
+        let status = format_bytes_with_options(
+            source.as_bytes(),
+            line_width,
+            indent_width,
+            keyword_case,
+            select_item_layout,
+            comma_style,
+            line_ending,
+            dialect,
+        );
+        assert_eq!(status, 0, "format_bytes_with_options({source:?}) failed");
+        let result = String::from_utf8(last_result_bytes()).expect("UTF-8 result");
+        clear_last_result();
+        result
+    }
+
     #[test]
     fn format_defaults_produce_uppercase_snowflake_output() {
         assert_eq!(
@@ -286,6 +405,23 @@ mod tests {
         assert_eq!(
             format_to_string(source, 10, 4, 1, 0),
             "SELECT\n    aaaa,\n    bbbb,\n    cccc\nFROM t;\n"
+        );
+    }
+
+    #[test]
+    fn extended_options_support_lowercase_vertical_selects_and_leading_commas() {
+        assert_eq!(
+            format_to_string_with_options(
+                "SELECT customer_id, customer_name FROM customers",
+                80,
+                2,
+                1,
+                1,
+                1,
+                1,
+                0,
+            ),
+            "select\n    customer_id\n  , customer_name\nfrom customers;\n"
         );
     }
 
@@ -336,6 +472,7 @@ mod tests {
         assert_eq!(format_to_string(&first, 80, 4, 1, 0), first);
     }
 
+    #[cfg(feature = "external-formatters")]
     #[test]
     fn javascript_routine_regression_formats_through_the_wasm_abi() {
         let input = javascript_routine_trailing_whitespace_input();

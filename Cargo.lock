@@ -2266,7 +2266,7 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "sql-dialect-fmt"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "globset",
  "ignore",
@@ -2283,7 +2283,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-config"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "serde",
  "sql-dialect-fmt-formatter",
@@ -2293,11 +2293,11 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-encoding"
-version = "1.20.1"
+version = "1.21.0"
 
 [[package]]
 name = "sql-dialect-fmt-formatter"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "biome_console",
  "biome_deserialize",
@@ -2331,7 +2331,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-highlight"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "serde_json",
  "sql-dialect-fmt-lexer",
@@ -2343,7 +2343,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-hover"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "sql-dialect-fmt-lexer",
  "sql-dialect-fmt-syntax",
@@ -2351,7 +2351,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-lexer"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "criterion",
  "sql-dialect-fmt-syntax",
@@ -2362,7 +2362,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-lint"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "sql-dialect-fmt-lexer",
  "sql-dialect-fmt-parser",
@@ -2372,7 +2372,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-lsp"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "lsp-server",
  "lsp-types",
@@ -2393,7 +2393,7 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-parser"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -2407,18 +2407,18 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-syntax"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "rowan",
 ]
 
 [[package]]
 name = "sql-dialect-fmt-test-fixtures"
-version = "1.20.1"
+version = "1.21.0"
 
 [[package]]
 name = "sql-dialect-fmt-test-support"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "sql-dialect-fmt-highlight",
  "sql-dialect-fmt-lexer",
@@ -2427,22 +2427,11 @@ dependencies = [
 
 [[package]]
 name = "sql-dialect-fmt-text"
-version = "1.20.1"
-
-[[package]]
-name = "sql-dialect-fmt-tree-sitter"
-version = "1.20.1"
-dependencies = [
- "cc",
- "sql-dialect-fmt-syntax",
- "sql-dialect-fmt-test-fixtures",
- "tree-sitter",
- "tree-sitter-language",
-]
+version = "1.21.0"
 
 [[package]]
 name = "sql-dialect-fmt-wasm"
-version = "1.20.1"
+version = "1.21.0"
 dependencies = [
  "sql-dialect-fmt-formatter",
  "sql-dialect-fmt-test-fixtures",
@@ -2453,12 +2442,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "streaming-iterator"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 
 [[package]]
 name = "strsim"
@@ -2687,26 +2670,6 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
 ]
-
-[[package]]
-name = "tree-sitter"
-version = "0.26.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1c71c1c4cc0920b20d6b0f6572e7682cd07a6a2faec71067a31fa394c586df"
-dependencies = [
- "cc",
- "regex",
- "regex-syntax",
- "serde_json",
- "streaming-iterator",
- "tree-sitter-language",
-]
-
-[[package]]
-name = "tree-sitter-language"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "ty_static"

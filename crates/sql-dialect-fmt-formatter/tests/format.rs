@@ -8,7 +8,9 @@
 //!   synthesized statement terminators) is unchanged, so formatting never drops or invents SQL.
 //! * **No new parse errors** — formatting clean input yields clean output.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions, KeywordCase, LineEnding};
+use sql_dialect_fmt_formatter::{
+    format, CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+};
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
@@ -261,6 +263,52 @@ fn magic_trailing_comma_explodes_even_a_single_item() {
 #[test]
 fn no_trailing_comma_stays_inline_when_it_fits() {
     assert_eq!(fmt("select a, b from t"), "SELECT a, b\nFROM t;\n");
+}
+
+#[test]
+fn vertical_select_layout_puts_one_item_on_each_line() {
+    let options = FormatOptions::default()
+        .with_indent_width(2)
+        .with_select_item_layout(SelectItemLayout::Vertical);
+    assert_eq!(
+        format("select customer_id, customer_name from customers", &options),
+        "SELECT\n  customer_id,\n  customer_name\nFROM customers;\n"
+    );
+}
+
+#[test]
+fn leading_comma_style_aligns_wrapped_list_items() {
+    let options = FormatOptions::default()
+        .with_indent_width(2)
+        .with_select_item_layout(SelectItemLayout::Vertical)
+        .with_comma_style(CommaStyle::Leading);
+    assert_eq!(
+        format("select customer_id, customer_name from customers", &options),
+        "SELECT\n    customer_id\n  , customer_name\nFROM customers;\n"
+    );
+    assert_eq!(
+        format(
+            "select f(customer_id, customer_name) from customers",
+            &options
+        ),
+        "SELECT\n  f(customer_id, customer_name)\nFROM customers;\n"
+    );
+}
+
+#[test]
+fn leading_comma_style_applies_to_forced_multiline_lists() {
+    let options = FormatOptions::default().with_comma_style(CommaStyle::Leading);
+    assert_eq!(
+        format(
+            "with a as (select 1), b as (select 2) select * from a",
+            &options
+        ),
+        "WITH a AS (SELECT 1)\n, b AS (SELECT 2)\nSELECT *\nFROM a;\n"
+    );
+    assert_eq!(
+        format("alter table t add column a int, add column b int", &options),
+        "ALTER TABLE t\n    ADD COLUMN a INT\n    , ADD COLUMN b INT;\n"
+    );
 }
 
 #[test]

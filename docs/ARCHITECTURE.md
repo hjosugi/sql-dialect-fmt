@@ -38,8 +38,8 @@ sql-dialect-fmt-parser       resilient rowan CST
   v
 future formatter/LSP  Doc IR, semantic tokens, diagnostics
 
-tree-sitter-snowflake is a parallel editor grammar for tools that consume
-Tree-sitter directly. It is intentionally permissive and token-centric.
+tree-sitter-snowflake is a paused parallel editor grammar. Its sources are retained for a future
+reevaluation but excluded from the active Cargo workspace, CI, and release scope.
 ```
 
 ## Syntax and Lexer
@@ -93,9 +93,8 @@ knows every Snowflake construct.
 range, title, body, kind, and optional docs URL. The future LSP server should
 adapt this model instead of duplicating hover text.
 
-`tree-sitter-snowflake` is for editors and code hosts. It should be robust under
-new Snowflake syntax. Add structure gradually only when it improves real editor
-features such as folding, injections, or selection.
+`tree-sitter-snowflake` is currently paused. Do not extend it while VS Code and core formatter
+quality are the active priority; reevaluate it as a separate scope later.
 
 ## Adding Snowflake Syntax
 

@@ -2,7 +2,7 @@
   "name": "snowflake-sql-sql-dialect-fmt",
   "displayName": "Snowflake SQL (sql-dialect-fmt)",
   "description": "Local Snowflake and Databricks SQL formatting, syntax highlighting, and optional LSP diagnostics, hover, and completion.",
-  "version": "1.20.1",
+  "version": "1.21.0",
   "publisher": "sql-dialect-fmt",
   "license": "0BSD",
   "repository": {
@@ -29,7 +29,9 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:snowflake-sql"
+    "onLanguage:snowflake-sql",
+    "onCommand:sqlDialectFmt.openSettings",
+    "onCommand:sqlDialectFmt.restartLanguageServer"
   ],
   "keywords": [
     "snowflake",
@@ -68,6 +70,16 @@
     "vscode-textmate": "^9.3.2"
   },
   "contributes": {
+    "commands": [
+      {
+        "command": "sqlDialectFmt.openSettings",
+        "title": "sql-dialect-fmt: Open Formatter Settings"
+      },
+      {
+        "command": "sqlDialectFmt.restartLanguageServer",
+        "title": "sql-dialect-fmt: Restart Language Server"
+      }
+    ],
     "configuration": {
       "title": "Snowflake SQL (sql-dialect-fmt)",
       "properties": {
@@ -82,13 +94,13 @@
         },
         "sqlDialectFmt.lineWidth": {
           "type": "integer",
-          "default": 100,
+          "default": 80,
           "minimum": 1,
           "description": "Target line width the formatter tries to stay within before wrapping."
         },
         "sqlDialectFmt.indentWidth": {
           "type": "integer",
-          "default": 4,
+          "default": 2,
           "minimum": 1,
           "maximum": 16,
           "description": "Number of spaces per indentation level."
@@ -96,7 +108,56 @@
         "sqlDialectFmt.uppercaseKeywords": {
           "type": "boolean",
           "default": true,
-          "description": "Upper-case SQL keywords when formatting."
+          "markdownDescription": "Deprecated compatibility setting. Use `sqlDialectFmt.keywordCase`.",
+          "deprecationMessage": "Use sqlDialectFmt.keywordCase instead."
+        },
+        "sqlDialectFmt.keywordCase": {
+          "type": "string",
+          "enum": [
+            "upper",
+            "lower",
+            "preserve"
+          ],
+          "enumDescriptions": [
+            "Write recognized SQL keywords in upper case.",
+            "Write recognized SQL keywords in lower case.",
+            "Keep each recognized keyword's source spelling."
+          ],
+          "default": "upper",
+          "description": "Letter case used for recognized SQL keywords."
+        },
+        "sqlDialectFmt.selectItemLayout": {
+          "type": "string",
+          "enum": [
+            "vertical",
+            "auto"
+          ],
+          "default": "vertical",
+          "markdownDescription": "Use `vertical` for one top-level SELECT item per line, or `auto` to keep short lists inline and wrap at `lineWidth`."
+        },
+        "sqlDialectFmt.commaStyle": {
+          "type": "string",
+          "enum": [
+            "trailing",
+            "leading"
+          ],
+          "default": "trailing",
+          "description": "Place commas after the preceding item or before the following item when a list wraps."
+        },
+        "sqlDialectFmt.lineEnding": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "lf",
+            "crlf"
+          ],
+          "default": "auto",
+          "description": "Output line endings. Auto preserves the first line ending found in the document."
+        },
+        "sqlDialectFmt.useEditorIndentation": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Use the active editor's `editor.tabSize` for indentation. Disable to use `sqlDialectFmt.indentWidth`."
         },
         "sqlDialectFmt.lsp.enabled": {
           "type": "boolean",

@@ -98,11 +98,11 @@ Reference for when something fails partway, or when a release needs hand-driving
 3. **Run the green gate** from the workspace root:
 
    ```sh
-   cargo test --workspace
-   cargo clippy --workspace --all-targets -- -D warnings
+   task test
+   task clippy
    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
    cargo bench -p sql-dialect-fmt-formatter --bench format -- --test
-   cargo fmt --all --check
+   task fmt:check
    scripts/check-publish-manifests.py
    scripts/run-external-corpus.sh --sample
    scripts/conformance-report.py --path crates/sql-dialect-fmt-formatter/tests/corpus_sample \
@@ -112,11 +112,11 @@ Reference for when something fails partway, or when a release needs hand-driving
 4. **Package release assets**:
 
    ```sh
-   scripts/package-extensions.sh
+   task vscode:package
    ```
 
-   This builds the Snowsight Chrome extension zip and the VS Code VSIX under `target/dist/`.
-   The GitHub Release workflow uploads those alongside the CLI tarball and checksum.
+   This builds and validates the VS Code VSIX under `target/dist/`. The GitHub Release workflow
+   uploads it alongside the CLI tarball and checksum.
 
 5. **Dry-run packaging** of dependency-free publishable crates:
 
@@ -182,12 +182,11 @@ Reference for when something fails partway, or when a release needs hand-driving
    dispatch the `Release` workflow for the same version with `publish_crates=true`; already
    published crate/version pairs are skipped before the remaining crates are uploaded.
 
-8. **Store publishing** is automated after one-time store setup. Follow
+8. **VS Code Marketplace publishing** is automated after one-time store setup. Follow
    [docs/STORE_PUBLISHING.md](docs/STORE_PUBLISHING.md) for the exact no-decision setup runbook.
 
-   The `Release` workflow packages the Chrome zip and VSIX on `v*.*.*` tags and can publish to
-   the stores automatically on tag push once the repository variables below are enabled. The
-   `Extension Packages` workflow remains available for manual package/publish runs.
+   The `Release` workflow packages the VSIX through go-task on `v*.*.*` tags and can publish it
+   automatically on tag push. The `VS Code Extension` workflow remains available for manual runs.
 
    One-time VS Code Marketplace setup:
 
@@ -200,45 +199,27 @@ Reference for when something fails partway, or when a release needs hand-driving
      Global Azure DevOps PATs retire on 2026-12-01, so treat this as the short path rather than the
      long-term one.
    - Enable automatic VS Code publishing with repository variable
-     `VSCODE_MARKETPLACE_AUTO_PUBLISH=true`, or set `EXTENSIONS_AUTO_PUBLISH=true` to publish both
-     stores from tag pushes.
-
-   One-time Chrome Web Store setup:
-
-   - Register the developer account, create the item, and complete the first listing/privacy/
-     distribution fields in the Chrome Web Store dashboard.
-   - Enable the Chrome Web Store API in a Google Cloud project, configure OAuth consent, and create
-     an OAuth client/refresh token with Chrome Web Store scope.
-   - Set variables `CHROME_PUBLISHER_ID` and `CHROME_EXTENSION_ID`.
-   - Set secrets `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, and `CHROME_REFRESH_TOKEN`.
-   - Enable automatic Chrome publishing with repository variable `CHROME_WEBSTORE_AUTO_PUBLISH=true`,
-     or set `EXTENSIONS_AUTO_PUBLISH=true` to publish both stores from tag pushes.
+     `VSCODE_MARKETPLACE_AUTO_PUBLISH=true`.
 
    To minimize GitHub UI work after the store-side setup is done, export the credentials locally
    and let the helper write repository variables/secrets with `gh`:
 
    ```sh
-   # PAT path, both stores, tag-push auto-publish enabled.
+   # PAT path, tag-push auto-publish enabled.
    export VSCE_PAT=...
-   export CHROME_PUBLISHER_ID=...
-   export CHROME_EXTENSION_ID=...
-   export CHROME_CLIENT_ID=...
-   export CHROME_CLIENT_SECRET=...
-   export CHROME_REFRESH_TOKEN=...
-   scripts/configure-extension-publishing.sh --target all --vscode-auth pat
+   scripts/configure-extension-publishing.sh --vscode-auth pat
 
    # Long-term VS Code auth path. Run instead of the PAT command after the Entra identity
    # has been authorized as a Marketplace publisher contributor.
    export AZURE_CLIENT_ID=...
    export AZURE_TENANT_ID=...
    export AZURE_SUBSCRIPTION_ID=... # optional
-   scripts/configure-extension-publishing.sh --target vscode --vscode-auth azure
+   scripts/configure-extension-publishing.sh --vscode-auth azure
    ```
 
-   Manual fallback remains available from the `Extension Packages` workflow: choose `publish=true`
-   and `publish_target=all|vscode|chrome`. Publishing a package with a new version updates the
-   existing Marketplace/Web Store item; it does not create a second listing. Both release
-   workflows validate the required credentials before attempting publication.
+   Manual fallback remains available from the `VS Code Extension` workflow with `publish=true`.
+   Publishing a new package version updates the existing Marketplace item. Both workflows validate
+   required credentials before attempting publication.
 
 ## Notes
 

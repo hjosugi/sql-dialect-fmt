@@ -6,7 +6,7 @@ use SyntaxKind::*;
 
 use crate::doc::{concat, empty, group, hard_line, indent, join, line, space, text, Doc};
 
-use super::expr::{bracketed, item_sep, paren_list_has_trailing_comma};
+use super::expr::{bracketed, hard_item_sep, item_sep, paren_list_has_trailing_comma};
 use super::options::{is_option_flag, is_option_key};
 use super::routine_body::{
     format_embedded_body_token, is_create_routine, is_routine_header_word, routine_body_language,
@@ -234,10 +234,11 @@ impl Lowerer {
                 if child.kind() == ALTER_ACTION {
                     actions_seen += 1;
                     if multi {
-                        if actions_seen > 1 {
-                            clauses.push(text(","));
-                        }
-                        clauses.push(hard_line());
+                        clauses.push(if actions_seen > 1 {
+                            hard_item_sep(self.ctx.comma_style)
+                        } else {
+                            hard_line()
+                        });
                         self.reset();
                     }
                     clauses.push(self.lower_node(&child));
@@ -288,7 +289,11 @@ impl Lowerer {
                         // Preserve the author's separator: Snowflake allows both the
                         // comma-separated (`ALTER SESSION SET a = 1, b = 2`) and the
                         // space-separated (`ALTER TASK t SET a = 1 b = 2`) property lists.
-                        items.push(if pending_comma { item_sep() } else { line() });
+                        items.push(if pending_comma {
+                            item_sep(self.ctx.comma_style)
+                        } else {
+                            line()
+                        });
                     }
                     seen_prop = true;
                     pending_comma = false;
@@ -355,7 +360,7 @@ impl Lowerer {
             })
             .collect();
         self.resume_after(R_PAREN);
-        bracketed(empty(), defs, trailing)
+        bracketed(empty(), defs, trailing, self.ctx.comma_style)
     }
 
     /// Lower a COPY `COPY_OPTION` or object-DDL `OBJECT_PROPERTY` node, up-casing the recognized
@@ -475,7 +480,7 @@ impl Lowerer {
                 text("("),
                 indent(concat(vec![
                     hard_line(),
-                    join(concat(vec![text(","), hard_line()]), items),
+                    join(hard_item_sep(self.ctx.comma_style), items),
                 ])),
                 hard_line(),
                 text(")"),

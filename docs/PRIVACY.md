@@ -1,47 +1,19 @@
 <!-- i18n: language-switcher -->
 [English](PRIVACY.md) | [日本語](PRIVACY.ja.md)
 
-# sql-dialect-fmt Extensions Privacy Policy
+# Privacy
 
-Last updated: 2026-07-11
+This policy covers the `Snowflake SQL (sql-dialect-fmt)` VS Code extension.
 
-This policy applies to:
+Formatting runs locally in the VS Code extension host through the bundled WebAssembly formatter.
+The extension does not send SQL, settings, file names, credentials, account identifiers, or usage
+analytics to the project maintainers or to a formatting service.
 
-- `sql-dialect-fmt for Snowsight`, the Chrome extension in `extensions/chrome`
-- `Snowflake SQL (sql-dialect-fmt)`, the VS Code extension in `editors`
+When the optional `sqlDialectFmt.lsp.enabled` setting is enabled, the extension starts the locally
+installed `sql-dialect-fmt-lsp` executable over stdio. The language server also processes documents
+locally and makes no network requests on behalf of the extension.
 
-## Data Collection
+The extension stores no SQL text. VS Code itself persists user/workspace settings according to the
+editor's normal settings behavior.
 
-These extensions do not collect, sell, transmit, or share user data.
-
-The Chrome extension reads SQL text from the active Snowflake Snowsight or Databricks SQL editor
-only when the user runs the formatter from the extension button, the browser action, or the
-`Alt+Shift+F` shortcut. The SQL is formatted locally by the WebAssembly module bundled with the
-extension and is written back to the active editor. The extension does not send SQL text to any
-external server.
-
-The VS Code extension contributes Snowflake SQL language metadata, TextMate grammar files, and a
-local formatter. When the user runs Format Document, Format Selection, or format on save, the SQL is
-formatted locally by the WebAssembly module bundled with the extension and written back to the
-editor. It does not include telemetry, analytics, network upload, or remote formatting, and does not
-store SQL text.
-
-## Permissions
-
-The Chrome extension requests access to Snowflake, Snowsight, and Databricks hostnames so it can
-find the active SQL editor and replace the selected SQL, or the whole editor contents, with
-formatted SQL. It requests `activeTab` so the browser action can run only after a user gesture in
-the active tab. It requests `storage` to save formatter preferences through `chrome.storage.sync`.
-
-## Storage
-
-The Chrome extension stores only formatter preferences using `chrome.storage.sync`: SQL dialect,
-line width, indent width, and keyword casing. These settings may synchronize between Chrome
-profiles where the user has enabled browser synchronization. It does not store SQL text,
-credentials, account identifiers, browsing history, or analytics events.
-
-## Contact
-
-For questions or security reports, open an issue at:
-
-https://github.com/hjosugi/sql-dialect-fmt/issues
+Report privacy or security concerns through the repository's security policy.

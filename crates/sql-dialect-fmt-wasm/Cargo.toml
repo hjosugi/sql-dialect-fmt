@@ -10,9 +10,13 @@ readme.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Raw WebAssembly bindings for sql-dialect-fmt, intended for browser extensions."
+description = "Raw WebAssembly bindings for the bundled sql-dialect-fmt VS Code formatter."
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+external-formatters = ["sql-dialect-fmt-formatter/external-formatters"]
 
 [dependencies]
 sql-dialect-fmt-formatter.workspace = true

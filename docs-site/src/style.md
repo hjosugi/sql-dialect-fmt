@@ -32,5 +32,5 @@ Routine bodies and embedded language blocks are kept inside their original SQL d
 ## Width And Indentation
 
 `line_width` controls when groups break. `indent_width` controls the spaces added for nested
-structures. Both options are available through the CLI, config files, the browser extension, and the
+structures. Both options are available through the CLI, config files, the VS Code extension, and the
 WASM playground.

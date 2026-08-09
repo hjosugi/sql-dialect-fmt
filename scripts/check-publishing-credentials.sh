@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-usage: scripts/check-publishing-credentials.sh vscode|chrome|crates
+usage: scripts/check-publishing-credentials.sh vscode|crates
 
 Checks that the environment contains the credentials required by a publishing target.
 Secret values are never printed.
@@ -36,13 +36,6 @@ case "$target" in
         exit 2
         ;;
     esac
-    ;;
-  chrome)
-    require_env CHROME_PUBLISHER_ID
-    require_env CHROME_EXTENSION_ID
-    require_env CHROME_CLIENT_ID
-    require_env CHROME_CLIENT_SECRET
-    require_env CHROME_REFRESH_TOKEN
     ;;
   crates)
     require_env CARGO_REGISTRY_TOKEN

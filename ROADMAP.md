@@ -135,28 +135,28 @@
 - ✅ 複数ファイル**並列**整形（`rayon`）。処理は並列、stdout/stderr/check 表示は入力順で安定。Criterion ベンチマークは [benches/format.rs](crates/sql-dialect-fmt-formatter/benches/format.rs) で導入済み
 - ✅ 大規模コーパスでのべき等性・無破壊（ラウンドトリップ）回帰（内蔵 easy fixture 全 SQL + always-on sample corpus + external corpus harness `SQL_DIALECT_FMT_EXTERNAL_CORPUS`、docs/CI smoke つき）。GitHub Actions は PR/push/weekly/dispatch で sample または `SQL_DIALECT_FMT_EXTERNAL_CORPUS_URL` の archive を継続実行し、repo variable には pinned public dbt corpus seed を設定済み
 - ✅ エディタ拡張（VS Code）パッケージング（`editors/` を extension root とする `package.json` + `language-configuration.json`）
-- ✅ Snowsight/Chrome 拡張（`sql-dialect-fmt-wasm` を `wasm32-unknown-unknown` でビルドして同梱、worksheet editor 上のボタン/拡張アイコン/`Alt+Shift+F` から整形）… [sql-dialect-fmt-wasm](crates/sql-dialect-fmt-wasm/) / [extensions/chrome](extensions/chrome/) / [build script](scripts/build-chrome-extension.sh)
-- ✅ GitHub Release asset: CLI tarball + sha256、Chrome zip、VS Code VSIX を `v*.*.*` release に同梱。旧 `snow-fmt-*` asset は除去済み
-- ✅ VS Code Marketplace / Chrome Web Store publish workflow: tag push で package artifact を作成し、repo variable で opt-in すれば store publish まで自動実行。VS Code Marketplace は初回 listing と v1.16.1 への自動更新を完了し、`VSCE_PAT` + `VSCODE_MARKETPLACE_AUTO_PUBLISH=true` を設定済み。Chrome は Web Store API OAuth credentials と初回 listing/審査が未完了。repo secret/variable は [configure-extension-publishing.sh](scripts/configure-extension-publishing.sh) で投入可
+- ✅ VS Code 拡張にローカル Wasm formatter を同梱し、Format Document / Selection / Save を外部 binary なしで提供
+- ✅ GitHub Release asset: CLI tarball + sha256、VS Code VSIX を `v*.*.*` release に同梱
+- ✅ VS Code Marketplace publish workflow: tag push で package artifact を作成し、`VSCODE_MARKETPLACE_AUTO_PUBLISH=true` で自動更新
+- ⏸️ Tree-sitter grammar / Rust binding / Tree-sitter 依存 editor integration は source を保持したまま active workspace・CI・release scope から除外
 - ✅ 公式仕様由来の conformance generator（Future Tech Blog の `uroborosql-fmt` / `postgresql-cst-parser` 型の発想を Snowflake 向けに翻訳）: local path / archive から `.sql` と SQL fenced block を抽出し、外部 corpus harness に流して parser/formatter conformance report を生成。将来、機械可読な公式 grammar が得られるなら Pure Rust CST parser 生成の候補にする … [scripts/conformance-report.py](scripts/conformance-report.py)
 - ✅ 外部 grammar oracle の継続監視: grammars-v4 Snowflake examples、Apache Spark SQL tests / `SqlBaseParser.g4` rule、sqlfluff Snowflake/Databricks keyword・segment inventory を出典/revision/license付き report に変換。Snowflake/Databricks別 corpus gateと週次artifactを運用し、name matchはsemantic coverageではないheuristic checklistとして扱う … [scripts/grammar-oracle-report.py](scripts/grammar-oracle-report.py) / [docs/CORPUS.ja.md](docs/CORPUS.ja.md)
 
 ---
 
 ### 現状サマリ（2026-07-27）
-**v1.18.0 到達**。Phase 0–10 の配布面は継続運用中で、コア整形（SELECT 一式・DML・基本 DDL・object DDL・COPY・Snowflake 固有クエリ）は無破壊・べき等を property test まで含めて機械保証している。Databricks mode、LSP/editor、CLI、Chrome+WASM、VSIX、GitHub Release、外部 corpus、conformance report も release gate に含める。キーワード・型語彙は syntax crate 側を中心に共有し、TextMate / tree-sitter / highlight / LSP completion の drift はテストで検出する。Formatter の Biome/Ruff 依存は Cargo feature で切り離し可能で、Java/Scala の簡易 brace body formatting は opt-in。外部grammarはparser生成入力にせず、週次conformance oracleとして手書きparserのgap検出に利用する。
+**現在の優先順位は VS Code 拡張と基本 formatter の完成度**。keyword case、SELECT 縦配置、leading/trailing comma、行幅、indent、line ending を core/config/CLI/LSP/Wasm/VS Code 全経路で一致させる。Chrome 拡張は削除済み。Tree-sitter は保留し、複雑な embedded body formatter は opt-in として基本 build から外す。
 
 **継続タスク（個別 issue で追跡）**:
-1. **Store 運用**: VS Code Marketplace は listing・PAT・自動更新を設定済み。Chrome Web Store は初回 item/listing・YouTube Unlisted の実 URL・審査・OAuth credentials・自動更新を完了させる。
+1. **VS Code 拡張**: 設定 UX、Wasm/LSP parity、format-on-save/selection、VSIX integration を最優先で磨く。
 2. **仕様追随**: Snowflake Preview option / Semantic View / Cortex-AISQL の追加は conformance generator と外部 corpus の継続運用で追う。
 3. **Formatter polish**: コメント配置、未構造化 DDL、balanced-paren 構文などは小さな issue 単位で進める。
 4. **LSP / editor polish**: 設定 reload、VS Code integration、store listing を個別 issue で完了させる（rich hover は #92 で spec 連携済み。識別子の別名解決への拡張が次段）。
 5. **研究開発**: Snowflake/Databricks が実装と同一の公式 grammar source（PostgreSQL の `gram.y` 相当）を公開した場合のみ、Pure Rust CST parser 用の専用 generator を再評価する。公式 ANTLR grammar の公開だけでは、lossless CST・エラー回復・contextual keyword の移行条件を満たさない。
 
-回帰ゲートは `cargo test --workspace`（実例の厳密な期待出力、full/sql-only fixture の
+回帰ゲートは `task ci`（実例の厳密な期待出力、full/sql-only fixture の
 べき等・無破壊、lexer/parser recovery、lexical highlight、LSP stdio、WASM ABI、
-Tree-sitter）＋ `cargo clippy --workspace --all-targets -- -D warnings` ＋
-`cargo fmt --all -- --check`。VS Code 拡張は実 TextMate engine と bundle→WASM formatter
+clippy、rustfmt）。Tree-sitter は保留中のため active gate に含めない。VS Code 拡張は実 TextMate engine と bundle→WASM formatter
 provider の統合テスト、さらに VSIX 内容検査まで CI で行う。release 時は
 `scripts/package-extensions.sh`、formatter bench smoke、external corpus sample、
 conformance report、GitHub Actions の Release / CI / Docs / Corpus も確認する。

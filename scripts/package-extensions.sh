@@ -6,9 +6,7 @@ VERSION="${1:-$("$ROOT_DIR/scripts/workspace-version.sh")}"
 DIST_DIR="$ROOT_DIR/target/dist"
 
 mkdir -p "$DIST_DIR"
-rm -f \
-  "$DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip" \
-  "$DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
+rm -f "$DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
 
 if command -v rustup >/dev/null 2>&1; then
   rustup target add wasm32-unknown-unknown >/dev/null
@@ -22,20 +20,7 @@ else
     exit 1
   fi
 fi
-"$ROOT_DIR/scripts/build-chrome-extension.sh"
-# Reuses the cached wasm build above and vendors it into editors/ for the VSIX.
 "$ROOT_DIR/scripts/build-vscode-extension.sh"
-
-(
-  cd "$ROOT_DIR/extensions/chrome"
-  zip -qr "$DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip" \
-    manifest.json \
-    images \
-    options.html \
-    README.md \
-    src \
-    vendor/sql_dialect_fmt_wasm.wasm
-)
 
 (
   cd "$ROOT_DIR/editors"
@@ -46,6 +31,4 @@ fi
 )
 "$ROOT_DIR/scripts/check-vsix-package.py" "$DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
 
-echo "Extension packages:"
-echo "  $DIST_DIR/sql-dialect-fmt-v$VERSION-chrome.zip"
-echo "  $DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"
+echo "VS Code extension package: $DIST_DIR/sql-dialect-fmt-v$VERSION.vsix"

@@ -32,15 +32,6 @@ updates:
       - dependency-name: "ruff_*"
 
   - package-ecosystem: "npm"
-    directory: "/tree-sitter-snowflake"
-    schedule:
-      interval: "weekly"
-    groups:
-      tree-sitter-npm:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
     directory: "/editors"
     schedule:
       interval: "weekly"

@@ -9,6 +9,7 @@ use std::io::{ErrorKind, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+#[cfg(feature = "external-formatters")]
 use sql_dialect_fmt_test_fixtures::{
     javascript_routine_trailing_whitespace_input, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED,
 };
@@ -60,6 +61,7 @@ fn stdin_to_stdout_formats() {
 }
 
 #[test]
+#[cfg(feature = "external-formatters")]
 fn stdin_formats_realistic_javascript_routine_instead_of_silently_passing_it_through() {
     let tmp = TempDir::new().unwrap();
     let input = javascript_routine_trailing_whitespace_input();
@@ -139,6 +141,31 @@ fn stdin_to_stdout_honors_keyword_case_and_line_ending() {
     );
     assert_eq!(code, 0);
     assert_eq!(out, "select a\r\nfrom t;\r\n");
+    assert!(!err.contains("parse error"), "stderr: {err}");
+}
+
+#[test]
+fn stdin_to_stdout_honors_vertical_select_and_leading_comma_style() {
+    let tmp = TempDir::new().unwrap();
+    let (code, out, err) = run(
+        tmp.path(),
+        &[
+            "--keyword-case",
+            "lower",
+            "--indent-width",
+            "2",
+            "--select-item-layout",
+            "vertical",
+            "--comma-style",
+            "leading",
+        ],
+        Some("SELECT customer_id, customer_name FROM customers"),
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        out,
+        "select\n    customer_id\n  , customer_name\nfrom customers;\n"
+    );
     assert!(!err.contains("parse error"), "stderr: {err}");
 }
 

@@ -13,7 +13,7 @@ categories.workspace = true
 description = "Generic Wadler/Prettier-style Doc IR + width-aware printer, plus the Snowflake SQL formatting rules built on the lossless CST."
 
 [features]
-default = ["external-formatters"]
+default = []
 external-formatters = ["embedded-javascript", "embedded-python"]
 embedded-javascript = [
     "dep:biome_console",

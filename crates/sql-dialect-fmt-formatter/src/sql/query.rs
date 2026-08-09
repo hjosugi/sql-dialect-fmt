@@ -5,11 +5,12 @@ use sql_dialect_fmt_syntax::{SyntaxKind, SyntaxNode};
 use SyntaxKind::*;
 
 use crate::doc::{
-    concat, empty, group, group_expanded, hard_line, indent, join, line, soft_line, space, text,
-    Doc,
+    concat, empty, group, group_expanded, hard_line, if_group_breaks, indent, join, line,
+    soft_line, space, text, Doc,
 };
+use crate::{CommaStyle, SelectItemLayout};
 
-use super::expr::{has_trailing_comma, item_sep};
+use super::expr::{hard_item_sep, has_trailing_comma, item_sep};
 use super::{trimmed_text, Lowerer};
 
 impl Lowerer {
@@ -43,7 +44,8 @@ impl Lowerer {
         let inner = concat(vec![concat(head), indent(concat(vec![line(), list_doc]))]);
         // A normal header is one group (flat when it fits, else one item per line); a magic comma
         // forces that group to break.
-        let header = if magic_comma {
+        let force_vertical = self.ctx.select_item_layout == SelectItemLayout::Vertical;
+        let header = if magic_comma || force_vertical {
             group_expanded(inner)
         } else {
             group(inner)
@@ -60,7 +62,12 @@ impl Lowerer {
 
     fn lower_select_list(&mut self, list: &SyntaxNode, trailing_comma: bool) -> Doc {
         let items = self.lower_items(list.children().filter(|n| n.kind() == SELECT_ITEM));
-        let mut doc = join(item_sep(), items);
+        let alignment = if self.ctx.comma_style == CommaStyle::Leading && items.len() > 1 {
+            if_group_breaks(text("  "), empty())
+        } else {
+            empty()
+        };
+        let mut doc = concat(vec![alignment, join(item_sep(self.ctx.comma_style), items)]);
         if trailing_comma {
             // Re-emit the author's trailing comma (a token of the list, not of any item).
             doc = concat(vec![doc, text(",")]);
@@ -124,7 +131,10 @@ impl Lowerer {
         if items.is_empty() {
             return concat(head);
         }
-        let body = indent(concat(vec![line(), join(item_sep(), items)]));
+        let body = indent(concat(vec![
+            line(),
+            join(item_sep(self.ctx.comma_style), items),
+        ]));
         group(concat(vec![concat(head), body]))
     }
 
@@ -298,7 +308,7 @@ impl Lowerer {
         concat(vec![
             concat(head),
             space(),
-            join(concat(vec![text(","), hard_line()]), ctes),
+            join(hard_item_sep(self.ctx.comma_style), ctes),
         ])
     }
 }

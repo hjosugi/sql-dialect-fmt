@@ -37,8 +37,8 @@ same engine used by [sql-dialect-fmt](https://github.com/hjosugi/sql-dialect-fmt
 
 The extension registers a formatter for `snowflake-sql` documents, so **Format Document**,
 **Format Selection**, and `"editor.formatOnSave"` all work out of the box. Formatting runs entirely
-on your machine: the bundled WebAssembly build of the formatter is the same engine that powers the
-CLI and the Snowsight browser extension. Nothing is sent over the network.
+on your machine through a bundled WebAssembly build of the same formatter used by the CLI and LSP.
+Nothing is sent over the network.
 
 Formatting is mechanically **lossless and idempotent** — input that cannot be parsed is passed
 through unchanged, and `format(format(x)) == format(x)`.
@@ -57,9 +57,13 @@ To make it the default formatter for these files, add to your settings:
 | Setting | Default | Description |
 | --- | --- | --- |
 | `sqlDialectFmt.dialect` | `snowflake` | SQL dialect (`snowflake` or `databricks`). |
-| `sqlDialectFmt.lineWidth` | `100` | Target line width before wrapping. |
-| `sqlDialectFmt.indentWidth` | `4` | Spaces per indent level. |
-| `sqlDialectFmt.uppercaseKeywords` | `true` | Upper-case SQL keywords. |
+| `sqlDialectFmt.lineWidth` | `80` | Target line width before wrapping. |
+| `sqlDialectFmt.useEditorIndentation` | `true` | Use the active editor's `tabSize`. |
+| `sqlDialectFmt.indentWidth` | `2` | Spaces per indent level when editor indentation is disabled. |
+| `sqlDialectFmt.keywordCase` | `upper` | `upper`, `lower`, or `preserve` recognized SQL keywords. |
+| `sqlDialectFmt.selectItemLayout` | `vertical` | One SELECT item per line, or `auto` for width-aware layout. |
+| `sqlDialectFmt.commaStyle` | `trailing` | Use `trailing` or `leading` commas when lists wrap. |
+| `sqlDialectFmt.lineEnding` | `auto` | Preserve input line endings, or force `lf` / `crlf`. |
 | `sqlDialectFmt.lsp.enabled` | `false` | Opt in to the `sql-dialect-fmt-lsp` language server (see below). |
 | `sqlDialectFmt.lsp.path` | `""` | Path to `sql-dialect-fmt-lsp`; empty looks it up on `PATH`. |
 
@@ -118,8 +122,7 @@ This directory also carries integrations for other editors, all driven by the sa
 
 - [`nvim/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/nvim) — a small Neovim plugin: `snowflake-sql` filetype, LSP setup, and
   conform.nvim/null-ls recipes for CLI-based formatting.
-- [`zed/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/zed) — a Zed extension (dev install): Snowflake SQL language backed by the
-  bundled tree-sitter grammar plus the language server.
+- [`zed/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/zed) — a paused Zed integration that still depends on the retained Tree-sitter sources.
 - [`helix/`](https://github.com/hjosugi/sql-dialect-fmt/tree/main/editors/helix) — a documented `languages.toml` snippet for Helix (no plugin system).
 
 ## Support and source
