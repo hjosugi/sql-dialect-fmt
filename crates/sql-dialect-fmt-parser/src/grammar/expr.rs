@@ -243,30 +243,31 @@ fn like_rhs(p: &mut Parser) {
 
 fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
     if p.at(NOT_KW) {
-        let mut prefixes = Vec::new();
-        while p.at(NOT_KW) {
-            let m = p.start();
-            p.bump(NOT_KW);
-            prefixes.push(m);
-        }
-        let operand = expr_bp(p, BP_PREFIX_NOT);
-        return complete_prefix_chain(p, prefixes, operand);
+        return prefix_chain(p, &[NOT_KW], BP_PREFIX_NOT);
     }
     if p.at(PRIOR_KW) || p.at(MINUS) || p.at(PLUS) {
-        // `PRIOR` and signs all bind tightly. Consume an equal-precedence prefix chain before
-        // parsing its operand so every suspended Pratt frame does not re-run the full postfix /
-        // predicate lookahead at the same boundary while it unwinds. Besides being linear, this
-        // keeps adversarial-but-bounded chains inside the parser's no-progress budget.
-        let mut prefixes = Vec::new();
-        while p.at(PRIOR_KW) || p.at(MINUS) || p.at(PLUS) {
-            let m = p.start();
-            p.bump_any();
-            prefixes.push(m);
-        }
-        let operand = expr_bp(p, BP_PREFIX_NEG);
-        return complete_prefix_chain(p, prefixes, operand);
+        return prefix_chain(p, &[PRIOR_KW, MINUS, PLUS], BP_PREFIX_NEG);
     }
     primary(p)
+}
+
+/// Consume an equal-precedence prefix chain before parsing its operand. This makes prefix parsing
+/// linear: suspended Pratt frames do not repeat the complete postfix and predicate lookahead while
+/// the chain unwinds, keeping adversarial-but-bounded input inside the no-progress budget.
+fn prefix_chain(
+    p: &mut Parser,
+    prefix_kinds: &[SyntaxKind],
+    operand_binding_power: u8,
+) -> Option<CompletedMarker> {
+    let mut prefixes = Vec::new();
+    while prefix_kinds.iter().any(|kind| p.at(*kind)) {
+        let marker = p.start();
+        p.bump_any();
+        prefixes.push(marker);
+    }
+    debug_assert!(!prefixes.is_empty());
+    let operand = expr_bp(p, operand_binding_power);
+    complete_prefix_chain(p, prefixes, operand)
 }
 
 /// Close already-consumed prefix markers from the innermost to the outermost. Marker construction

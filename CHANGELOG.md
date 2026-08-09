@@ -9,6 +9,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- Isolated candidate finalization and losslessness checks from formatter orchestration, reused one
+  meaningful-token pipeline for plain and directive-formatted output, removed candidate-side
+  signature allocations, and unified Pratt prefix-chain parsing without changing SQL output.
+
 ## [1.22.1] - 2026-08-09
 
 ### Changed
