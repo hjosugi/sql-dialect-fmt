@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.22.2] - 2026-08-09
+
 ### Changed
 
 - Isolated candidate finalization and losslessness checks from formatter orchestration, reused one
@@ -659,7 +661,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.1...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.2...HEAD
+[1.22.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.1...v1.22.2
 [1.22.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.21.0...v1.22.0
 [1.21.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.1...v1.21.0
