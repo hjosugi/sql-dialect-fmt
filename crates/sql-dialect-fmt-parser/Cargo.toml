@@ -15,7 +15,7 @@ description = "Error-resilient, event-based recursive-descent parser building a 
 sql-dialect-fmt-syntax = { workspace = true, features = ["rowan"] }
 sql-dialect-fmt-lexer.workspace = true
 sql-dialect-fmt-text.workspace = true
-rowan = "0.16"
+rowan = "0.17"
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
