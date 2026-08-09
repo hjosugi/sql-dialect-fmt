@@ -11,7 +11,7 @@
 //! ```
 //! use sql_dialect_fmt_formatter::{format, FormatOptions};
 //! let out = format("select a,b from t", &FormatOptions::default());
-//! assert_eq!(out, "SELECT a, b\nFROM t;\n");
+//! assert_eq!(out, "SELECT\n  a,\n  b\nFROM t;\n");
 //! ```
 //!
 //! ## Public API stability
@@ -120,12 +120,12 @@ pub struct FormatOptions {
 impl Default for FormatOptions {
     fn default() -> Self {
         FormatOptions {
-            line_width: 100,
-            indent_width: 4,
+            line_width: 80,
+            indent_width: 2,
             uppercase_keywords: true,
             keyword_case: KeywordCase::Upper,
-            line_ending: LineEnding::Lf,
-            select_item_layout: SelectItemLayout::Auto,
+            line_ending: LineEnding::Auto,
+            select_item_layout: SelectItemLayout::Vertical,
             comma_style: CommaStyle::Trailing,
             dialect: Dialect::Snowflake,
         }

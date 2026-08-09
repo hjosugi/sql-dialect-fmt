@@ -87,8 +87,11 @@ pub unsafe extern "C" fn sql_dialect_fmt_format_with_dialect(
 
 /// Format UTF-8 SQL with the complete stable editor option set.
 ///
-/// Enum values use `0` as the conventional/default variant and fall back to that variant when an
-/// unknown value is received, keeping older extension hosts forwards-compatible with newer Wasm.
+/// Enum values are keyword case `0 = upper`, `1 = lower`, `2 = preserve`; SELECT layout
+/// `0 = auto`, `1 = vertical`; comma style `0 = trailing`, `1 = leading`; line ending `0 = auto`,
+/// `1 = LF`, `2 = CRLF`; and dialect `0 = Snowflake`, `1 = Databricks`. Unknown values fall back
+/// to the product default for that option, keeping extension hosts forwards-compatible with newer
+/// Wasm builds.
 ///
 /// # Safety
 ///
@@ -133,9 +136,9 @@ fn format_bytes(
         line_width,
         indent_width,
         if uppercase_keywords == 0 { 2 } else { 0 },
-        0,
-        0,
         1,
+        0,
+        0,
         dialect,
     )
 }
@@ -180,8 +183,8 @@ fn keyword_case_from_u32(value: u32) -> KeywordCase {
 
 fn select_item_layout_from_u32(value: u32) -> SelectItemLayout {
     match value {
-        1 => SelectItemLayout::Vertical,
-        _ => SelectItemLayout::Auto,
+        0 => SelectItemLayout::Auto,
+        _ => SelectItemLayout::Vertical,
     }
 }
 
@@ -194,9 +197,9 @@ fn comma_style_from_u32(value: u32) -> CommaStyle {
 
 fn line_ending_from_u32(value: u32) -> LineEnding {
     match value {
-        0 => LineEnding::Auto,
+        1 => LineEnding::Lf,
         2 => LineEnding::Crlf,
-        _ => LineEnding::Lf,
+        _ => LineEnding::Auto,
     }
 }
 
@@ -378,7 +381,7 @@ mod tests {
     fn format_defaults_produce_uppercase_snowflake_output() {
         assert_eq!(
             format_to_string("select a,b from t", 80, 4, 1, 0),
-            "SELECT a, b\nFROM t;\n"
+            "SELECT\n    a,\n    b\nFROM t;\n"
         );
     }
 
@@ -387,11 +390,11 @@ mod tests {
         // `uppercase_keywords = 0` maps to KeywordCase::Preserve, not lowercasing.
         assert_eq!(
             format_to_string("select a from t", 80, 4, 0, 0),
-            "select a\nfrom t;\n"
+            "select\n    a\nfrom t;\n"
         );
         assert_eq!(
             format_to_string("SELECT a from t", 80, 4, 0, 0),
-            "SELECT a\nfrom t;\n"
+            "SELECT\n    a\nfrom t;\n"
         );
     }
 
@@ -399,11 +402,11 @@ mod tests {
     fn line_width_controls_select_list_wrapping() {
         let source = "select aaaa, bbbb, cccc from t";
         assert_eq!(
-            format_to_string(source, 100, 4, 1, 0),
+            format_to_string_with_options(source, 100, 4, 0, 0, 0, 0, 0),
             "SELECT aaaa, bbbb, cccc\nFROM t;\n"
         );
         assert_eq!(
-            format_to_string(source, 10, 4, 1, 0),
+            format_to_string_with_options(source, 10, 4, 0, 0, 0, 0, 0),
             "SELECT\n    aaaa,\n    bbbb,\n    cccc\nFROM t;\n"
         );
     }
@@ -457,13 +460,27 @@ mod tests {
         let source = "select a <=> b from t";
         assert_eq!(
             format_to_string(source, 80, 4, 1, 1),
-            "SELECT a <=> b\nFROM t;\n"
+            "SELECT\n    a <=> b\nFROM t;\n"
         );
         let snowflake = format_to_string(source, 80, 4, 1, 0);
         assert_eq!(format_to_string(source, 80, 4, 1, 999), snowflake);
         assert_eq!(dialect_from_u32(0), Dialect::Snowflake);
         assert_eq!(dialect_from_u32(1), Dialect::Databricks);
         assert_eq!(dialect_from_u32(u32::MAX), Dialect::Snowflake);
+    }
+
+    #[test]
+    fn unknown_style_codes_fall_back_to_product_defaults() {
+        assert_eq!(keyword_case_from_u32(u32::MAX), KeywordCase::Upper);
+        assert_eq!(select_item_layout_from_u32(0), SelectItemLayout::Auto);
+        assert_eq!(
+            select_item_layout_from_u32(u32::MAX),
+            SelectItemLayout::Vertical
+        );
+        assert_eq!(comma_style_from_u32(u32::MAX), CommaStyle::Trailing);
+        assert_eq!(line_ending_from_u32(1), LineEnding::Lf);
+        assert_eq!(line_ending_from_u32(2), LineEnding::Crlf);
+        assert_eq!(line_ending_from_u32(u32::MAX), LineEnding::Auto);
     }
 
     #[test]
@@ -514,10 +531,10 @@ mod tests {
     #[test]
     fn sequential_calls_replace_the_stored_result() {
         assert_eq!(format_bytes(b"select 1", 80, 4, 1, 0), 0);
-        assert_eq!(last_result_bytes(), b"SELECT 1;\n");
+        assert_eq!(last_result_bytes(), b"SELECT\n    1;\n");
 
         assert_eq!(format_bytes(b"select 2", 80, 4, 1, 0), 0);
-        assert_eq!(last_result_bytes(), b"SELECT 2;\n");
+        assert_eq!(last_result_bytes(), b"SELECT\n    2;\n");
         clear_last_result();
     }
 

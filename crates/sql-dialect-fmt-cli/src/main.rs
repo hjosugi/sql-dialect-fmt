@@ -1089,15 +1089,15 @@ OPTIONS:
                            File path context for stdin config discovery and diagnostics
         --range START:END Reformat only statements intersecting the byte range [START, END)
                            (stdin only; prints the whole document to stdout)
-        --line-width N    Target line width (default 100)
-        --indent-width N  Spaces per indent level (default 4)
+        --line-width N    Target line width (default 80)
+        --indent-width N  Spaces per indent level (default 2)
         --dialect NAME    SQL dialect: snowflake or databricks (default snowflake)
         --keyword-case NAME
                            Keyword case: upper, lower, or preserve (default upper)
         --line-ending NAME
-                           Output line endings: auto, lf, or crlf (default lf)
+                           Output line endings: auto, lf, or crlf (default auto)
         --select-item-layout NAME
-                           SELECT items: auto or vertical (default auto)
+                           SELECT items: auto or vertical (default vertical)
         --comma-style NAME Wrapped-list commas: trailing or leading (default trailing)
         --uppercase       Upper-case SQL keywords (the default)
         --no-uppercase    Do not upper-case SQL keywords
@@ -1130,7 +1130,7 @@ mod tests {
 
     #[test]
     fn formats_plain_sql() {
-        assert_eq!(fmt(b"select a,b from t"), b"SELECT a, b\nFROM t;\n");
+        assert_eq!(fmt(b"select a,b from t"), b"SELECT\n  a,\n  b\nFROM t;\n");
     }
 
     #[test]
@@ -1308,6 +1308,6 @@ mod tests {
         overrides.apply_to(&mut options);
         assert_eq!(options.line_width, 42);
         assert_eq!(options.dialect, Dialect::Databricks);
-        assert_eq!(options.indent_width, 4);
+        assert_eq!(options.indent_width, 2);
     }
 }

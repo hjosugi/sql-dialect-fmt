@@ -71,9 +71,12 @@ auto-format = true
 ## 設定
 
 エディタ側の設定は `[language-server.sql-dialect-fmt-lsp.config.sqlDialectFmt]` に置きます
-（`lineWidth`、`indentWidth`、`dialect`、`uppercaseKeywords`、`keywordCase`、`lineEnding`、
-`lint.*`）。サーバーはオプションを**デフォルト → 最寄りの `sql-dialect-fmt.toml` →
+（`lineWidth`、`indentWidth`、`dialect`、`keywordCase`、`selectItemLayout`、`commaStyle`、
+`lineEnding`、`lint.*`）。旧 `uppercaseKeywords` boolean は非推奨の互換 alias として残ります。
+サーバーはオプションを**デフォルト → 最寄りの `sql-dialect-fmt.toml` →
 エディタ設定**の順で重ねるため、プロジェクトの設定ファイルによって Helix と CI が一貫します。
+共通デフォルトは80桁、2スペースインデント、キーワード大文字、トップレベルの SELECT 項目を
+縦配置、末尾カンマ、入力の改行コードを自動保持です。
 
 ## サポートとソース
 

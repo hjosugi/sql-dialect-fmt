@@ -49,7 +49,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
     require("sql-dialect-fmt").setup({
       -- claim_sql = true,          -- also map plain *.sql to snowflake-sql
       -- filetypes = { "snowflake-sql", "sql" },  -- or: attach to sql buffers
-      -- settings = { lineWidth = 100, indentWidth = 4, dialect = "snowflake" },
+      -- settings = { lineWidth = 80, indentWidth = 2, keywordCase = "upper", selectItemLayout = "vertical", commaStyle = "trailing", lineEnding = "auto", dialect = "snowflake" },
     })
   end,
 }
@@ -79,10 +79,12 @@ use({
 | `cmd` | `{ "sql-dialect-fmt-lsp" }` | Command used to launch the server (stdio). |
 | `filetypes` | `{ "snowflake-sql" }` | Filetypes the server attaches to. Add `"sql"` to attach without changing the filetype. |
 | `root_markers` | `{ "sql-dialect-fmt.toml", ".git" }` | Project root markers, matching the server's config discovery. |
-| `settings` | `{}` | Settings sent under the `sqlDialectFmt` section: `lineWidth`, `indentWidth`, `dialect` (`snowflake`/`databricks`), `uppercaseKeywords`, `keywordCase`, `lineEnding`, `lint.*`. |
+| `settings` | `{}` | Settings sent under the `sqlDialectFmt` section: `lineWidth`, `indentWidth`, `dialect` (`snowflake`/`databricks`), `keywordCase`, `selectItemLayout`, `commaStyle`, `lineEnding`, `lint.*`. The old `uppercaseKeywords` boolean remains a deprecated compatibility alias. |
 
 The server resolves options as **defaults → nearest `sql-dialect-fmt.toml` → editor
 settings**, so a project config file keeps CI and the editor consistent.
+The shared defaults are 80 columns, two-space indentation, upper-case keywords, vertical
+top-level SELECT items, trailing commas, and automatic input line-ending preservation.
 
 Format with the usual `vim.lsp.buf.format()`, e.g. on save:
 
@@ -105,7 +107,7 @@ vim.lsp.config("sql_dialect_fmt_lsp", {
   cmd = { "sql-dialect-fmt-lsp" },
   filetypes = { "snowflake-sql" },
   root_markers = { "sql-dialect-fmt.toml", ".git" },
-  settings = { sqlDialectFmt = { lineWidth = 100 } },
+  settings = { sqlDialectFmt = { lineWidth = 80 } },
 })
 vim.lsp.enable("sql_dialect_fmt_lsp")
 ```

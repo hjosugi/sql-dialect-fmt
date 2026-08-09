@@ -48,7 +48,7 @@
     require("sql-dialect-fmt").setup({
       -- claim_sql = true,          -- 素の *.sql も snowflake-sql に関連付ける
       -- filetypes = { "snowflake-sql", "sql" },  -- または: sql バッファにもアタッチ
-      -- settings = { lineWidth = 100, indentWidth = 4, dialect = "snowflake" },
+      -- settings = { lineWidth = 80, indentWidth = 2, keywordCase = "upper", selectItemLayout = "vertical", commaStyle = "trailing", lineEnding = "auto", dialect = "snowflake" },
     })
   end,
 }
@@ -78,10 +78,12 @@ use({
 | `cmd` | `{ "sql-dialect-fmt-lsp" }` | サーバーの起動コマンド（stdio）。 |
 | `filetypes` | `{ "snowflake-sql" }` | サーバーがアタッチするファイルタイプ。ファイルタイプを変えずにアタッチするには `"sql"` を追加。 |
 | `root_markers` | `{ "sql-dialect-fmt.toml", ".git" }` | プロジェクトルートのマーカー。サーバーの設定探索と一致。 |
-| `settings` | `{}` | `sqlDialectFmt` セクションとして送られる設定：`lineWidth`、`indentWidth`、`dialect`（`snowflake`/`databricks`）、`uppercaseKeywords`、`keywordCase`、`lineEnding`、`lint.*`。 |
+| `settings` | `{}` | `sqlDialectFmt` セクションとして送られる設定：`lineWidth`、`indentWidth`、`dialect`（`snowflake`/`databricks`）、`keywordCase`、`selectItemLayout`、`commaStyle`、`lineEnding`、`lint.*`。旧 `uppercaseKeywords` boolean は非推奨の互換 alias として残ります。 |
 
 サーバーはオプションを**デフォルト → 最寄りの `sql-dialect-fmt.toml` → エディタ設定**の順で
 解決するため、プロジェクトの設定ファイルによって CI とエディタが一貫します。
+共通デフォルトは80桁、2スペースインデント、キーワード大文字、トップレベルの SELECT 項目を
+縦配置、末尾カンマ、入力の改行コードを自動保持です。
 
 フォーマットは通常どおり `vim.lsp.buf.format()` で実行できます。保存時に実行する例：
 
@@ -104,7 +106,7 @@ vim.lsp.config("sql_dialect_fmt_lsp", {
   cmd = { "sql-dialect-fmt-lsp" },
   filetypes = { "snowflake-sql" },
   root_markers = { "sql-dialect-fmt.toml", ".git" },
-  settings = { sqlDialectFmt = { lineWidth = 100 } },
+  settings = { sqlDialectFmt = { lineWidth = 80 } },
 })
 vim.lsp.enable("sql_dialect_fmt_lsp")
 ```

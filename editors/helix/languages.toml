@@ -13,10 +13,13 @@ command = "sql-dialect-fmt-lsp"
 # Optional: editor-side settings, layered on top of the nearest
 # sql-dialect-fmt.toml the server discovers for each file.
 [language-server.sql-dialect-fmt-lsp.config.sqlDialectFmt]
-lineWidth = 100
-indentWidth = 4
+lineWidth = 80
+indentWidth = 2
 dialect = "snowflake"
-uppercaseKeywords = true
+keywordCase = "upper"
+selectItemLayout = "vertical"
+commaStyle = "trailing"
+lineEnding = "auto"
 
 # A dedicated Snowflake SQL language for *.snowsql / *.sfsql. Plain *.sql is
 # intentionally left to Helix's built-in `sql` language; see README.md to opt
@@ -28,7 +31,7 @@ injection-regex = "^(snowflake|snowflake-sql|sfsql)$"
 file-types = ["snowsql", "sfsql"]
 comment-tokens = ["--", "//"]
 block-comment-tokens = { start = "/*", end = "*/" }
-indent = { tab-width = 4, unit = "    " }
+indent = { tab-width = 2, unit = "  " }
 roots = ["sql-dialect-fmt.toml"]
 language-servers = ["sql-dialect-fmt-lsp"]
 auto-format = true

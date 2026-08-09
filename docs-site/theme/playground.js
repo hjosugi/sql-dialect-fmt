@@ -1,8 +1,10 @@
 (() => {
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
   }
 
   function init() {
@@ -17,7 +19,10 @@
     const dialect = app.querySelector("#playground-dialect");
     const lineWidth = app.querySelector("#playground-line-width");
     const indentWidth = app.querySelector("#playground-indent-width");
-    const uppercase = app.querySelector("#playground-uppercase");
+    const keywordCase = app.querySelector("#playground-keyword-case");
+    const selectItemLayout = app.querySelector("#playground-select-layout");
+    const commaStyle = app.querySelector("#playground-comma-style");
+    const lineEnding = app.querySelector("#playground-line-ending");
     const formatButton = app.querySelector("#playground-format");
     const copyButton = app.querySelector("#playground-copy");
     const status = app.querySelector("#playground-status");
@@ -40,9 +45,12 @@
       try {
         output.value = await formatSql(input.value, {
           dialect: dialect.value,
-          lineWidth: normalizeInteger(lineWidth.value, 100),
-          indentWidth: normalizeInteger(indentWidth.value, 4),
-          uppercaseKeywords: uppercase.checked
+          lineWidth: normalizeInteger(lineWidth.value, 80),
+          indentWidth: normalizeInteger(indentWidth.value, 2),
+          keywordCase: keywordCase.value,
+          selectItemLayout: selectItemLayout.value,
+          commaStyle: commaStyle.value,
+          lineEnding: lineEnding.value,
         });
         setStatus(output.value === input.value ? "Already formatted" : "Formatted");
       } catch (error) {
@@ -62,15 +70,7 @@
 
       try {
         new Uint8Array(api.memory.buffer, inputPtr, bytes.length).set(bytes);
-        const format = api.sql_dialect_fmt_format_with_dialect || api.sql_dialect_fmt_format;
-        const result = format(
-          inputPtr,
-          bytes.length,
-          options.lineWidth,
-          options.indentWidth,
-          options.uppercaseKeywords ? 1 : 0,
-          options.dialect === "databricks" ? 1 : 0
-        );
+        const result = callFormatter(api, inputPtr, bytes.length, options);
         if (result !== 0) {
           throw new Error(`Formatter failed with status ${result}`);
         }
@@ -93,8 +93,13 @@
           }
           const bytes = await response.arrayBuffer();
           const module = await WebAssembly.compile(bytes);
-          return WebAssembly.instantiate(module, wasmImportsFor(module));
-        })();
+          const instance = await WebAssembly.instantiate(module, wasmImportsFor(module));
+          validateApi(instance.exports);
+          return instance;
+        })().catch((error) => {
+          wasmInstancePromise = null;
+          throw error;
+        });
       }
       return wasmInstancePromise;
     }
@@ -116,15 +121,41 @@
         </label>
         <label>
           <span>Line width</span>
-          <input id="playground-line-width" type="number" min="20" max="240" value="100">
+          <input id="playground-line-width" type="number" min="1" max="240" value="80">
         </label>
         <label>
           <span>Indent</span>
-          <input id="playground-indent-width" type="number" min="1" max="16" value="4">
+          <input id="playground-indent-width" type="number" min="1" max="16" value="2">
         </label>
-        <label class="playground-checkbox">
-          <input id="playground-uppercase" type="checkbox" checked>
-          <span>Uppercase keywords</span>
+        <label>
+          <span>Keyword case</span>
+          <select id="playground-keyword-case">
+            <option value="upper">Upper</option>
+            <option value="lower">Lower</option>
+            <option value="preserve">Preserve</option>
+          </select>
+        </label>
+        <label>
+          <span>SELECT items</span>
+          <select id="playground-select-layout">
+            <option value="vertical">Vertical</option>
+            <option value="auto">Auto</option>
+          </select>
+        </label>
+        <label>
+          <span>Commas</span>
+          <select id="playground-comma-style">
+            <option value="trailing">Trailing</option>
+            <option value="leading">Leading</option>
+          </select>
+        </label>
+        <label>
+          <span>Line endings</span>
+          <select id="playground-line-ending">
+            <option value="auto">Auto</option>
+            <option value="lf">LF</option>
+            <option value="crlf">CRLF</option>
+          </select>
         </label>
         <button id="playground-format" type="button">Format</button>
         <button id="playground-copy" type="button">Copy</button>
@@ -183,8 +214,49 @@ qualify row_number() over (partition by customer_id order by revenue desc) = 1;<
     return imports;
   }
 
+  function callFormatter(api, inputPtr, inputLength, options) {
+    return api.sql_dialect_fmt_format_with_options(
+      inputPtr,
+      inputLength,
+      options.lineWidth,
+      options.indentWidth,
+      enumCode(options.keywordCase, ["upper", "lower", "preserve"]),
+      enumCode(options.selectItemLayout, ["auto", "vertical"]),
+      enumCode(options.commaStyle, ["trailing", "leading"]),
+      enumCode(options.lineEnding, ["auto", "lf", "crlf"]),
+      enumCode(options.dialect, ["snowflake", "databricks"]),
+    );
+  }
+
+  function enumCode(value, variants) {
+    const index = variants.indexOf(value);
+    return index < 0 ? 0 : index;
+  }
+
+  function validateApi(api) {
+    if (!(api.memory instanceof WebAssembly.Memory)) {
+      throw new Error("Formatter WASM does not export WebAssembly memory");
+    }
+    for (const name of [
+      "sql_dialect_fmt_alloc",
+      "sql_dialect_fmt_dealloc",
+      "sql_dialect_fmt_format_with_options",
+      "sql_dialect_fmt_result_ptr",
+      "sql_dialect_fmt_result_len",
+      "sql_dialect_fmt_clear_result",
+    ]) {
+      if (typeof api[name] !== "function") {
+        throw new Error(`Formatter WASM is missing required export ${name}`);
+      }
+    }
+  }
+
   function normalizeInteger(value, fallback) {
     const number = Number(value);
     return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { callFormatter, enumCode, normalizeInteger, validateApi };
   }
 })();

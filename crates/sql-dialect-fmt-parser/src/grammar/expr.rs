@@ -140,7 +140,10 @@ pub(super) fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
             }
             let m = lhs.precede(p);
             p.bump(ARROW);
-            expr_bp(p, 1);
+            if expr_bp(p, 1).is_none() {
+                lhs = m.complete(p, LAMBDA_EXPR);
+                return Some(lhs);
+            }
             lhs = m.complete(p, LAMBDA_EXPR);
             continue;
         }
@@ -204,7 +207,14 @@ pub(super) fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
         }
         let m = lhs.precede(p);
         p.bump_any(); // the operator
-        expr_bp(p, rbp);
+        if expr_bp(p, rbp).is_none() {
+            // The failing recursive parse has already diagnosed and, when possible, consumed the
+            // offending token. Stop this expression here instead of making every suspended Pratt
+            // frame rescan the same recovery position; a long malformed operator chain would
+            // otherwise exhaust the parser's no-progress fuel while unwinding.
+            lhs = m.complete(p, BIN_EXPR);
+            return Some(lhs);
+        }
         lhs = m.complete(p, BIN_EXPR);
     }
     Some(lhs)
@@ -235,20 +245,29 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
     if p.at(NOT_KW) {
         let m = p.start();
         p.bump(NOT_KW);
-        expr_bp(p, BP_PREFIX_NOT);
+        if expr_bp(p, BP_PREFIX_NOT).is_none() {
+            m.complete(p, PREFIX_EXPR);
+            return None;
+        }
         return Some(m.complete(p, PREFIX_EXPR));
     }
     if p.at(PRIOR_KW) {
         // `CONNECT BY PRIOR <col> = <col>`: PRIOR is a tight unary prefix on a value.
         let m = p.start();
         p.bump(PRIOR_KW);
-        expr_bp(p, BP_PREFIX_NEG);
+        if expr_bp(p, BP_PREFIX_NEG).is_none() {
+            m.complete(p, PREFIX_EXPR);
+            return None;
+        }
         return Some(m.complete(p, PREFIX_EXPR));
     }
     if p.at(MINUS) || p.at(PLUS) {
         let m = p.start();
         p.bump_any();
-        expr_bp(p, BP_PREFIX_NEG);
+        if expr_bp(p, BP_PREFIX_NEG).is_none() {
+            m.complete(p, PREFIX_EXPR);
+            return None;
+        }
         return Some(m.complete(p, PREFIX_EXPR));
     }
     primary(p)

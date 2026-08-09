@@ -901,13 +901,13 @@ mod tests {
     fn formatting_replaces_the_whole_document() {
         let edits = format_edits("select a,b from t", &FormatOptions::default());
         assert_eq!(edits.len(), 1);
-        assert_eq!(edits[0].new_text, "SELECT a, b\nFROM t;\n");
+        assert_eq!(edits[0].new_text, "SELECT\n  a,\n  b\nFROM t;\n");
         assert_eq!(edits[0].range.start, Position::new(0, 0));
     }
 
     #[test]
     fn already_formatted_input_yields_no_edits() {
-        let formatted = "SELECT a, b\nFROM t;\n";
+        let formatted = "SELECT\n  a,\n  b\nFROM t;\n";
         assert!(format_edits(formatted, &FormatOptions::default()).is_empty());
     }
 
@@ -918,14 +918,14 @@ mod tests {
         let range = Range::new(Position::new(1, 0), Position::new(1, 3));
         let edits = format_range_edits(text, range, &FormatOptions::default());
         assert_eq!(edits.len(), 1);
-        assert_eq!(edits[0].new_text, "SELECT a, b\nFROM t;");
+        assert_eq!(edits[0].new_text, "SELECT\n  a,\n  b\nFROM t;");
         // The edit is scoped to the second statement, not the top of the document.
         assert_eq!(edits[0].range.start, Position::new(1, 0));
     }
 
     #[test]
     fn range_formatting_already_formatted_selection_yields_no_edits() {
-        let text = "SELECT 1;\nSELECT a, b\nFROM t;\n";
+        let text = "SELECT\n  1;\nSELECT\n  a,\n  b\nFROM t;\n";
         let range = Range::new(Position::new(0, 0), Position::new(0, 8));
         assert!(format_range_edits(text, range, &FormatOptions::default()).is_empty());
     }
@@ -936,7 +936,7 @@ mod tests {
         let text = "SELECT 1;\nselect a,b from t;\n";
         let edits = on_type_formatting_edits(text, Position::new(1, 18), &FormatOptions::default());
         assert_eq!(edits.len(), 1);
-        assert_eq!(edits[0].new_text, "SELECT a, b\nFROM t;");
+        assert_eq!(edits[0].new_text, "SELECT\n  a,\n  b\nFROM t;");
         // Only the second statement is touched.
         assert_eq!(edits[0].range.start, Position::new(1, 0));
     }
@@ -947,14 +947,14 @@ mod tests {
         let text = "select a,b from t;\n";
         let edits = on_type_formatting_edits(text, Position::new(1, 0), &FormatOptions::default());
         assert_eq!(edits.len(), 1);
-        assert_eq!(edits[0].new_text, "SELECT a, b\nFROM t;");
+        assert_eq!(edits[0].new_text, "SELECT\n  a,\n  b\nFROM t;");
     }
 
     #[test]
     fn on_type_formatting_already_formatted_statement_yields_no_edits() {
-        let text = "SELECT a, b\nFROM t;\n";
+        let text = "SELECT\n  a,\n  b\nFROM t;\n";
         assert!(
-            on_type_formatting_edits(text, Position::new(1, 7), &FormatOptions::default())
+            on_type_formatting_edits(text, Position::new(3, 7), &FormatOptions::default())
                 .is_empty()
         );
     }

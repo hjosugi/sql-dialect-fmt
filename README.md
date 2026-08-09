@@ -18,7 +18,7 @@ unchanged, significant tokens and comments are preserved, and `format(format(x))
 
 ```sh
 # From crates.io
-cargo install sql-dialect-fmt --version 1.21.0 --locked
+cargo install sql-dialect-fmt --version 1.22.0 --locked
 
 # Directly from this repository
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
@@ -43,7 +43,7 @@ CI can use the bundled composite action or the GHCR image.
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.21.0 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.22.0 --check .
 ```
 
 Try the browser playground from the docs site:
@@ -64,14 +64,19 @@ cat query.sql | sql-dialect-fmt --range 40:120  # reformat only statements in a 
 
 # Style: --keyword-case upper|lower|preserve / --select-item-layout auto|vertical
 #        --comma-style trailing|leading / --line-width N / --indent-width N
+#        --line-ending auto|lf|crlf
 ```
+
+The shared defaults are `line_width = 80`, `indent_width = 2`, upper-case keywords, vertical
+top-level `SELECT` items, trailing commas, and automatic preservation of the input line ending.
+CLI, config, LSP, Wasm playground, and VS Code use the same option model and defaults.
 
 pre-commit users can enable the official hooks:
 
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.21.0
+    rev: v1.22.0
     hooks:
       - id: sql-dialect-fmt
 ```

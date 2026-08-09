@@ -1,10 +1,13 @@
 //! Formatting coverage for structural generic CTAS bodies and routine signature clauses.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_parser::parse;
+use support::adaptive_options;
 
 fn fmt(sql: &str) -> String {
-    format(sql, &FormatOptions::default())
+    format(sql, &adaptive_options())
 }
 
 #[test]

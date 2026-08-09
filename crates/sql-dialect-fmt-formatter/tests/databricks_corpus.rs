@@ -16,13 +16,16 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod support;
+
 use sql_dialect_fmt_formatter::{format, FormatOptions};
 use sql_dialect_fmt_lexer::tokenize_for_dialect;
 use sql_dialect_fmt_parser::parse_with_dialect;
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind};
+use support::adaptive_options;
 
 fn options() -> FormatOptions {
-    FormatOptions::default().with_dialect(Dialect::Databricks)
+    adaptive_options().with_dialect(Dialect::Databricks)
 }
 
 fn significant_tokens(sql: &str) -> Vec<String> {

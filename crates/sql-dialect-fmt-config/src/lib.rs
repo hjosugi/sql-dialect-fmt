@@ -316,7 +316,7 @@ mod tests {
         assert_eq!(options.keyword_case, KeywordCase::Lower);
         assert_eq!(options.line_ending, LineEnding::Crlf);
         // Untouched fields keep their defaults.
-        assert_eq!(options.indent_width, 4);
+        assert_eq!(options.indent_width, 2);
     }
 
     #[test]

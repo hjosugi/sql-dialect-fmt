@@ -8,13 +8,16 @@
 //! (3) be idempotent, and (4) preserve its meaningful tokens (formatting only changes trivia and
 //! keyword casing). A handful of exact-string goldens pin the layout opinions.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// The signature a faithful formatter must preserve: meaningful tokens, upper-cased, with the

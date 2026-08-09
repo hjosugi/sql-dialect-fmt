@@ -306,8 +306,8 @@ pub struct PrintOptions {
 impl Default for PrintOptions {
     fn default() -> Self {
         PrintOptions {
-            line_width: 100,
-            indent_width: 4,
+            line_width: 80,
+            indent_width: 2,
         }
     }
 }

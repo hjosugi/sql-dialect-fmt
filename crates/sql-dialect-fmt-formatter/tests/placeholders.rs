@@ -7,12 +7,15 @@
 //! literals — round-trips verbatim. Every case must (1) parse with no errors, (2) reparse clean
 //! after formatting, (3) be idempotent, and (4) preserve its meaningful tokens.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::{tokenize, SyntaxKind};
 use sql_dialect_fmt_parser::parse;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// Meaningful tokens the formatter must preserve (upper-cased, minus the synthesized `;`). A

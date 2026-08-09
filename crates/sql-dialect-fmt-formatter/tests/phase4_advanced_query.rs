@@ -13,14 +13,17 @@
 //! a structural-coverage test that proves each case takes its dedicated grammar path (rather than
 //! silently falling back to verbatim), and a few exact-string goldens for the canonical layouts.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
 use sql_dialect_fmt_test_support::parser::has_node_kind;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// Significant lexer token kinds: drop trivia and the statement terminators the formatter

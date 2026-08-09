@@ -8,9 +8,9 @@
 //!   synthesized statement terminators) is unchanged, so formatting never drops or invents SQL.
 //! * **No new parse errors** — formatting clean input yields clean output.
 
-use sql_dialect_fmt_formatter::{
-    format, CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
-};
+mod support;
+
+use sql_dialect_fmt_formatter::{format, CommaStyle, KeywordCase, LineEnding, SelectItemLayout};
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
@@ -19,9 +19,25 @@ use sql_dialect_fmt_test_fixtures::EASY_CASES;
 use sql_dialect_fmt_test_fixtures::{
     javascript_routine_trailing_whitespace_input, JAVASCRIPT_ROUTINE_TRAILING_WHITESPACE_EXPECTED,
 };
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
+}
+
+#[test]
+fn product_defaults_use_the_same_conventional_style_as_editor_integrations() {
+    let options = sql_dialect_fmt_formatter::FormatOptions::default();
+    assert_eq!(options.line_width, 80);
+    assert_eq!(options.indent_width, 2);
+    assert_eq!(options.keyword_case, KeywordCase::Upper);
+    assert_eq!(options.select_item_layout, SelectItemLayout::Vertical);
+    assert_eq!(options.comma_style, CommaStyle::Trailing);
+    assert_eq!(options.line_ending, LineEnding::Auto);
+    assert_eq!(
+        format("select customer_id, customer_name from customers", &options),
+        "SELECT\n  customer_id,\n  customer_name\nFROM customers;\n"
+    );
 }
 
 /// Significant token kinds: drop trivia and the statement terminators the formatter synthesizes.
@@ -62,21 +78,21 @@ fn keyword_case_option_supports_lower_and_preserve() {
     assert_eq!(
         format(
             "select a from t",
-            &FormatOptions::default().with_keyword_case(KeywordCase::Lower)
+            &adaptive_options().with_keyword_case(KeywordCase::Lower)
         ),
         "select a\nfrom t;\n"
     );
     assert_eq!(
         format(
             "select a FROM t",
-            &FormatOptions::default().with_keyword_case(KeywordCase::Preserve)
+            &adaptive_options().with_keyword_case(KeywordCase::Preserve)
         ),
         "select a\nFROM t;\n"
     );
     assert_eq!(
         format(
             "select a FROM t",
-            &FormatOptions::default().with_uppercase_keywords(false)
+            &adaptive_options().with_uppercase_keywords(false)
         ),
         "select a\nFROM t;\n"
     );
@@ -87,14 +103,14 @@ fn line_ending_option_controls_printed_newlines() {
     assert_eq!(
         format(
             "select a from t",
-            &FormatOptions::default().with_line_ending(LineEnding::Crlf)
+            &adaptive_options().with_line_ending(LineEnding::Crlf)
         ),
         "SELECT a\r\nFROM t;\r\n"
     );
     assert_eq!(
         format(
             "select a\r\nfrom t",
-            &FormatOptions::default().with_line_ending(LineEnding::Auto)
+            &adaptive_options().with_line_ending(LineEnding::Auto)
         ),
         "SELECT a\r\nFROM t;\r\n"
     );
@@ -113,7 +129,7 @@ fn format_off_on_directives_preserve_disabled_regions() {
 fn disabled_regions_do_not_contribute_parse_errors() {
     let result = sql_dialect_fmt_formatter::format_with_diagnostics(
         "-- fmt: off\nselect from where\n-- fmt: on\nselect 1",
-        &FormatOptions::default(),
+        &adaptive_options(),
     );
     assert!(
         result.parse_errors.is_empty(),
@@ -215,7 +231,7 @@ fn formats_regex_like_quantifiers_and_snowflake_star_modifiers() {
 #[test]
 fn long_select_list_breaks_one_item_per_line() {
     let src = "select alpha, bravo, charlie, delta, echo, foxtrot, golf, hotel from t";
-    let out = format(src, &FormatOptions::default().with_line_width(40));
+    let out = format(src, &adaptive_options().with_line_width(40));
     insta::assert_snapshot!(out, @"
     SELECT
         alpha,
@@ -267,7 +283,7 @@ fn no_trailing_comma_stays_inline_when_it_fits() {
 
 #[test]
 fn vertical_select_layout_puts_one_item_on_each_line() {
-    let options = FormatOptions::default()
+    let options = adaptive_options()
         .with_indent_width(2)
         .with_select_item_layout(SelectItemLayout::Vertical);
     assert_eq!(
@@ -278,7 +294,7 @@ fn vertical_select_layout_puts_one_item_on_each_line() {
 
 #[test]
 fn leading_comma_style_aligns_wrapped_list_items() {
-    let options = FormatOptions::default()
+    let options = adaptive_options()
         .with_indent_width(2)
         .with_select_item_layout(SelectItemLayout::Vertical)
         .with_comma_style(CommaStyle::Leading);
@@ -297,7 +313,7 @@ fn leading_comma_style_aligns_wrapped_list_items() {
 
 #[test]
 fn leading_comma_style_applies_to_forced_multiline_lists() {
-    let options = FormatOptions::default().with_comma_style(CommaStyle::Leading);
+    let options = adaptive_options().with_comma_style(CommaStyle::Leading);
     assert_eq!(
         format(
             "with a as (select 1), b as (select 2) select * from a",
@@ -402,7 +418,7 @@ fn joins_each_go_on_their_own_line() {
 fn long_logical_predicates_wrap_by_operator() {
     let out = format(
         "select * from orders where customer_id = 1 and status = 'open' and created_at >= '2024-01-01' and region = 'us-east-1'",
-        &FormatOptions::default().with_line_width(80),
+        &adaptive_options().with_line_width(80),
     );
     insta::assert_snapshot!(out, @"
     SELECT *
@@ -418,7 +434,7 @@ fn long_logical_predicates_wrap_by_operator() {
 fn long_window_specs_wrap_inside_over() {
     let out = format(
         "select sum(amount) over (partition by customer_id, account_id order by created_at desc, event_id) as running_total from orders",
-        &FormatOptions::default().with_line_width(80),
+        &adaptive_options().with_line_width(80),
     );
     insta::assert_snapshot!(out, @"
     SELECT
@@ -479,7 +495,7 @@ fn in_subquery_stays_inline() {
 fn order_by_items_wrap_when_they_do_not_fit() {
     let out = format(
         "select * from t order by alpha, bravo desc, charlie nulls last",
-        &FormatOptions::default().with_line_width(30),
+        &adaptive_options().with_line_width(30),
     );
     insta::assert_snapshot!(out, @"
     SELECT *
@@ -503,7 +519,7 @@ fn short_case_stays_on_one_line() {
 fn long_case_breaks_one_arm_per_line() {
     let out = format(
         "select case when a > 10 then 'big' when a > 0 then 'small' else 'zero' end as label from t",
-        &FormatOptions::default().with_line_width(40),
+        &adaptive_options().with_line_width(40),
     );
     insta::assert_snapshot!(out, @"
     SELECT
@@ -651,7 +667,7 @@ fn create_table_as_select_is_a_ctas() {
 fn create_table_column_defs_wrap_one_per_line() {
     let out = format(
         "create table t (id int, name varchar(100) not null)",
-        &FormatOptions::default().with_line_width(30),
+        &adaptive_options().with_line_width(30),
     );
     insta::assert_snapshot!(out, @"
     CREATE TABLE t (

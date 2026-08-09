@@ -11,13 +11,16 @@
 //!   3. be idempotent (`format(format(x)) == format(x)`), and
 //!   4. preserve its meaningful tokens (formatting only changes trivia and casing).
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// The significant-token *kind* sequence, dropping trivia and the synthesized statement terminator.
@@ -403,7 +406,7 @@ fn revoke_grant_option_for_with_cascade() {
 fn keyword_casing_can_be_disabled() {
     // With casing off, every keyword (reserved and contextual) keeps its source spelling — including
     // the synthesized `AS` and the contextual `TO`/`ROLE`/object-kind words.
-    let opts = FormatOptions::default().with_uppercase_keywords(false);
+    let opts = adaptive_options().with_uppercase_keywords(false);
     assert_eq!(
         format("grant select on table t to role r", &opts),
         "grant select\n    on table t\n    to role r;\n",

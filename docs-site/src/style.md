@@ -7,15 +7,20 @@ CI without team-local style debates.
 
 - SQL keywords are upper-cased by default.
 - Statements end with semicolons.
+- Top-level `SELECT` items are vertical by default; `select_item_layout = "auto"` enables
+  width-aware inline lists.
+- Wrapped lists use trailing commas by default; `comma_style = "leading"` moves separators to the
+  next item.
 - Major clauses such as `SELECT`, `FROM`, `WHERE`, `GROUP BY`, `QUALIFY`, and `ORDER BY` start on
   their own lines when the query is multi-line.
-- Comma-separated lists use one item per line when they do not fit within the configured width.
+- Other comma-separated lists use one item per line when they do not fit within the configured
+  width.
 
 ```sql
 SELECT
-    customer_id,
-    COUNT(*) AS orders,
-    SUM(total_amount) AS revenue
+  customer_id,
+  COUNT(*) AS orders,
+  SUM(total_amount) AS revenue
 FROM analytics.orders
 WHERE order_status = 'paid'
 GROUP BY customer_id;
@@ -34,3 +39,14 @@ Routine bodies and embedded language blocks are kept inside their original SQL d
 `line_width` controls when groups break. `indent_width` controls the spaces added for nested
 structures. Both options are available through the CLI, config files, the VS Code extension, and the
 WASM playground.
+
+All entry points share these defaults:
+
+| Option | Default |
+| --- | --- |
+| `line_width` | `80` |
+| `indent_width` | `2` |
+| `keyword_case` | `upper` |
+| `select_item_layout` | `vertical` |
+| `comma_style` | `trailing` |
+| `line_ending` | `auto` |

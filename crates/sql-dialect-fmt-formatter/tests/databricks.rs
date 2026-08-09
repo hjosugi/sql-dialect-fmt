@@ -1,14 +1,14 @@
 //! Databricks/Spark SQL formatter coverage behind the dialect option.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize_for_dialect;
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind};
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(
-        src,
-        &FormatOptions::default().with_dialect(Dialect::Databricks),
-    )
+    format(src, &adaptive_options().with_dialect(Dialect::Databricks))
 }
 
 fn significant_tokens(sql: &str) -> Vec<String> {

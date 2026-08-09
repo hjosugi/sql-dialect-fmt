@@ -63,10 +63,13 @@ Zed はサーバーごとの設定を言語サーバーに引き渡します。�
     "sql-dialect-fmt-lsp": {
       "settings": {
         "sqlDialectFmt": {
-          "lineWidth": 100,
-          "indentWidth": 4,
+          "lineWidth": 80,
+          "indentWidth": 2,
           "dialect": "snowflake",
-          "uppercaseKeywords": true
+          "keywordCase": "upper",
+          "selectItemLayout": "vertical",
+          "commaStyle": "trailing",
+          "lineEnding": "auto"
         }
       }
     }
@@ -78,6 +81,7 @@ Zed はサーバーごとの設定を言語サーバーに引き渡します。�
 `"binary": { "path": "/path/to/sql-dialect-fmt-lsp" }`
 
 設定は**デフォルト → 最寄りの `sql-dialect-fmt.toml` → エディタ設定**の順で重ねられます。
+上記は CLI・LSP・Wasm playground・VS Code で共通のデフォルト値です。
 
 ## サポートとソース
 

@@ -7,13 +7,16 @@
 //! idempotent, and (4) preserve its meaningful tokens (formatting only changes trivia and keyword
 //! casing). A few exact-string goldens pin the layout opinions.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// The signature a faithful formatter must preserve: meaningful tokens, upper-cased, with the
@@ -223,7 +226,7 @@ fn drop_with_cascade_restrict_upcases() {
 fn long_column_list_explodes_one_per_line() {
     let out = format(
         "create table bigt (averylongcolumnnamehere int, anotherlongcolumnname varchar(255), yetanothercol number(38, 0), morecolumns string)",
-        &FormatOptions::default(),
+        &adaptive_options(),
     );
     assert_eq!(
         out,

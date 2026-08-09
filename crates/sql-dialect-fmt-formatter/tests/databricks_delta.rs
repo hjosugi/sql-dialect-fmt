@@ -13,16 +13,16 @@
 //! A block of exact-string goldens pins the layout. A final guard confirms the same text under
 //! **Snowflake** never panics and round-trips losslessly (the words stay plain identifiers there).
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize_for_dialect;
 use sql_dialect_fmt_parser::parse_with_dialect;
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind};
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(
-        src,
-        &FormatOptions::default().with_dialect(Dialect::Databricks),
-    )
+    format(src, &adaptive_options().with_dialect(Dialect::Databricks))
 }
 
 /// Case-folded significant tokens under the Databricks dialect (drops trivia + synthesized `;`).
@@ -248,8 +248,8 @@ fn snowflake_never_panics_and_round_trips() {
             "Snowflake must round-trip losslessly for {sql:?}"
         );
         // Formatter side: must produce some output without panicking, and be idempotent.
-        let once = format(sql, &FormatOptions::default());
-        let twice = format(&once, &FormatOptions::default());
+        let once = format(sql, &adaptive_options());
+        let twice = format(&once, &adaptive_options());
         assert_eq!(
             once, twice,
             "Snowflake formatting must be idempotent:\n{sql}"

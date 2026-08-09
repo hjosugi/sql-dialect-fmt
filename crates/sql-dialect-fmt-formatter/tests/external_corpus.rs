@@ -22,10 +22,13 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod support;
+
 use sql_dialect_fmt_formatter::{format, FormatOptions};
 use sql_dialect_fmt_lexer::tokenize_for_dialect;
 use sql_dialect_fmt_parser::{parse_with_dialect, Dialect};
 use sql_dialect_fmt_syntax::SyntaxKind;
+use support::adaptive_options;
 
 const EXTERNAL_CORPUS_ENV: &str = "SQL_DIALECT_FMT_EXTERNAL_CORPUS";
 const EXTERNAL_CORPUS_LIMIT_ENV: &str = "SQL_DIALECT_FMT_EXTERNAL_CORPUS_LIMIT";
@@ -183,10 +186,10 @@ fn sample_corpus_is_clean() {
         files.len()
     );
 
-    run_corpus(&files, "sample_corpus", &FormatOptions::default());
+    run_corpus(&files, "sample_corpus", &adaptive_options());
 
     // The committed samples are stored in formatter-canonical form: `format(x) == x`.
-    let options = FormatOptions::default();
+    let options = adaptive_options();
     let mut drifted = Vec::new();
     for file in &files {
         let source = fs::read_to_string(file).expect("read sample file");
@@ -229,7 +232,7 @@ fn external_corpus_preserves_formatter_invariants() {
     let limit = external_corpus_limit();
     files.truncate(limit);
 
-    let options = FormatOptions::default().with_dialect(external_corpus_dialect());
+    let options = adaptive_options().with_dialect(external_corpus_dialect());
     run_corpus(&files, "external_corpus", &options);
 }
 

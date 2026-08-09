@@ -27,8 +27,9 @@ M.defaults = {
   filetypes = { "snowflake-sql" },
   -- Project root markers, matching the server's own config discovery.
   root_markers = { "sql-dialect-fmt.toml", ".git" },
-  -- Settings sent to the server, e.g. { lineWidth = 100, indentWidth = 4,
-  -- dialect = "snowflake", uppercaseKeywords = true }. Wrapped under the
+  -- Settings sent to the server, e.g. { lineWidth = 80, indentWidth = 2,
+  -- dialect = "snowflake", keywordCase = "upper", selectItemLayout = "vertical",
+  -- commaStyle = "trailing", lineEnding = "auto" }. Wrapped under the
   -- `sqlDialectFmt` section automatically unless already wrapped.
   settings = {},
 }

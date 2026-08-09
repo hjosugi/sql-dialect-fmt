@@ -9,6 +9,34 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-08-09
+
+### Added
+
+- Added complete playground controls for keyword case, top-level `SELECT` layout, comma style,
+  line endings, line width, indentation, and dialect through the stable full-options Wasm ABI.
+- Added VS Code lifecycle regressions for Wasm-to-LSP transitions, disabling LSP, and falling back
+  cleanly when language-server startup fails.
+
+### Changed
+
+- Standardized the Rust API, CLI, config, LSP, legacy and full Wasm APIs, playground, and VS Code
+  on conventional defaults: 80 columns, two-space indentation, upper-case keywords, one top-level
+  `SELECT` item per line, trailing commas, and automatic input line-ending preservation. Existing
+  keyword and Wasm compatibility aliases remain supported.
+- Made the formatter golden-test profile explicit instead of coupling structural coverage to
+  product defaults, and synchronized the Zed, Neovim, Helix, playground, CLI, and style guides.
+- Centralized Cargo target-directory discovery for docs and VS Code builds so both reuse configured
+  build caches, and regenerated the fuzz lockfile without inactive Biome and Ruff dependency trees.
+
+### Fixed
+
+- Stopped malformed deep prefix/infix operator chains from repeatedly scanning one recovery point
+  while Pratt-parser frames unwind. The scheduled `parser_lossless` and `formatter_idempotent`
+  fuzz crashes now recover with diagnostics, stay lossless, and do not exhaust parser fuel.
+- Fixed docs-site packaging when `CARGO_TARGET_DIR` or Cargo configuration places the Wasm artifact
+  outside the repository-local `target` directory.
+
 ## [1.21.0] - 2026-08-09
 
 ### Added
@@ -606,7 +634,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.21.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.0...HEAD
+[1.22.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.21.0...v1.22.0
 [1.21.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.1...v1.21.0
 [1.20.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.20.0...v1.20.1
 [1.20.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.19.0...v1.20.0

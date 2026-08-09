@@ -9,12 +9,15 @@
 //! `FROM @stage`, column lists, and the option region (FILE_FORMAT nested, PATTERN, FILES,
 //! ON_ERROR, VALIDATION_MODE, MATCH_BY_COLUMN_NAME, PARTITION BY, HEADER, SINGLE, OVERWRITE, …).
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::{tokenize, SyntaxKind};
 use sql_dialect_fmt_parser::parse;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// The signature a faithful formatter must preserve: meaningful tokens, upper-cased, with the

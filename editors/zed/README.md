@@ -63,10 +63,13 @@ options either at the top level or under the `sqlDialectFmt` section:
     "sql-dialect-fmt-lsp": {
       "settings": {
         "sqlDialectFmt": {
-          "lineWidth": 100,
-          "indentWidth": 4,
+          "lineWidth": 80,
+          "indentWidth": 2,
           "dialect": "snowflake",
-          "uppercaseKeywords": true
+          "keywordCase": "upper",
+          "selectItemLayout": "vertical",
+          "commaStyle": "trailing",
+          "lineEnding": "auto"
         }
       }
     }
@@ -78,6 +81,7 @@ A `binary` override is also supported, e.g.
 `"binary": { "path": "/path/to/sql-dialect-fmt-lsp" }`.
 
 Settings are layered as **defaults → nearest `sql-dialect-fmt.toml` → editor settings**.
+The values above are the shared defaults used by the CLI, LSP, Wasm playground, and VS Code.
 
 ## Support and source
 

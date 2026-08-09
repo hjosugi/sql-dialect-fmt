@@ -40,14 +40,6 @@
   width: 92px;
 }
 
-.playground-checkbox {
-  align-items: center;
-  display: flex !important;
-  flex-direction: row;
-  gap: var(--sdf-space-sm) !important;
-  min-height: var(--sdf-height-control);
-}
-
 .playground-toolbar button {
   min-height: var(--sdf-height-control);
   border: 1px solid var(--sdf-color-primary);
@@ -100,7 +92,7 @@
   line-height: 1.5;
   padding: var(--sdf-space-md);
   resize: vertical;
-  tab-size: 4;
+  tab-size: 2;
 }
 
 .playground-editor textarea:focus,

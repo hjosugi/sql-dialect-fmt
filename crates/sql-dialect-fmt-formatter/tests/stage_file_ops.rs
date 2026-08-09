@@ -1,11 +1,14 @@
 //! Snowflake PUT / GET / LIST / REMOVE formatting coverage.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::{tokenize, SyntaxKind};
 use sql_dialect_fmt_parser::parse;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 fn signature(sql: &str) -> Vec<String> {

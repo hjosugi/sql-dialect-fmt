@@ -19,16 +19,16 @@
 //!
 //! A block of exact-string goldens pins the layout opinions.
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize_for_dialect;
 use sql_dialect_fmt_parser::parse_with_dialect;
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind};
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(
-        src,
-        &FormatOptions::default().with_dialect(Dialect::Databricks),
-    )
+    format(src, &adaptive_options().with_dialect(Dialect::Databricks))
 }
 
 /// Case-folded significant tokens under the Databricks dialect (drops trivia + synthesized `;`).

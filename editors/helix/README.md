@@ -71,9 +71,12 @@ or a [release tarball](https://github.com/hjosugi/sql-dialect-fmt/releases).
 ## Settings
 
 Editor-side settings go under `[language-server.sql-dialect-fmt-lsp.config.sqlDialectFmt]`
-(`lineWidth`, `indentWidth`, `dialect`, `uppercaseKeywords`, `keywordCase`, `lineEnding`,
-`lint.*`). The server layers options as **defaults → nearest `sql-dialect-fmt.toml` →
+(`lineWidth`, `indentWidth`, `dialect`, `keywordCase`, `selectItemLayout`, `commaStyle`,
+`lineEnding`, `lint.*`). The old `uppercaseKeywords` boolean remains a deprecated compatibility
+alias. The server layers options as **defaults → nearest `sql-dialect-fmt.toml` →
 editor settings**, so a project config file keeps Helix and CI consistent.
+The shared defaults are 80 columns, two-space indentation, upper-case keywords, vertical
+top-level SELECT items, trailing commas, and automatic input line-ending preservation.
 
 ## Support and source
 

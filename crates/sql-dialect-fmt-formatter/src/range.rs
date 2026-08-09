@@ -155,7 +155,10 @@ mod tests {
         // Target the middle statement only.
         let start = source.find("select a").unwrap();
         let out = range_format(source, start..start + 5).expect("edit");
-        assert_eq!(out, "select 1 ;\n\n\nSELECT a, b\nFROM t;\n\nSELECT 3;\n");
+        assert_eq!(
+            out,
+            "select 1 ;\n\n\nSELECT\n  a,\n  b\nFROM t;\n\nSELECT 3;\n"
+        );
         // The untouched statements are byte-identical.
         assert!(out.starts_with("select 1 ;\n\n\n"));
         assert!(out.ends_with("\n\nSELECT 3;\n"));
@@ -165,7 +168,7 @@ mod tests {
     fn keeps_same_line_trailing_comment_attached() {
         let source = "select a,b from t;  -- keep me\nselect 2;\n";
         let out = range_format(source, 0..3).expect("edit");
-        assert_eq!(out, "SELECT a, b\nFROM t;  -- keep me\nselect 2;\n");
+        assert_eq!(out, "SELECT\n  a,\n  b\nFROM t;  -- keep me\nselect 2;\n");
     }
 
     #[test]
@@ -188,7 +191,7 @@ mod tests {
 
     #[test]
     fn already_formatted_selection_makes_no_edit() {
-        let source = "SELECT 1;\nSELECT a, b\nFROM t;\n";
+        let source = "SELECT\n  1;\nSELECT\n  a,\n  b\nFROM t;\n";
         assert_eq!(format_range(source, 0..8, &FormatOptions::default()), None);
     }
 
@@ -204,7 +207,7 @@ mod tests {
         let start = source.find("select a").unwrap();
         let once = range_format(source, start..start + 5).expect("edit");
         // Re-formatting the same statement in the already-formatted output is a no-op.
-        let new_start = once.find("SELECT a").unwrap();
+        let new_start = once.find("SELECT\n  a").unwrap();
         assert_eq!(
             format_range(&once, new_start..new_start + 5, &FormatOptions::default()),
             None
@@ -215,6 +218,6 @@ mod tests {
     fn selection_spanning_two_statements_reformats_both() {
         let source = "select 1;select 2;\nSELECT 3;\n";
         let out = range_format(source, 0..12).expect("edit");
-        assert_eq!(out, "SELECT 1;\nSELECT 2;\nSELECT 3;\n");
+        assert_eq!(out, "SELECT\n  1;\nSELECT\n  2;\nSELECT 3;\n");
     }
 }

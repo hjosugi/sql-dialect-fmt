@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WASM_OUT="${CARGO_TARGET_DIR:-$ROOT_DIR/target}/wasm32-unknown-unknown/release/sql_dialect_fmt_wasm.wasm"
+BUILD_TARGET_DIR="$("$ROOT_DIR/scripts/cargo-target-dir.sh")"
+WASM_OUT="$BUILD_TARGET_DIR/wasm32-unknown-unknown/release/sql_dialect_fmt_wasm.wasm"
 EXT_VENDOR="$ROOT_DIR/editors/vendor"
 
 cargo build --release --locked -p sql-dialect-fmt-wasm --target wasm32-unknown-unknown

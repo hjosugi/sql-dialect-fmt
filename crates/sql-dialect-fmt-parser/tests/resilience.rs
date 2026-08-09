@@ -3,7 +3,7 @@
 //! The parser must be useful before it knows the entire Snowflake grammar: clean common SELECTs
 //! should be diagnostic-free, while newer/unsupported statements must still round-trip and recover.
 
-use sql_dialect_fmt_parser::SyntaxKind;
+use sql_dialect_fmt_parser::{parse_with_dialect, Dialect, SyntaxKind};
 use sql_dialect_fmt_test_support::parser::{
     assert_has_node_kind, assert_parse_clean as clean, assert_parse_recovers as recovers,
 };
@@ -43,6 +43,29 @@ fn long_select_list_is_fast_and_lossless() {
     clean(&sql);
     assert_has_node_kind(&sql, SyntaxKind::SELECT_LIST);
     assert_has_node_kind(&sql, SyntaxKind::ORDER_BY_CLAUSE);
+}
+
+#[test]
+fn malformed_fuzz_operator_chains_recover_without_exhausting_parser_fuel() {
+    // Regression inputs found independently by parser_lossless and formatter_idempotent. Deep
+    // prefix frames used to rescan the same recovery position while unwinding and trip the
+    // parser's no-progress guard even though recovery had consumed a token.
+    let cases = [
+        (
+            Dialect::Snowflake,
+            "2=\0.\0\0\0\u{f}+++++++++++++++++++++++++++++++++++++\u{1}\0.2=.2",
+        ),
+        (
+            Dialect::Databricks,
+            ":+++++++++++++++++++++++++++++++++++\0/\u{1}",
+        ),
+    ];
+
+    for (dialect, source) in cases {
+        let parsed = parse_with_dialect(source, dialect);
+        assert_eq!(parsed.syntax().to_string(), source);
+        assert!(!parsed.errors().is_empty());
+    }
 }
 
 #[test]

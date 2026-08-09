@@ -17,13 +17,16 @@
 //! Syntax cross-checked against docs.snowflake.com developer-guide/snowflake-scripting:
 //! blocks, variables, branch (IF/CASE), and loops (FOR/WHILE/REPEAT/LOOP).
 
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
+use support::adaptive_options;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// The case-folded text of every significant token: trivia and the formatter-synthesized statement

@@ -57,7 +57,7 @@ fn stdin_to_stdout_formats() {
     let tmp = TempDir::new().unwrap();
     let (code, out, _err) = run(tmp.path(), &[], Some("select a,b from t"));
     assert_eq!(code, 0);
-    assert_eq!(out, "SELECT a, b\nFROM t;\n");
+    assert_eq!(out, "SELECT\n  a,\n  b\nFROM t;\n");
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn dash_reads_stdin_to_stdout() {
     let tmp = TempDir::new().unwrap();
     let (code, out, _err) = run(tmp.path(), &["-"], Some("select 1"));
     assert_eq!(code, 0);
-    assert_eq!(out, "SELECT 1;\n");
+    assert_eq!(out, "SELECT\n  1;\n");
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn range_reformats_only_the_selected_statement() {
     let src = "select 1;\nselect a,b from t;\n";
     let (code, out, _err) = run(tmp.path(), &["--range", "10:15"], Some(src));
     assert_eq!(code, 0);
-    assert_eq!(out, "select 1;\nSELECT a, b\nFROM t;\n");
+    assert_eq!(out, "select 1;\nSELECT\n  a,\n  b\nFROM t;\n");
 }
 
 #[test]
@@ -127,7 +127,10 @@ fn stdin_to_stdout_formats_databricks_when_requested() {
         Some("select transform(items, x -> x + 1) from events"),
     );
     assert_eq!(code, 0);
-    assert_eq!(out, "SELECT transform(items, x -> x + 1)\nFROM events;\n");
+    assert_eq!(
+        out,
+        "SELECT\n  transform(items, x -> x + 1)\nFROM events;\n"
+    );
     assert!(!err.contains("parse error"), "stderr: {err}");
 }
 
@@ -140,7 +143,7 @@ fn stdin_to_stdout_honors_keyword_case_and_line_ending() {
         Some("select a from t"),
     );
     assert_eq!(code, 0);
-    assert_eq!(out, "select a\r\nfrom t;\r\n");
+    assert_eq!(out, "select\r\n  a\r\nfrom t;\r\n");
     assert!(!err.contains("parse error"), "stderr: {err}");
 }
 
@@ -183,7 +186,7 @@ fn stdin_filepath_discovers_config_from_that_path() {
         Some("select 1"),
     );
     assert_eq!(code, 0);
-    assert_eq!(out, "select 1;\n");
+    assert_eq!(out, "select\n  1;\n");
 }
 
 #[test]
@@ -196,6 +199,17 @@ fn version_and_help_succeed() {
     let (code_h, out_h, _) = run(tmp.path(), &["--help"], None);
     assert_eq!(code_h, 0);
     assert!(out_h.contains("USAGE"));
+    for documented_default in [
+        "line width (default 80)",
+        "indent level (default 2)",
+        "line endings: auto, lf, or crlf (default auto)",
+        "SELECT items: auto or vertical (default vertical)",
+    ] {
+        assert!(
+            out_h.contains(documented_default),
+            "help omitted product default {documented_default:?}"
+        );
+    }
 }
 
 #[test]
@@ -209,7 +223,7 @@ fn multiple_files_stream_to_stdout() {
         None,
     );
     assert_eq!(code, 0);
-    assert_eq!(out, "SELECT 1;\nSELECT 2;\n");
+    assert_eq!(out, "SELECT\n  1;\nSELECT\n  2;\n");
 }
 
 #[test]
@@ -223,11 +237,11 @@ fn directory_is_recursed_for_sql_files() {
     // Two SQL files formatted; the .txt left alone.
     assert_eq!(
         fs::read_to_string(tmp.path().join("top.sql")).unwrap(),
-        "SELECT 1;\n"
+        "SELECT\n  1;\n"
     );
     assert_eq!(
         fs::read_to_string(tmp.path().join("nested/deep.sql")).unwrap(),
-        "SELECT 2;\n"
+        "SELECT\n  2;\n"
     );
     assert_eq!(
         fs::read_to_string(tmp.path().join("ignore.txt")).unwrap(),
@@ -250,7 +264,7 @@ fn directory_recursion_skips_standard_ignored_dirs() {
     assert_eq!(code, 0);
     assert_eq!(
         fs::read_to_string(tmp.path().join("src/keep.sql")).unwrap(),
-        "SELECT 1;\n"
+        "SELECT\n  1;\n"
     );
     assert_eq!(
         fs::read_to_string(tmp.path().join(".cache/hidden.sql")).unwrap(),
@@ -285,7 +299,7 @@ fn directory_recursion_respects_gitignore() {
     assert_eq!(code, 0);
     assert_eq!(
         fs::read_to_string(tmp.path().join("keep.sql")).unwrap(),
-        "SELECT 1;\n"
+        "SELECT\n  1;\n"
     );
     assert_eq!(
         fs::read_to_string(tmp.path().join("ignored/query.sql")).unwrap(),
@@ -315,7 +329,7 @@ fn config_exclude_filters_directory_recursion() {
     assert_eq!(code, 0);
     assert_eq!(
         fs::read_to_string(tmp.path().join("keep.sql")).unwrap(),
-        "SELECT 1;\n"
+        "SELECT\n  1;\n"
     );
     assert_eq!(
         fs::read_to_string(tmp.path().join("generated/report.sql")).unwrap(),
@@ -341,7 +355,7 @@ fn explicit_file_paths_bypass_recursive_excludes() {
     let (code, _out, err) = run(tmp.path(), &["--write", file.to_str().unwrap()], None);
 
     assert_eq!(code, 0);
-    assert_eq!(fs::read_to_string(file).unwrap(), "SELECT 1;\n");
+    assert_eq!(fs::read_to_string(file).unwrap(), "SELECT\n  1;\n");
     assert!(err.contains("1 file"), "summary missing: {err}");
 }
 
@@ -352,13 +366,13 @@ fn write_in_place_changes_files() {
     let (code, out, _err) = run(tmp.path(), &["--write", f.to_str().unwrap()], None);
     assert_eq!(code, 0);
     assert!(out.is_empty(), "write mode should not print to stdout");
-    assert_eq!(fs::read_to_string(&f).unwrap(), "SELECT a, b;\n");
+    assert_eq!(fs::read_to_string(&f).unwrap(), "SELECT\n  a,\n  b;\n");
 }
 
 #[test]
 fn check_passes_for_formatted_file() {
     let tmp = TempDir::new().unwrap();
-    let f = write(tmp.path(), "ok.sql", "SELECT 1;\n");
+    let f = write(tmp.path(), "ok.sql", "SELECT\n  1;\n");
     let (code, _out, _err) = run(tmp.path(), &["--check", f.to_str().unwrap()], None);
     assert_eq!(code, 0);
 }
@@ -388,7 +402,8 @@ fn check_diff_prints_unified_diff_for_unformatted_file() {
     assert!(out.contains("+++ "), "stdout: {out}");
     assert!(out.contains("@@ -"), "stdout: {out}");
     assert!(out.contains("-select 1"), "stdout: {out}");
-    assert!(out.contains("+SELECT 1;"), "stdout: {out}");
+    assert!(out.contains("+SELECT"), "stdout: {out}");
+    assert!(out.contains("+  1;"), "stdout: {out}");
     assert!(err.contains("is not formatted"), "stderr: {err}");
     assert_eq!(fs::read_to_string(&f).unwrap(), "select 1");
 }
@@ -409,7 +424,8 @@ fn check_diff_works_for_stdin_with_filepath() {
     );
     assert_eq!(code, 1);
     assert!(out.contains("--- src/query.sql"), "stdout: {out}");
-    assert!(out.contains("+SELECT 1;"), "stdout: {out}");
+    assert!(out.contains("+SELECT"), "stdout: {out}");
+    assert!(out.contains("+  1;"), "stdout: {out}");
     assert!(
         err.contains("src/query.sql is not formatted"),
         "stderr: {err}"
@@ -419,7 +435,7 @@ fn check_diff_works_for_stdin_with_filepath() {
 #[test]
 fn check_mixed_files_fails_and_names_offender() {
     let tmp = TempDir::new().unwrap();
-    write(tmp.path(), "good.sql", "SELECT 1;\n");
+    write(tmp.path(), "good.sql", "SELECT\n  1;\n");
     write(tmp.path(), "bad.sql", "select 2");
     let (code, _out, err) = run(tmp.path(), &["--check", "."], None);
     assert_eq!(code, 1);
@@ -430,7 +446,7 @@ fn check_mixed_files_fails_and_names_offender() {
 #[test]
 fn config_file_is_discovered_and_applied() {
     let tmp = TempDir::new().unwrap();
-    // 80-wide config; with default 100 this stays on one line.
+    // Explicit indentation and legacy keyword compatibility are both applied.
     write(
         tmp.path(),
         "sql-dialect-fmt.toml",
@@ -466,7 +482,7 @@ fn config_file_can_select_databricks_dialect() {
     );
     let (code, out, err) = run(tmp.path(), &[f.to_str().unwrap()], None);
     assert_eq!(code, 0);
-    assert_eq!(out, "SELECT `a b`\nFROM `catalog`.`schema`.`table`;\n");
+    assert_eq!(out, "SELECT\n  `a b`\nFROM `catalog`.`schema`.`table`;\n");
     assert!(!err.contains("parse error"), "stderr: {err}");
 }
 
@@ -481,7 +497,7 @@ fn config_is_discovered_walking_up_from_nested_file() {
     let nested = write(tmp.path(), "a/b/c/q.sql", "select 1");
     let (code, out, _err) = run(tmp.path(), &[nested.to_str().unwrap()], None);
     assert_eq!(code, 0);
-    assert_eq!(out, "select 1;\n");
+    assert_eq!(out, "select\n  1;\n");
 }
 
 #[test]
@@ -496,7 +512,7 @@ fn cli_flag_overrides_config() {
     // CLI --uppercase wins over the config's uppercase_keywords=false.
     let (code, out, _err) = run(tmp.path(), &["--uppercase", f.to_str().unwrap()], None);
     assert_eq!(code, 0);
-    assert_eq!(out, "SELECT 1;\n");
+    assert_eq!(out, "SELECT\n  1;\n");
 }
 
 #[test]
@@ -511,7 +527,7 @@ fn no_config_ignores_config_file() {
     let (code, out, _err) = run(tmp.path(), &["--no-config", f.to_str().unwrap()], None);
     assert_eq!(code, 0);
     // Defaults restored: keywords uppercased.
-    assert_eq!(out, "SELECT 1;\n");
+    assert_eq!(out, "SELECT\n  1;\n");
 }
 
 #[test]
@@ -614,8 +630,8 @@ fn opaque_bytes_pass_through_without_crash() {
 #[test]
 fn already_formatted_directory_check_succeeds() {
     let tmp = TempDir::new().unwrap();
-    write(tmp.path(), "a.sql", "SELECT 1;\n");
-    write(tmp.path(), "b.sql", "SELECT 2;\n");
+    write(tmp.path(), "a.sql", "SELECT\n  1;\n");
+    write(tmp.path(), "b.sql", "SELECT\n  2;\n");
     let (code, _out, err) = run(tmp.path(), &["--check", "."], None);
     assert_eq!(code, 0);
     assert!(err.contains("already formatted"), "summary: {err}");

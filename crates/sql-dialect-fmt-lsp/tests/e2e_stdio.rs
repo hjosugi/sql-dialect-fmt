@@ -292,7 +292,7 @@ fn did_open_publishes_lint_diagnostics_and_formatting_edits_the_document() {
         json!({ "textDocument": { "uri": TEST_URI }, "options": FORMATTING_OPTIONS() }),
     );
     assert_eq!(edits.as_array().map(Vec::len), Some(1));
-    assert_eq!(edits[0]["newText"], "SELECT *\nFROM t;\n");
+    assert_eq!(edits[0]["newText"], "SELECT\n    *\nFROM t;\n");
     assert_eq!(
         edits[0]["range"]["start"],
         json!({ "line": 0, "character": 0 })
@@ -303,7 +303,7 @@ fn did_open_publishes_lint_diagnostics_and_formatting_edits_the_document() {
         "textDocument/didChange",
         json!({
             "textDocument": { "uri": TEST_URI, "version": 4 },
-            "contentChanges": [{ "text": "SELECT a\nFROM t;\n" }],
+            "contentChanges": [{ "text": "SELECT\n    a\nFROM t;\n" }],
         }),
     );
     let params = server.notification("textDocument/publishDiagnostics");
@@ -358,7 +358,12 @@ fn formatting_realistic_javascript_routine_uses_the_embedded_formatter_over_stdi
 #[test]
 fn range_and_on_type_formatting_touch_only_the_finished_statement() {
     let (mut server, _) = Server::start(json!({}), json!(null));
-    did_open(&mut server, TEST_URI, 1, "SELECT 1;\nselect a,b from t;\n");
+    did_open(
+        &mut server,
+        TEST_URI,
+        1,
+        "SELECT\n    1;\nselect a,b from t;\n",
+    );
     let params = server.notification("textDocument/publishDiagnostics");
     assert_eq!(params["diagnostics"], json!([]));
 
@@ -367,17 +372,17 @@ fn range_and_on_type_formatting_touch_only_the_finished_statement() {
         json!({
             "textDocument": { "uri": TEST_URI },
             "range": {
-                "start": { "line": 1, "character": 0 },
-                "end": { "line": 1, "character": 3 },
+                "start": { "line": 2, "character": 0 },
+                "end": { "line": 2, "character": 3 },
             },
             "options": FORMATTING_OPTIONS(),
         }),
     );
     assert_eq!(edits.as_array().map(Vec::len), Some(1));
-    assert_eq!(edits[0]["newText"], "SELECT a, b\nFROM t;");
+    assert_eq!(edits[0]["newText"], "SELECT\n    a,\n    b\nFROM t;");
     assert_eq!(
         edits[0]["range"]["start"],
-        json!({ "line": 1, "character": 0 })
+        json!({ "line": 2, "character": 0 })
     );
 
     // Typing the terminating `;` reformats the statement that just ended.
@@ -385,16 +390,16 @@ fn range_and_on_type_formatting_touch_only_the_finished_statement() {
         "textDocument/onTypeFormatting",
         json!({
             "textDocument": { "uri": TEST_URI },
-            "position": { "line": 1, "character": 18 },
+            "position": { "line": 2, "character": 18 },
             "ch": ";",
             "options": FORMATTING_OPTIONS(),
         }),
     );
     assert_eq!(edits.as_array().map(Vec::len), Some(1));
-    assert_eq!(edits[0]["newText"], "SELECT a, b\nFROM t;");
+    assert_eq!(edits[0]["newText"], "SELECT\n    a,\n    b\nFROM t;");
     assert_eq!(
         edits[0]["range"]["start"],
-        json!({ "line": 1, "character": 0 })
+        json!({ "line": 2, "character": 0 })
     );
 
     // The already formatted first statement yields no on-type edits.
@@ -402,7 +407,7 @@ fn range_and_on_type_formatting_touch_only_the_finished_statement() {
         "textDocument/onTypeFormatting",
         json!({
             "textDocument": { "uri": TEST_URI },
-            "position": { "line": 0, "character": 9 },
+            "position": { "line": 1, "character": 6 },
             "ch": ";",
             "options": FORMATTING_OPTIONS(),
         }),
@@ -566,7 +571,7 @@ fn did_change_configuration_switches_dialect_and_republishes_diagnostics() {
         "textDocument/formatting",
         json!({ "textDocument": { "uri": TEST_URI }, "options": FORMATTING_OPTIONS() }),
     );
-    assert_eq!(edits[0]["newText"], "SELECT a <=> b\nFROM t;\n");
+    assert_eq!(edits[0]["newText"], "SELECT\n    a <=> b\nFROM t;\n");
 
     server.shutdown();
 }
@@ -594,7 +599,7 @@ fn nearest_config_file_is_discovered_and_editor_settings_win() {
             "options": { "tabSize": 4, "insertSpaces": false },
         }),
     );
-    assert_eq!(edits[0]["newText"], "select a, b\nfrom t;\n");
+    assert_eq!(edits[0]["newText"], "select\n  a,\n  b\nfrom t;\n");
 
     // Editor settings overlay the config file, field by field.
     server.notify(
@@ -609,7 +614,7 @@ fn nearest_config_file_is_discovered_and_editor_settings_win() {
             "options": { "tabSize": 4, "insertSpaces": false },
         }),
     );
-    assert_eq!(edits[0]["newText"], "SELECT a, b\nFROM t;\n");
+    assert_eq!(edits[0]["newText"], "SELECT\n  a,\n  b\nFROM t;\n");
 
     server.shutdown();
 }

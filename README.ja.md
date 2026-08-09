@@ -13,7 +13,7 @@ Snowflake SQL と Databricks SQL のフォーマッタ＋シンタックスハ�
 
 ```sh
 # crates.io から
-cargo install sql-dialect-fmt --version 1.21.0 --locked
+cargo install sql-dialect-fmt --version 1.22.0 --locked
 
 # このリポジトリから直接（`sql-dialect-fmt` バイナリが入る）
 cargo install --git https://github.com/hjosugi/sql-dialect-fmt sql-dialect-fmt
@@ -39,7 +39,7 @@ CI では同梱の composite action またはコンテナを使えます。
 ```
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.21.0 --check .
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/hjosugi/sql-dialect-fmt:1.22.0 --check .
 ```
 
 ## 使い方
@@ -55,14 +55,19 @@ sql-dialect-fmt --stdin-filepath src/query.sql < query.sql  # stdin に設定探
 
 # スタイル: --keyword-case upper|lower|preserve / --select-item-layout auto|vertical
 #          --comma-style trailing|leading / --line-width N / --indent-width N
+#          --line-ending auto|lf|crlf
 ```
+
+共通デフォルトは `line_width = 80`、`indent_width = 2`、キーワード大文字、トップレベルの
+`SELECT` 項目を縦配置、末尾カンマ、入力の改行コードを自動保持です。CLI・設定ファイル・LSP・
+Wasm playground・VS Code は同じオプションモデルとデフォルトを使用します。
 
 pre-commit 利用者は次の設定で `--write` または `--check` を使えます。
 
 ```yaml
 repos:
   - repo: https://github.com/hjosugi/sql-dialect-fmt
-    rev: v1.21.0
+    rev: v1.22.0
     hooks:
       - id: sql-dialect-fmt
 ```

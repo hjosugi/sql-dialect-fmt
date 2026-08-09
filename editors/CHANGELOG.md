@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.22.0
+
+- Standardized bundled Wasm and optional LSP formatting on the same 80-column, two-space,
+  upper-case, vertical-SELECT, trailing-comma, input-line-ending-preserving defaults used by the
+  CLI and Rust API.
+- Added lifecycle coverage for enabling and disabling the language server and for startup failure;
+  the extension disposes the previous provider/client and keeps bundled Wasm formatting available.
+- Kept the deprecated `uppercaseKeywords` setting compatible while making `keywordCase`,
+  `selectItemLayout`, `commaStyle`, and `lineEnding` the complete public style model.
+
 ## 1.18.0
 
 - Reworked syntax highlighting around the official Snowflake reference material: control-flow

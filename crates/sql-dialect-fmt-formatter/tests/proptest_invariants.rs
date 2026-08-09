@@ -26,15 +26,18 @@
 //! salad); case counts are capped so `cargo test` stays fast.
 
 use proptest::prelude::*;
-use sql_dialect_fmt_formatter::{format, FormatOptions};
+mod support;
+
+use sql_dialect_fmt_formatter::format;
 use sql_dialect_fmt_lexer::tokenize;
 use sql_dialect_fmt_parser::parse;
 use sql_dialect_fmt_syntax::SyntaxKind;
+use support::adaptive_options;
 
 const PROPTEST_CASES: u32 = 512;
 
 fn fmt(src: &str) -> String {
-    format(src, &FormatOptions::default())
+    format(src, &adaptive_options())
 }
 
 /// The case-folded, meaningful-token signature a faithful formatter must preserve.
