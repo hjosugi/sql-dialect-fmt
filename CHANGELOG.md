@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.22.3] - 2026-09-22
+
 ### Changed
 
 - Updated dependencies: toml 1.1.5, esbuild and vscode-languageclient 10.1.1 in the editor
@@ -671,7 +673,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.2...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.3...HEAD
+[1.22.3]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.2...v1.22.3
 [1.22.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.1...v1.22.2
 [1.22.1]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.21.0...v1.22.0
