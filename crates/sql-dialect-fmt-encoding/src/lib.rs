@@ -161,9 +161,10 @@ fn decode_utf16(bytes: &[u8], encoding: TextEncoding, original: &[u8]) -> Decode
         return opaque(original, OpaqueReason::OddLengthUtf16);
     }
 
-    let words = bytes.chunks_exact(2).map(|chunk| match encoding {
-        TextEncoding::Utf16Le => u16::from_le_bytes([chunk[0], chunk[1]]),
-        TextEncoding::Utf16Be => u16::from_be_bytes([chunk[0], chunk[1]]),
+    let (pairs, _) = bytes.as_chunks::<2>();
+    let words = pairs.iter().map(|chunk| match encoding {
+        TextEncoding::Utf16Le => u16::from_le_bytes(*chunk),
+        TextEncoding::Utf16Be => u16::from_be_bytes(*chunk),
         _ => unreachable!("decode_utf16 is only called for UTF-16 encodings"),
     });
 
