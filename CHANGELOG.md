@@ -9,6 +9,16 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- Updated dependencies: toml 1.1.5, esbuild and vscode-languageclient 10.1.1 in the editor
+  packages, and the cargo group bumps from #176.
+
+### Fixed
+
+- Decode UTF-16 words through `as_chunks` so the workspace clippy gate passes on Rust 1.98
+  (`chunks_exact_to_as_chunks`). No change to formatter output.
+
 ## [1.22.2] - 2026-08-09
 
 ### Changed
