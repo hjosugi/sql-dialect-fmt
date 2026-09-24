@@ -140,7 +140,7 @@
 - ✅ VS Code Marketplace publish workflow: tag push で package artifact を作成し、`VSCODE_MARKETPLACE_AUTO_PUBLISH=true` で自動更新
 - ⏸️ Tree-sitter grammar / Rust binding / Tree-sitter 依存 editor integration は source を保持したまま active workspace・CI・release scope から除外
 - ✅ 公式仕様由来の conformance generator（Future Tech Blog の `uroborosql-fmt` / `postgresql-cst-parser` 型の発想を Snowflake 向けに翻訳）: local path / archive から `.sql` と SQL fenced block を抽出し、外部 corpus harness に流して parser/formatter conformance report を生成。将来、機械可読な公式 grammar が得られるなら Pure Rust CST parser 生成の候補にする … [scripts/conformance-report.py](scripts/conformance-report.py)
-- ✅ 外部 grammar oracle の継続監視: grammars-v4 Snowflake examples、Apache Spark SQL tests / `SqlBaseParser.g4` rule、sqlfluff Snowflake/Databricks keyword・segment inventory を出典/revision/license付き report に変換。Snowflake/Databricks別 corpus gateと週次artifactを運用し、name matchはsemantic coverageではないheuristic checklistとして扱う … [scripts/grammar-oracle-report.py](scripts/grammar-oracle-report.py) / [docs/CORPUS.ja.md](docs/CORPUS.ja.md)
+- ✅ 外部 grammar oracle の継続監視: grammars-v4 Snowflake examples、Apache Spark SQL tests / `SqlBaseParser.g4` rule、sqlfluff Snowflake/Databricks keyword・segment inventory を出典/revision/license付き report に変換。Snowflake/Databricks別 corpus gateと週次artifactを運用し、name matchはsemantic coverageではないheuristic checklistとして扱う。ANTLR grammar の predicate / action / lexer mode / tree 外 trivia / keyword fallback rule を Generator Hazards 表として数える … [scripts/grammar-oracle-report.py](scripts/grammar-oracle-report.py) / [docs/CORPUS.ja.md](docs/CORPUS.ja.md)
 
 ---
 
@@ -152,7 +152,7 @@
 2. **仕様追随**: Snowflake Preview option / Semantic View / Cortex-AISQL の追加は conformance generator と外部 corpus の継続運用で追う。
 3. **Formatter polish**: コメント配置、未構造化 DDL、balanced-paren 構文などは小さな issue 単位で進める。
 4. **LSP / editor polish**: 設定 reload、VS Code integration、store listing を個別 issue で完了させる（rich hover は #92 で spec 連携済み。識別子の別名解決への拡張が次段）。
-5. **研究開発**: Snowflake/Databricks が実装と同一の公式 grammar source（PostgreSQL の `gram.y` 相当）を公開した場合のみ、Pure Rust CST parser 用の専用 generator を再評価する。公式 ANTLR grammar の公開だけでは、lossless CST・エラー回復・contextual keyword の移行条件を満たさない。
+5. **研究開発**: Snowflake/Databricks が実装と同一の公式 grammar source（PostgreSQL の `gram.y` 相当）を公開した場合のみ、Pure Rust CST parser 用の専用 generator を再評価する。公式 ANTLR grammar の公開だけでは、lossless CST・エラー回復・contextual keyword の移行条件を満たさない。2026-09-24 再確認でもトリガー未成立。調査記録と再評価手順は [docs/research/official-grammar-cst-feasibility.ja.md](docs/research/official-grammar-cst-feasibility.ja.md)、週次 oracle report の Generator Hazards 表で継続追跡する。
 
 回帰ゲートは `task ci`（実例の厳密な期待出力、full/sql-only fixture の
 べき等・無破壊、lexer/parser recovery、lexical highlight、LSP stdio、WASM ABI、

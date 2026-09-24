@@ -108,6 +108,69 @@ class GrammarOracleReportTests(unittest.TestCase):
         )
         self.assertEqual(by_name["CompletelyUnknownSegment"].status, "unmatched")
 
+    def test_counts_generator_hazards_in_antlr_grammars(self) -> None:
+        lexer = """
+        lexer grammar DemoLexer;
+        @members {
+            public boolean isHint() { return false; }
+        }
+        SELECT: 'SELECT';
+        LBRACE: '{';
+        OPEN_COMMENT: '/*' {!isHint()}? .*? '*/' -> channel(HIDDEN);
+        WS: [ \\t{}]+ -> skip;
+        DOLLAR: '$$' -> pushMode(DOLLAR_MODE);
+        fragment DIGIT: [0-9];
+        mode DOLLAR_MODE;
+        BODY: ~'$'+ { setText(getText().trim()); };
+        """
+        parser = """
+        parser grammar DemoParser;
+        options { tokenVocab = DemoLexer; }
+        // ignored: {commentAction();}
+        query
+            : {!legacy_mode}? SELECT (identifier | nonReserved)
+            | SELECT
+            ;
+        nonReserved
+            : SELECT | (LBRACE | BODY) | WS
+            ;
+        identifier[boolean strict]
+            : {strict}? BODY
+            ;
+        """
+        hazards = oracle.generator_hazards(lexer, parser)
+        self.assertEqual(hazards.parser_rules, 3)
+        self.assertEqual(hazards.lexer_rules, 7)
+        self.assertEqual(hazards.semantic_predicates, 3)
+        self.assertEqual(hazards.inline_actions, 1)
+        self.assertEqual(hazards.named_actions, ("members",))
+        self.assertEqual(hazards.lexer_modes, 1)
+        self.assertEqual(hazards.trivia_off_tree_rules, 2)
+        self.assertEqual(
+            hazards.predicate_references, ("isHint", "legacy_mode", "strict")
+        )
+        self.assertEqual(hazards.keyword_fallback_rules, (("nonReserved", 3),))
+
+    def test_action_free_grammar_has_no_code_hazards(self) -> None:
+        hazards = oracle.generator_hazards(
+            "lexer grammar L;\nA: 'a';\nWS: [ ]+ -> channel(HIDDEN);\n",
+            "parser grammar P;\nstart: A+ EOF;\nkeyword: A | A A;\n",
+        )
+        self.assertEqual(hazards.semantic_predicates, 0)
+        self.assertEqual(hazards.inline_actions, 0)
+        self.assertEqual(hazards.named_actions, ())
+        self.assertEqual(hazards.trivia_off_tree_rules, 1)
+        self.assertEqual(hazards.keyword_fallback_rules, (("keyword", 2),))
+
+    def test_hazard_section_renders_one_row_per_grammar(self) -> None:
+        hazards = oracle.generator_hazards(
+            "lexer grammar L;\nA: 'a' {isOk()}?;\n", "parser grammar P;\nstart: A;\n"
+        )
+        lines = oracle.hazards_section([("Demo", hazards)])
+        self.assertIn("## Generator Hazards", lines)
+        self.assertIn("| Demo | 1 | 1 | 1 | 0 | — | 0 | 0 | — |", lines)
+        self.assertIn("- Demo predicates reference: `isOk`", lines)
+
 
 if __name__ == "__main__":
     unittest.main()

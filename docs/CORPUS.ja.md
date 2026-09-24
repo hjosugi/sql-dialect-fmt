@@ -103,6 +103,13 @@ mode、Spark SQL testsをDatabricks modeで実行し、2つのconformance report
 local Rust rule/nodeとのname matchは明示的にheuristicです。unmatched nameはレビュー候補で、
 matched nameもsemantic coverageの証明ではありません。
 
+**Generator Hazards** 表は、2つのANTLR grammarについて、Pure Rust CST generatorがdataとして
+受け取れない構成要素を数えます：target言語のsemantic predicate/action、名前付き
+`@members`/`@header` block、lexer mode、hidden channelへ送る・skipするtrivia rule、および
+keyword fallback rule（`nonReserved` 系）とその選択肢数です。
+[research/official-grammar-cst-feasibility.ja.md](research/official-grammar-cst-feasibility.ja.md)
+に記録した再評価の入力を継続的に追跡します。
+
 週次 `Corpus` workflowはcurrent upstream headをsparse checkoutし、3 reportをartifactとして
 uploadします。いずれかのcorpusがlosslessness/idempotencyに違反すれば失敗します。PRでは
 upstream networkに依存せず、extractorのunit testだけを実行します。

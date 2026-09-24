@@ -117,6 +117,13 @@ Snowflake mode and Spark SQL tests in Databricks mode, producing two linked conf
 Name matches against local Rust rules/nodes are explicitly heuristic: an unmatched name is a review
 candidate, and a matched name is not proof of semantic coverage.
 
+A **Generator Hazards** table counts, for both ANTLR grammars, the constructs a Pure Rust CST
+generator could not take as data: target-language semantic predicates and actions, named
+`@members`/`@header` blocks, lexer modes, trivia rules routed to a hidden channel or skipped, and
+keyword fallback rules (`nonReserved` and friends) with their alternative counts. It tracks the
+re-evaluation input described in
+[research/official-grammar-cst-feasibility.md](research/official-grammar-cst-feasibility.md).
+
 The scheduled `Corpus` workflow sparse-checks out the current upstream heads weekly, uploads all
 three reports as an artifact, and fails if either corpus violates losslessness/idempotency. Pull
 requests run the extractor's unit tests without depending on upstream network state.

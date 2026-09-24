@@ -10,6 +10,11 @@ checklists from three independent upstream sources:
 
 The resulting Markdown report is a drift signal, not a claim of semantic parser coverage. Optional
 corpus runs reuse ``conformance-report.py`` and the lossless/idempotent formatter harness.
+
+The report also counts *generator hazards* in the two ANTLR grammars: target-language predicates
+and actions, named ``@members`` blocks, lexer modes, trivia routed off the parse tree, and keyword
+fallback rules. They are the constructs a Pure Rust CST generator could not consume as data, and
+they feed the re-evaluation recorded in ``docs/research/official-grammar-cst-feasibility.md``.
 """
 
 from __future__ import annotations
@@ -32,6 +37,8 @@ SPARK_MARKER = Path(
     "sql/api/src/main/antlr4/org/apache/spark/sql/catalyst/parser/SqlBaseParser.g4"
 )
 SQLFLUFF_MARKER = Path("src/sqlfluff/dialects/dialect_snowflake.py")
+GRAMMARS_V4_LEXER = Path("sql/snowflake/SnowflakeLexer.g4")
+SPARK_LEXER = SPARK_MARKER.with_name("SqlBaseLexer.g4")
 
 GRAMMARS_V4_URL = "https://github.com/antlr/grammars-v4/tree/master/sql/snowflake"
 SPARK_URL = (
@@ -48,6 +55,19 @@ class Source:
     revision: str
     url: str
     license: str
+
+
+@dataclass(frozen=True)
+class GeneratorHazards:
+    parser_rules: int
+    lexer_rules: int
+    semantic_predicates: int
+    inline_actions: int
+    named_actions: tuple[str, ...]
+    lexer_modes: int
+    trivia_off_tree_rules: int
+    predicate_references: tuple[str, ...]
+    keyword_fallback_rules: tuple[tuple[str, int], ...]
 
 
 @dataclass(frozen=True)
@@ -137,6 +157,171 @@ def extract_antlr_rules(text: str) -> list[str]:
         r"\s*:"
     )
     return sorted(set(pattern.findall(cleaned)))
+
+
+ANTLR_RULE = re.compile(
+    r"(?m)^[ \t]*(?:fragment\s+)?([A-Za-z][A-Za-z0-9_]*)"
+    r"(?:\s*\[[^\]\n]*\])?"
+    r"(?:\s+returns\s*\[[^\]\n]*\])?"
+    r"(?:\s+locals\s*\[[^\]\n]*\])?"
+    r"\s*:"
+)
+KEYWORD_FALLBACK_RULE = re.compile(r"(?i)^(?:\w*non_?reserved\w*|keyword)$")
+PREDICATE_NOISE = {"true", "false", "this", "null", "return"}
+
+
+def without_comments_or_literals(text: str) -> str:
+    """Drop ANTLR comments and blank out quoted literals.
+
+    Unlike ``without_comments`` this is a scanner, so literals such as ``'/*'`` or ``'{'`` cannot
+    open a comment or an action block.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        if text.startswith("//", index):
+            end = text.find("\n", index)
+            index = len(text) if end < 0 else end
+        elif text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            index = len(text) if end < 0 else end + 2
+        elif text[index] == "'":
+            end = index + 1
+            while end < len(text) and text[end] != "'":
+                end += 2 if text[end] == "\\" else 1
+            out.append("''")
+            index = end + 1
+        else:
+            out.append(text[index])
+            index += 1
+    return "".join(out)
+
+
+def antlr_blocks(text: str) -> list[tuple[str, bool]]:
+    """Return top-level ``{...}`` blocks as ``(body, is_predicate)`` pairs.
+
+    ``text`` must already be free of comments and literals. Lexer character sets (``[{}]``) are
+    skipped so their braces are not mistaken for actions.
+    """
+    blocks: list[tuple[str, bool]] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "[":
+            index += 1
+            while index < len(text) and text[index] != "]":
+                index += 2 if text[index] == "\\" else 1
+            index += 1
+            continue
+        if char != "{":
+            index += 1
+            continue
+        depth = 1
+        end = index + 1
+        while end < len(text) and depth:
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+            end += 1
+        after = text[end:].lstrip(" \t")
+        blocks.append((text[index + 1 : end - 1].strip(), after.startswith("?")))
+        index = end
+    return blocks
+
+
+def top_level_alternatives(body: str) -> int:
+    depth = 0
+    alternatives = 1
+    for char in body:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "|" and depth == 0:
+            alternatives += 1
+    return alternatives
+
+
+def generator_hazards(*grammars: str) -> GeneratorHazards:
+    """Count constructs a Rust CST generator could not take from an ANTLR grammar as data."""
+    text = "\n".join(without_comments_or_literals(grammar) for grammar in grammars)
+    named = re.compile(r"@(?:\w+::)?(\w+)\s*\{")
+    named_actions = tuple(sorted(set(named.findall(text))))
+    # Named actions and options blocks are declarations, not inline grammar hazards.
+    declarations = re.compile(r"(?:@(?:\w+::)?\w+|\boptions|\btokens|\bchannels)\s*(?=\{)")
+    inline_text = text
+    for match in reversed(list(declarations.finditer(text))):
+        body_end = match.end()
+        depth = 0
+        for offset, char in enumerate(text[match.end() :]):
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    body_end = match.end() + offset + 1
+                    break
+        inline_text = inline_text[: match.start()] + inline_text[body_end:]
+    blocks = antlr_blocks(inline_text)
+    predicates = [body for body, is_predicate in blocks if is_predicate]
+    rules = ANTLR_RULE.findall(inline_text)
+    references = {
+        word
+        for body in predicates
+        for word in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", body)
+        if word not in PREDICATE_NOISE
+    }
+    fallback = []
+    for match in re.finditer(r"(?ms)^[ \t]*([a-z][A-Za-z0-9_]*)\s*:(.*?);", inline_text):
+        if KEYWORD_FALLBACK_RULE.match(match.group(1)):
+            fallback.append((match.group(1), top_level_alternatives(match.group(2))))
+    return GeneratorHazards(
+        parser_rules=sum(name[0].islower() for name in rules),
+        lexer_rules=sum(name[0].isupper() for name in rules),
+        semantic_predicates=len(predicates),
+        inline_actions=len(blocks) - len(predicates),
+        named_actions=named_actions,
+        lexer_modes=len(re.findall(r"(?m)^\s*mode\s+\w+\s*;", inline_text)),
+        trivia_off_tree_rules=len(
+            re.findall(r"->\s*(?:channel\s*\(\s*HIDDEN\s*\)|skip\b)", inline_text)
+        ),
+        predicate_references=tuple(sorted(references)),
+        keyword_fallback_rules=tuple(fallback),
+    )
+
+
+def hazards_section(grammars: list[tuple[str, GeneratorHazards]]) -> list[str]:
+    lines = [
+        "## Generator Hazards",
+        "",
+        "Constructs a Pure Rust CST generator could not consume as data: target-language "
+        "predicates and actions, named actions, lexer modes, trivia routed off the parse tree, and "
+        "keyword fallback rules (reservation as a static list rather than by position). See "
+        "`docs/research/official-grammar-cst-feasibility.md`.",
+        "",
+        "| Grammar | Parser rules | Lexer rules | Predicates | Actions | Named actions "
+        "| Lexer modes | Trivia off tree | Keyword fallback alternatives |",
+        "| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- |",
+    ]
+    for name, hazards in grammars:
+        named = ", ".join(f"`@{action}`" for action in hazards.named_actions) or "—"
+        fallback = (
+            ", ".join(f"`{rule}` {count}" for rule, count in hazards.keyword_fallback_rules)
+            or "—"
+        )
+        lines.append(
+            f"| {name} | {hazards.parser_rules} | {hazards.lexer_rules} | "
+            f"{hazards.semantic_predicates} | {hazards.inline_actions} | {named} | "
+            f"{hazards.lexer_modes} | {hazards.trivia_off_tree_rules} | {fallback} |"
+        )
+    lines.append("")
+    for name, hazards in grammars:
+        if hazards.predicate_references:
+            references = ", ".join(f"`{word}`" for word in hazards.predicate_references)
+            lines.append(f"- {name} predicates reference: {references}")
+    lines.append("")
+    return lines
 
 
 def literal_words(value: ast.AST) -> set[str]:
@@ -387,6 +572,21 @@ def write_report(
     spark_parser = (spark.root / SPARK_MARKER).read_text(encoding="utf-8")
     grammars_v4_rules = extract_antlr_rules(snowflake_parser)
     spark_rules = extract_antlr_rules(spark_parser)
+    hazards = [
+        (
+            "grammars-v4 Snowflake",
+            generator_hazards(
+                (grammars_v4.root / GRAMMARS_V4_LEXER).read_text(encoding="utf-8"),
+                snowflake_parser,
+            ),
+        ),
+        (
+            "Apache Spark SQL",
+            generator_hazards(
+                (spark.root / SPARK_LEXER).read_text(encoding="utf-8"), spark_parser
+            ),
+        ),
+    ]
     sqlfluff_inventory = inventory_sqlfluff(sqlfluff.root)
 
     local_snowflake_reserved = {
@@ -436,6 +636,7 @@ def write_report(
         f"- Apache Spark SQL test inputs: **{count_sql(spark_tests)}** SQL files",
         f"- Harness execution: **{'enabled' if run_corpora else 'not requested'}**",
         "",
+        *hazards_section(hazards),
         "## SQLFluff Keyword Delta",
         "",
         "Reservation differences are review candidates, not automatic defects: this parser keeps "

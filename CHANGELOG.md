@@ -9,6 +9,16 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- The external grammar oracle report now has a Generator Hazards table for the grammars-v4
+  Snowflake and Apache Spark grammars: semantic predicates, inline and named actions, lexer modes,
+  trivia routed off the parse tree, and keyword fallback rules with their alternative counts.
+- `docs/research/official-grammar-cst-feasibility.md` (and `.ja.md`) records the 2026-09
+  re-evaluation for #121: neither Snowflake nor Databricks publishes the grammar its parser is
+  built from, so the handwritten event/rowan parser stays the source of truth and third-party
+  grammars stay conformance oracles.
+
 ## [1.22.3] - 2026-09-22
 
 ### Changed
