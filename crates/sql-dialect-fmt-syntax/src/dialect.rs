@@ -581,6 +581,15 @@ impl Dialect {
         )
     }
 
+    /// Whether the parser is allowed to start a new statement without a `;` separator. Snowflake and
+    /// Databricks do (their grammar covers the common statement tails); every other dialect is
+    /// strict so an unrecognized trailing clause becomes a diagnostic (and the formatter falls back
+    /// to verbatim) instead of a silently invented statement boundary.
+    #[must_use]
+    pub fn tolerates_implicit_statement_boundaries(self) -> bool {
+        matches!(self, Dialect::Snowflake | Dialect::Databricks)
+    }
+
     /// SQLite `GLOB` comparison operator.
     #[must_use]
     pub fn supports_glob(self) -> bool {

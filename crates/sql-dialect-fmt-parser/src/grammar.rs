@@ -51,13 +51,23 @@ use self::stmt::call_stmt;
 
 pub(crate) fn source_file(p: &mut Parser) {
     let m = p.start();
+    let mut need_separator = false;
     while !p.at_eof() {
         if p.at(SEMICOLON) {
             p.bump(SEMICOLON); // statement separator / empty statement
+            need_separator = false;
         } else if stmt::at_stmt_start(p) {
+            // Non-core dialects must separate statements with `;`. Without one, an unrecognized
+            // trailing clause would otherwise be re-parsed as a fresh statement and the formatter
+            // would invent a `;`; diagnose it instead so the caller keeps the source verbatim.
+            if need_separator && !p.dialect().tolerates_implicit_statement_boundaries() {
+                p.error("expected ';' between statements");
+            }
             stmt::statement_or_flow(p);
+            need_separator = true;
         } else {
             p.err_and_bump("expected a statement");
+            need_separator = true;
         }
     }
     m.complete(p, SOURCE_FILE);

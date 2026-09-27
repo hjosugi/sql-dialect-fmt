@@ -11,6 +11,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Non-core dialects now require an explicit `;` between statements: an unrecognized trailing
+  clause is diagnosed (so the formatter falls back to verbatim) instead of being silently
+  re-parsed as a new statement with an invented separator. Snowflake and Databricks keep their
+  existing implicit-boundary behavior.
 - ClickHouse `SETTINGS k = v` and `FORMAT <name>` query tails, Transact-SQL `EXEC <proc>`
   statements, and the SQLite `GLOB` comparison operator no longer split into spurious
   statements.
