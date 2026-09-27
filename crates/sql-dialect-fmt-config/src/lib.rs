@@ -568,4 +568,75 @@ mod tests {
         assert!(Config::parse("logical_operator_newline = \"middle\"\n").is_err());
         assert!(parse_logical_operator_newline("middle").is_err());
     }
+
+    #[test]
+    fn json_schema_matches_the_config_keys() {
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../../../docs/schema.json"))
+                .expect("schema JSON parses");
+        let properties = schema["properties"].as_object().expect("properties object");
+        let mut keys: Vec<&str> = properties.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        let mut expected = vec![
+            "comma_style",
+            "data_type_case",
+            "dense_operators",
+            "dialect",
+            "exclude",
+            "expression_width",
+            "function_case",
+            "identifier_case",
+            "indent_width",
+            "keyword_case",
+            "line_ending",
+            "line_width",
+            "lines_between_queries",
+            "logical_operator_newline",
+            "newline_before_semicolon",
+            "param_types",
+            "params",
+            "select_item_layout",
+            "tab_width",
+            "uppercase_keywords",
+            "use_tabs",
+        ];
+        expected.sort_unstable();
+        assert_eq!(keys, expected);
+
+        // Every documented key is accepted by the config parser.
+        for (key, snippet) in [
+            ("line_width", "line_width = 80"),
+            ("indent_width", "indent_width = 2"),
+            ("tab_width", "tab_width = 4"),
+            ("uppercase_keywords", "uppercase_keywords = true"),
+            ("keyword_case", "keyword_case = \"upper\""),
+            ("data_type_case", "data_type_case = \"preserve\""),
+            ("function_case", "function_case = \"preserve\""),
+            ("identifier_case", "identifier_case = \"preserve\""),
+            (
+                "logical_operator_newline",
+                "logical_operator_newline = \"before\"",
+            ),
+            ("dense_operators", "dense_operators = false"),
+            ("use_tabs", "use_tabs = false"),
+            (
+                "newline_before_semicolon",
+                "newline_before_semicolon = false",
+            ),
+            ("lines_between_queries", "lines_between_queries = 1"),
+            ("expression_width", "expression_width = 40"),
+            ("line_ending", "line_ending = \"auto\""),
+            ("select_item_layout", "select_item_layout = \"vertical\""),
+            ("comma_style", "comma_style = \"trailing\""),
+            ("dialect", "dialect = \"snowflake\""),
+            ("params", "params = [\"1\"]"),
+            ("param_types", "[param_types]\npositional = true"),
+            ("exclude", "exclude = [\"target/**\"]"),
+        ] {
+            assert!(
+                Config::parse(snippet).is_ok(),
+                "schema key `{key}` is not accepted by Config::parse"
+            );
+        }
+    }
 }

@@ -2287,6 +2287,7 @@ name = "sql-dialect-fmt-config"
 version = "1.24.0"
 dependencies = [
  "serde",
+ "serde_json",
  "sql-dialect-fmt-formatter",
  "sql-dialect-fmt-parser",
  "toml",

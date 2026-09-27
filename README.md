@@ -151,7 +151,9 @@ CLI (`--dialect`), and the Wasm ABI, with aliases such as `oracle`, `tsql`, `pos
 `presto`. Configuration covers `keyword_case`, `data_type_case`, `function_case`, `identifier_case`,
 `indent_width`/`tab_width`, `use_tabs`, `line_ending`, `select_item_layout`, `comma_style`,
 `logical_operator_newline`, `dense_operators`, `newline_before_semicolon`, `lines_between_queries`,
-`expression_width`, and `dialect`.
+`expression_width`, `params`, `[param_types]`, and `dialect`. A JSON Schema for the file lives
+at [`docs/schema.json`](docs/schema.json) (editors that understand TOML schema, such as Taplo
+or the VS Code TOML extension via `#:schema`, use it for completion).
 
 SQL lifted out of a host language keeps formatting and highlighting: a `${ ... }` template
 placeholder — a JavaScript template literal (`` `SELECT ${cfg.col} FROM ${cfg.t}` ``) or a

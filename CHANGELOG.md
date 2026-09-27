@@ -11,6 +11,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- `docs/schema.json`: a JSON Schema for `sql-dialect-fmt.toml` (all keys, enums, and
+  `[param_types]`), with a config-crate test that keeps it in sync with the parser. Editors
+  that support TOML schema (Taplo, the VS Code TOML extension via `#:schema`) get completion.
 - Transact-SQL `GO` batch separators (emitted on their own line without a trailing `;`) and
   DuckDB FROM-first queries (`FROM t SELECT … WHERE …`), whose clause order is preserved.
 - Oracle PL/SQL named routines: `CREATE [OR REPLACE] PROCEDURE p IS …` and

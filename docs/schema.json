@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/hjosugi/sql-dialect-fmt/main/docs/schema.json",
+  "title": "sql-dialect-fmt.toml",
+  "description": "Configuration for sql-dialect-fmt (the nearest sql-dialect-fmt.toml found by walking up from each input). Every key is optional.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "line_width": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 80,
+      "description": "Target line width the printer tries to stay within before wrapping."
+    },
+    "indent_width": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 2,
+      "description": "Spaces per indentation level. `tab_width` is accepted as an alias."
+    },
+    "tab_width": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for `indent_width`."
+    },
+    "uppercase_keywords": {
+      "type": "boolean",
+      "default": true,
+      "description": "Deprecated compatibility key. Prefer `keyword_case`."
+    },
+    "keyword_case": {
+      "enum": ["upper", "lower", "preserve"],
+      "default": "upper",
+      "description": "Letter case for recognized SQL keywords."
+    },
+    "data_type_case": {
+      "enum": ["upper", "lower", "preserve"],
+      "default": "preserve",
+      "description": "Letter case for built-in data-type words in type positions."
+    },
+    "function_case": {
+      "enum": ["upper", "lower", "preserve"],
+      "default": "preserve",
+      "description": "Letter case for recognized function names."
+    },
+    "identifier_case": {
+      "enum": ["upper", "lower", "preserve"],
+      "default": "preserve",
+      "description": "Letter case for unquoted identifiers that are not keywords, types, or functions."
+    },
+    "logical_operator_newline": {
+      "enum": ["before", "after"],
+      "default": "before",
+      "description": "Where AND/OR sit when a boolean expression wraps."
+    },
+    "dense_operators": {
+      "type": "boolean",
+      "default": false,
+      "description": "Pack binary operators without surrounding spaces."
+    },
+    "use_tabs": {
+      "type": "boolean",
+      "default": false,
+      "description": "Indent with tab characters instead of spaces."
+    },
+    "newline_before_semicolon": {
+      "type": "boolean",
+      "default": false,
+      "description": "Place the statement-terminating semicolon on its own line."
+    },
+    "lines_between_queries": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Force this many blank lines between top-level statements. Leave unset to preserve the author's grouping."
+    },
+    "expression_width": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Flat width cap for parenthesized lists before they wrap. Leave unset to use `line_width`."
+    },
+    "line_ending": {
+      "enum": ["auto", "lf", "crlf"],
+      "default": "auto",
+      "description": "Output line endings. Auto preserves the first line ending found in the input."
+    },
+    "select_item_layout": {
+      "enum": ["auto", "vertical"],
+      "default": "vertical",
+      "description": "Top-level SELECT list layout."
+    },
+    "comma_style": {
+      "enum": ["trailing", "leading"],
+      "default": "trailing",
+      "description": "Placement of commas in wrapped comma-separated lists."
+    },
+    "dialect": {
+      "enum": [
+        "snowflake",
+        "databricks",
+        "spark",
+        "bigquery",
+        "clickhouse",
+        "db2",
+        "db2i",
+        "duckdb",
+        "hive",
+        "mariadb",
+        "mysql",
+        "tidb",
+        "n1ql",
+        "plsql",
+        "postgresql",
+        "redshift",
+        "singlestoredb",
+        "sqlite",
+        "sql",
+        "transactsql",
+        "trino"
+      ],
+      "default": "snowflake",
+      "description": "SQL dialect to parse and format. Aliases such as oracle, tsql, postgres, and presto are also accepted."
+    },
+    "params": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Placeholder values replaced after formatting, in order of appearance."
+    },
+    "param_types": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Override which placeholder spellings the lexer recognizes. Unset flags keep the dialect default.",
+      "properties": {
+        "positional": { "type": "boolean", "description": "`?`" },
+        "numbered_question": { "type": "boolean", "description": "`?1`" },
+        "numbered_colon": { "type": "boolean", "description": "`:1`" },
+        "numbered_dollar": { "type": "boolean", "description": "`$1`" },
+        "named_colon": { "type": "boolean", "description": "`:name`" },
+        "named_at": { "type": "boolean", "description": "`@name`" },
+        "named_dollar": { "type": "boolean", "description": "`$name`" },
+        "quoted_colon": { "type": "boolean", "description": "`:\"name\"`" },
+        "quoted_at": { "type": "boolean", "description": "`@\"name\"`" },
+        "quoted_dollar": { "type": "boolean", "description": "`$\"name\"`" }
+      }
+    },
+    "exclude": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns skipped during recursive directory discovery."
+    }
+  }
+}
