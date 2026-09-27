@@ -7,7 +7,9 @@
 //!     lexical highlighter, so an editor using the grammar and one using the LSP/CST agree.
 
 use sql_dialect_fmt_highlight::{classify, HighlightKind};
-use sql_dialect_fmt_syntax::{keyword_texts, SyntaxKind, BUILTIN_TYPE_WORDS};
+use sql_dialect_fmt_syntax::{
+    keyword_kind_for, keyword_texts, Dialect, SyntaxKind, BUILTIN_TYPE_WORDS,
+};
 
 const GRAMMAR_SRC: &str = include_str!("../../../editors/snowflake.tmLanguage.json");
 
@@ -351,6 +353,11 @@ fn keyword_list_is_complete_against_the_keyword_table() {
     }
 
     for kw in keyword_texts() {
+        // The committed grammar is the Snowflake grammar; dialect-specific keywords that Snowflake
+        // does not reserve (conflict/duplicate/nothing/prewhere/returning) are intentionally absent.
+        if keyword_kind_for(kw, Dialect::Snowflake).is_none() {
+            continue;
+        }
         assert!(
             words.contains(kw),
             "no grammar keyword rule covers reserved word `{kw}`"

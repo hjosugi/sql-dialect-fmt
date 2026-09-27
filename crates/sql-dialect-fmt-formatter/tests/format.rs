@@ -1597,3 +1597,97 @@ fn logical_operator_newline_controls_operator_placement() {
     assert!(a.contains("aaaaaaaaaa AND"), "after: {a:?}");
     assert!(!a.contains("AND bbbbbbbbbb"), "after: {a:?}");
 }
+
+#[test]
+fn postgres_returning_and_on_conflict_clauses() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let pg = FormatOptions::default().with_dialect(Dialect::PostgreSql);
+    let once = format(
+        "insert into t (a, b) values (1, 2) on conflict (a) do update set b = excluded.b returning id",
+        &pg,
+    );
+    assert_eq!(
+        once,
+        "INSERT INTO t (a, b)\nVALUES (1, 2)\nON CONFLICT (a) DO UPDATE SET b = excluded.b\nRETURNING id;\n"
+    );
+    assert_eq!(format(&once, &pg), once);
+
+    let update = format(
+        "update t set a = 1 from s where t.id = s.id returning t.id",
+        &pg,
+    );
+    assert_eq!(
+        update,
+        "UPDATE t\nSET a = 1\nFROM s\nWHERE t.id = s.id\nRETURNING t.id;\n"
+    );
+    assert_eq!(format(&update, &pg), update);
+
+    let delete = format("delete from t where a = 1 returning *", &pg);
+    assert_eq!(delete, "DELETE FROM t\nWHERE a = 1\nRETURNING *;\n");
+}
+
+#[test]
+fn mysql_and_sqlite_insert_extensions() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let mysql = FormatOptions::default().with_dialect(Dialect::MySql);
+    assert_eq!(
+        format(
+            "insert into t (a) values (1) on duplicate key update a = a + 1",
+            &mysql
+        ),
+        "INSERT INTO t (a)\nVALUES (1)\nON DUPLICATE KEY UPDATE a = a + 1;\n"
+    );
+
+    let sqlite = FormatOptions::default().with_dialect(Dialect::Sqlite);
+    assert_eq!(
+        format("insert or replace into t (a) values (1)", &sqlite),
+        "INSERT OR REPLACE INTO t (a)\nVALUES (1);\n"
+    );
+}
+
+#[test]
+fn bigquery_star_except_and_clickhouse_prewhere() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let bq = FormatOptions::default().with_dialect(Dialect::BigQuery);
+    assert_eq!(
+        format("select * except(a, b) from t", &bq),
+        "SELECT\n  * EXCEPT (a, b)\nFROM t;\n"
+    );
+
+    let ch = FormatOptions::default().with_dialect(Dialect::ClickHouse);
+    assert_eq!(
+        format("select a from t prewhere b = 1 where c = 2 limit 10", &ch),
+        "SELECT\n  a\nFROM t\nPREWHERE b = 1\nWHERE c = 2\nLIMIT 10;\n"
+    );
+}
+
+#[test]
+fn tsql_output_clause() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let tsql = FormatOptions::default().with_dialect(Dialect::TransactSql);
+    assert_eq!(
+        format("update t set a = 1 output inserted.a where b = 2", &tsql),
+        "UPDATE t\nSET a = 1\nOUTPUT inserted.a\nWHERE b = 2;\n"
+    );
+    assert_eq!(
+        format("delete from t output deleted.* where b = 2", &tsql),
+        "DELETE FROM t\nOUTPUT deleted.*\nWHERE b = 2;\n"
+    );
+}
+
+#[test]
+fn tsql_for_json_and_offset_fetch() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let tsql = FormatOptions::default().with_dialect(Dialect::TransactSql);
+    assert_eq!(
+        format("select a from t for json path", &tsql),
+        "SELECT\n  a\nFROM t\nFOR JSON PATH;\n"
+    );
+    assert_eq!(
+        format(
+            "select a from t order by a offset 10 rows fetch next 5 rows only",
+            &tsql
+        ),
+        "SELECT\n  a\nFROM t\nORDER BY a\nOFFSET 10 ROWS\nFETCH NEXT 5 ROWS ONLY;\n"
+    );
+}

@@ -343,4 +343,14 @@ contextual_keywords! {
     Search => "search",
     /// `ALTER TABLE t ADD SEARCH OPTIMIZATION ...` — second word.
     Optimization => "optimization",
+    /// Transact-SQL `FOR JSON ...` — output format word.
+    Json => "json",
+    /// Transact-SQL `FOR XML ...` — output format word.
+    Xml => "xml",
+    /// `FOR JSON AUTO` — layout word.
+    Auto => "auto",
+    /// `FOR JSON PATH` — layout word.
+    Path => "path",
+    /// `FOR JSON ... , ROOT(...)` / `RAW` — option word.
+    Raw => "raw",
 }

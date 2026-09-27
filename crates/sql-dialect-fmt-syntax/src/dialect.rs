@@ -437,6 +437,68 @@ impl Dialect {
         matches!(self, Dialect::Databricks | Dialect::Spark | Dialect::Hive)
     }
 
+    /// `RETURNING <expr> [, ...]` after `INSERT`/`UPDATE`/`DELETE`. PostgreSQL, SQLite, DuckDB,
+    /// MariaDB and N1QL.
+    #[must_use]
+    pub fn supports_returning_clause(self) -> bool {
+        matches!(
+            self,
+            Dialect::PostgreSql
+                | Dialect::Sqlite
+                | Dialect::DuckDb
+                | Dialect::MariaDb
+                | Dialect::N1ql
+        )
+    }
+
+    /// `INSERT ... ON CONFLICT [(cols)] DO NOTHING | DO UPDATE SET ...`. PostgreSQL, SQLite, DuckDB.
+    #[must_use]
+    pub fn supports_insert_conflict(self) -> bool {
+        matches!(
+            self,
+            Dialect::PostgreSql | Dialect::Sqlite | Dialect::DuckDb
+        )
+    }
+
+    /// `INSERT ... ON DUPLICATE KEY UPDATE ...`. The MySQL family.
+    #[must_use]
+    pub fn supports_on_duplicate_key(self) -> bool {
+        matches!(
+            self,
+            Dialect::MySql | Dialect::MariaDb | Dialect::TiDb | Dialect::SingleStoreDb
+        )
+    }
+
+    /// SQLite `INSERT OR REPLACE|IGNORE|ABORT|FAIL|ROLLBACK INTO ...`.
+    #[must_use]
+    pub fn supports_insert_or_clause(self) -> bool {
+        matches!(self, Dialect::Sqlite)
+    }
+
+    /// ClickHouse `PREWHERE <expr>` (a filter applied before `WHERE`).
+    #[must_use]
+    pub fn supports_prewhere(self) -> bool {
+        matches!(self, Dialect::ClickHouse)
+    }
+
+    /// Transact-SQL `OUTPUT ... [INTO ...]` DML clause.
+    #[must_use]
+    pub fn supports_output_clause(self) -> bool {
+        matches!(self, Dialect::TransactSql)
+    }
+
+    /// Transact-SQL `FOR JSON|XML ...` output clause at the end of a `SELECT`.
+    #[must_use]
+    pub fn supports_select_for_clause(self) -> bool {
+        matches!(self, Dialect::TransactSql)
+    }
+
+    /// BigQuery `SELECT * EXCEPT (...)` / `SELECT * REPLACE (...)` star modifiers.
+    #[must_use]
+    pub fn supports_select_star_modifier(self) -> bool {
+        matches!(self, Dialect::BigQuery)
+    }
+
     /// Delta/Spark maintenance + cache statements — `VACUUM`, `OPTIMIZE … ZORDER BY`,
     /// `INSERT OVERWRITE`, `CACHE`/`UNCACHE`/`REFRESH`, `DESCRIBE HISTORY`, and the
     /// `WHEN NOT MATCHED BY SOURCE`/`INSERT *` MERGE extensions. Databricks and Spark. The leading

@@ -11,6 +11,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Dialect-specific DML and query clauses now parse and format instead of splitting into spurious
+  statements: PostgreSQL/SQLite/DuckDB/MariaDB `RETURNING`, `ON CONFLICT … DO NOTHING|UPDATE`
+  (including `ON CONSTRAINT` and partial-index `WHERE`), MySQL-family `ON DUPLICATE KEY UPDATE`,
+  SQLite `INSERT OR REPLACE|IGNORE|…`, ClickHouse `PREWHERE`, BigQuery `SELECT * EXCEPT (…)` /
+  `REPLACE (…)`, and Transact-SQL `OUTPUT … [INTO …]` and `FOR JSON|XML`, plus `OFFSET n ROWS` /
+  `FETCH FIRST|NEXT n ROWS ONLY`. Snowflake and Databricks output is unchanged.
 - WebAssembly ABI v2 (`sql_dialect_fmt_format_with_options_v2`) and VS Code settings expose
   the extended formatter options (`dataTypeCase`, `functionCase`, `identifierCase`,
   `logicalOperatorNewline`, `denseOperators`, `useTabs`, `newlineBeforeSemicolon`,

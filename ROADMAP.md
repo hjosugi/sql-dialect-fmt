@@ -159,8 +159,9 @@
 - ✅ 既存キーワードの方言メンバーシップを精緻化: `top`→{Snowflake, Transact-SQL}、`qualify`→{Snowflake, Databricks, Spark, BigQuery, DuckDb, Trino}、`ilike`→{Snowflake, Spark系, PostgreSQL系, Redshift, ClickHouse, Trino, Hive}、`rlike`→{Snowflake, Spark系, Hive}、`regexp`→{Snowflake, MySQL系}
 - ⏳ 方言固有予約語の追加（例: BigQuery `STRUCT`/`UNNEST`、ClickHouse `PREWHERE`/`FINAL`/`SETTINGS`、T-SQL `GO`）は新 `SyntaxKind` と parser 対応が必要なため、`sql-formatter` の keyword 表やベンダ公式 reserve word 一覧を出典付きで生成する lane（`scripts/generate-dialect-tables.py` 想定）で追う
 
-### Phase 11c — 方言別パーサ/フォーマッタ規則 ⏳
-- ⏳ 方言固有の文・句の構造化: `LIMIT`/`TOP`/`FETCH FIRST`、MySQL `INSERT … ON DUPLICATE KEY UPDATE`、PostgreSQL `RETURNING`/`ON CONFLICT`、T-SQL `GO` バッチ、BigQuery `STRUCT`/`UNNEST`、ClickHouse `PREWHERE`/`FORMAT`、Oracle PL/SQL ブロックなど。パーサは現状もロスレスに受理し unknown は verbatim に倒れるため、優先度は「頻度 × 価値」で個別 issue 化する
+### Phase 11c — 方言別パーサ/フォーマッタ規則 🚧
+- ✅ `RETURNING`（PostgreSQL/SQLite/DuckDB/MariaDB/N1QL）、`ON CONFLICT … DO NOTHING|UPDATE`（`ON CONSTRAINT`・部分インデックス `WHERE` 含む）、`ON DUPLICATE KEY UPDATE`（MySQL 系）、SQLite `INSERT OR …`、ClickHouse `PREWHERE`、BigQuery `SELECT * EXCEPT/REPLACE (…)`、T-SQL `OUTPUT … [INTO …]` と `FOR JSON|XML`、`OFFSET n ROWS` / `FETCH FIRST|NEXT n ROWS ONLY` をパース＋整形。方言ゲートで Snowflake/Databricks は不変
+- ⏳ 残り: T-SQL `GO` バッチ／`FOR XML` 詳細、BigQuery `STRUCT`/`UNNEST` の構造化、ClickHouse `FORMAT`/`FINAL`/`SETTINGS`、Oracle PL/SQL ブロック・`RETURNING … INTO`、PostgreSQL `DISTINCT ON`、MySQL `REPLACE INTO`/`INSERT … SET`、`LATERAL`/`USING` 差分など。頻度 × 価値で個別 issue 化
 
 ### Phase 11d — ハイライトの全面対応 🚧
 - ✅ LSP semantic token を `options.dialect` に追随（`highlight_for_dialect` ベースの `semantic_tokens_lsp_for_dialect` を追加し、`textDocument/semanticTokens/full|range` が文書の方言設定を使う） … [semantic.rs](crates/sql-dialect-fmt-highlight/src/semantic.rs) / [lsp/lib.rs](crates/sql-dialect-fmt-lsp/src/lib.rs) / [lsp/main.rs](crates/sql-dialect-fmt-lsp/src/main.rs)

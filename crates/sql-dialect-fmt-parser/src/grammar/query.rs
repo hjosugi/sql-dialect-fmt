@@ -100,6 +100,9 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.at(FROM_KW) {
         from_clause(p);
     }
+    if p.dialect().supports_prewhere() && p.at(PREWHERE_KW) {
+        prewhere_clause(p);
+    }
     if p.at(WHERE_KW) {
         where_clause(p);
     }
@@ -139,6 +142,9 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     }
     if p.at(FETCH_KW) {
         fetch_clause(p);
+    }
+    if p.dialect().supports_select_for_clause() && p.at(FOR_KW) {
+        select_for_clause(p);
     }
     m.complete(p, SELECT_STMT)
 }
@@ -244,7 +250,8 @@ fn star_select_expr(p: &mut Parser) {
 fn at_star_modifier(p: &Parser) -> bool {
     p.at(ILIKE_KW)
         || p.at(REPLACE_KW)
-        || (p.dialect().supports_delta_commands() && p.at(EXCEPT_KW))
+        || ((p.dialect().supports_delta_commands() || p.dialect().supports_select_star_modifier())
+            && p.at(EXCEPT_KW))
         || (p.dialect().supports_semantic_view() && p.at_name())
 }
 
@@ -595,6 +602,14 @@ pub(super) fn where_clause(p: &mut Parser) {
     m.complete(p, WHERE_CLAUSE);
 }
 
+/// ClickHouse `PREWHERE <expr>`: like `WHERE` but applied earlier in the pipeline.
+fn prewhere_clause(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(PREWHERE_KW);
+    expr(p);
+    m.complete(p, PREWHERE_CLAUSE)
+}
+
 /// `START WITH <predicate>` — the seed of a hierarchical (`CONNECT BY`) query.
 fn start_with_clause(p: &mut Parser) {
     let m = p.start();
@@ -792,13 +807,39 @@ fn offset_clause(p: &mut Parser) {
     let m = p.start();
     p.bump(OFFSET_KW);
     expr(p);
+    // Standard / Transact-SQL `OFFSET n ROW|ROWS`.
+    if p.at(ROW_KW) || p.at(ROWS_KW) {
+        p.bump_any();
+    }
     m.complete(p, OFFSET_CLAUSE);
+}
+
+/// Transact-SQL `FOR JSON [AUTO|PATH] ...` / `FOR XML ...`, kept as a lenient token run to the end
+/// of the statement (the options are many and rarely worth structuring).
+fn select_for_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump(FOR_KW);
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        if p.nth_contextual(0, ContextualKeyword::Json)
+            || p.nth_contextual(0, ContextualKeyword::Xml)
+            || p.nth_contextual(0, ContextualKeyword::Auto)
+            || p.nth_contextual(0, ContextualKeyword::Path)
+            || p.nth_contextual(0, ContextualKeyword::Raw)
+        {
+            p.bump_as(CONTEXTUAL_KEYWORD);
+        } else {
+            p.bump_any();
+        }
+    }
+    m.complete(p, FOR_CLAUSE);
 }
 
 fn fetch_clause(p: &mut Parser) {
     let m = p.start();
     p.bump(FETCH_KW);
-    p.eat(FIRST_KW);
+    if !p.eat(FIRST_KW) && p.nth_contextual(0, ContextualKeyword::Next) {
+        p.bump_as(CONTEXTUAL_KEYWORD); // Transact-SQL `FETCH NEXT`
+    }
     expr(p);
     if p.at(ROW_KW) || p.at(ROWS_KW) {
         p.bump_any();

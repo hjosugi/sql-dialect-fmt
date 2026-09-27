@@ -61,6 +61,9 @@ impl Lowerer {
                         | SET_OP
                         | SUBQUERY
                         | WITH_QUERY
+                        | ON_CONFLICT_CLAUSE
+                        | OUTPUT_CLAUSE
+                        | RETURNING_CLAUSE
                 )
             },
         )
@@ -71,13 +74,22 @@ impl Lowerer {
         self.lower_clausal(
             node,
             |_| false,
-            |k| matches!(k, SET_CLAUSE | FROM_CLAUSE | WHERE_CLAUSE),
+            |k| {
+                matches!(
+                    k,
+                    SET_CLAUSE | FROM_CLAUSE | WHERE_CLAUSE | OUTPUT_CLAUSE | RETURNING_CLAUSE
+                )
+            },
         )
     }
 
     /// `DELETE FROM t [USING ...]` then `WHERE ...` on its own line.
     pub(super) fn lower_delete(&mut self, node: &SyntaxNode) -> Doc {
-        self.lower_clausal(node, |_| false, |k| k == WHERE_CLAUSE)
+        self.lower_clausal(
+            node,
+            |_| false,
+            |k| matches!(k, WHERE_CLAUSE | OUTPUT_CLAUSE | RETURNING_CLAUSE),
+        )
     }
 
     /// `COPY INTO <target> FROM <source>` with `FROM` and each option on their own line.

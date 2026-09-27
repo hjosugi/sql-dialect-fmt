@@ -45,6 +45,11 @@ const KEYWORDS: &[(&str, SyntaxKind, DialectSet)] = {
         ("case", CASE_KW, DialectSet::ALL),
         ("cast", CAST_KW, DialectSet::ALL),
         ("commit", COMMIT_KW, DialectSet::ALL),
+        (
+            "conflict",
+            CONFLICT_KW,
+            DialectSet::of(&[Dialect::PostgreSql, Dialect::Sqlite, Dialect::DuckDb]),
+        ),
         // CONNECT/PRIOR: Snowflake hierarchical `CONNECT BY`; absent from the Spark keyword table.
         ("connect", CONNECT_KW, DialectSet::SNOWFLAKE_ONLY),
         ("copy", COPY_KW, DialectSet::SNOWFLAKE_ONLY),
@@ -59,6 +64,16 @@ const KEYWORDS: &[(&str, SyntaxKind, DialectSet)] = {
         ("distinct", DISTINCT_KW, DialectSet::ALL),
         ("do", DO_KW, DialectSet::ALL),
         ("drop", DROP_KW, DialectSet::ALL),
+        (
+            "duplicate",
+            DUPLICATE_KW,
+            DialectSet::of(&[
+                Dialect::MySql,
+                Dialect::MariaDb,
+                Dialect::TiDb,
+                Dialect::SingleStoreDb,
+            ]),
+        ),
         ("else", ELSE_KW, DialectSet::ALL),
         ("elseif", ELSEIF_KW, DialectSet::SNOWFLAKE_ONLY),
         ("end", END_KW, DialectSet::ALL),
@@ -125,6 +140,11 @@ const KEYWORDS: &[(&str, SyntaxKind, DialectSet)] = {
         ("minus", MINUS_KW, DialectSet::ALL),
         ("natural", NATURAL_KW, DialectSet::ALL),
         ("not", NOT_KW, DialectSet::ALL),
+        (
+            "nothing",
+            NOTHING_KW,
+            DialectSet::of(&[Dialect::PostgreSql, Dialect::Sqlite, Dialect::DuckDb]),
+        ),
         ("null", NULL_KW, DialectSet::ALL),
         ("nulls", NULLS_KW, DialectSet::ALL),
         ("offset", OFFSET_KW, DialectSet::ALL),
@@ -141,6 +161,11 @@ const KEYWORDS: &[(&str, SyntaxKind, DialectSet)] = {
         ("partition", PARTITION_KW, DialectSet::ALL),
         ("pivot", PIVOT_KW, DialectSet::ALL),
         ("preceding", PRECEDING_KW, DialectSet::ALL),
+        (
+            "prewhere",
+            PREWHERE_KW,
+            DialectSet::of(&[Dialect::ClickHouse]),
+        ),
         ("prior", PRIOR_KW, DialectSet::SNOWFLAKE_ONLY),
         ("procedure", PROCEDURE_KW, DialectSet::ALL),
         ("python", PYTHON_KW, DialectSet::ALL),
@@ -178,6 +203,17 @@ const KEYWORDS: &[(&str, SyntaxKind, DialectSet)] = {
         ("replace", REPLACE_KW, DialectSet::ALL),
         ("resultset", RESULTSET_KW, DialectSet::SNOWFLAKE_ONLY),
         ("return", RETURN_KW, DialectSet::ALL),
+        (
+            "returning",
+            RETURNING_KW,
+            DialectSet::of(&[
+                Dialect::PostgreSql,
+                Dialect::Sqlite,
+                Dialect::DuckDb,
+                Dialect::MariaDb,
+                Dialect::N1ql,
+            ]),
+        ),
         ("returns", RETURNS_KW, DialectSet::ALL),
         ("revoke", REVOKE_KW, DialectSet::ALL),
         ("right", RIGHT_KW, DialectSet::ALL),
@@ -345,16 +381,24 @@ mod tests {
             "KEYWORDS table is out of sync with the SyntaxKind keyword block"
         );
         let mut seen = std::collections::HashSet::new();
-        for (text, kind, _) in KEYWORDS {
-            assert_eq!(
-                keyword_kind(text),
-                Some(*kind),
-                "keyword_kind({text:?}) is wrong"
-            );
-            assert_eq!(
-                keyword_kind(&text.to_uppercase()),
-                Some(*kind),
-                "keyword_kind is not case-insensitive for {text:?}"
+        for (text, kind, dialects) in KEYWORDS {
+            // The text maps to exactly this kind in every dialect that reserves it, and to no kind
+            // (or never a different kind) elsewhere.
+            let mut reserved_somewhere = false;
+            for dialect in Dialect::ALL {
+                if let Some(resolved) = keyword_kind_for(text, *dialect) {
+                    assert_eq!(resolved, *kind, "keyword_kind_for({text:?}) is wrong");
+                    reserved_somewhere = true;
+                }
+                assert_eq!(
+                    keyword_kind_for(&text.to_uppercase(), *dialect),
+                    keyword_kind_for(text, *dialect),
+                    "keyword lookup is not case-insensitive for {text:?}"
+                );
+            }
+            assert!(
+                reserved_somewhere,
+                "{text:?} ({kind:?}) is reserved in no dialect ({dialects:?})"
             );
             assert!(
                 kind.is_keyword(),
@@ -407,10 +451,11 @@ mod tests {
     fn snowflake_classification_is_byte_identical_to_legacy_keyword_kind() {
         // Under Snowflake, the dialect-aware lookup must agree with the plain `keyword_kind` for
         // every keyword — the regression guard that Snowflake reservation is unchanged.
-        for (text, kind, _) in KEYWORDS {
+        for (text, kind, dialects) in KEYWORDS {
+            let expected = dialects.reserved_in(Dialect::Snowflake).then_some(*kind);
             assert_eq!(
                 keyword_kind_for(text, Dialect::Snowflake),
-                Some(*kind),
+                expected,
                 "Snowflake reservation changed for {text:?}"
             );
             assert_eq!(

@@ -223,6 +223,12 @@ pub enum SyntaxKind {
     EXCEPTION_KW,
     CURSOR_KW,
     RESULTSET_KW,
+    // Dialect-specific clause keywords (PostgreSQL/SQLite/MySQL/ClickHouse/…).
+    RETURNING_KW,
+    CONFLICT_KW,
+    DUPLICATE_KW,
+    NOTHING_KW,
+    PREWHERE_KW,
     #[doc(hidden)]
     __KW_END,
 
@@ -412,6 +418,13 @@ pub enum SyntaxKind {
     RESTORE_STMT,          // `RESTORE TABLE <t> TO VERSION/TIMESTAMP AS OF ...`
     ANALYZE_STMT,          // `ANALYZE TABLE <t> COMPUTE STATISTICS`
     MSCK_REPAIR_STMT,      // `MSCK REPAIR TABLE <t>`
+    // Dialect-specific query/DML clauses.
+    RETURNING_CLAUSE,   // `RETURNING <expr> [, ...]` after INSERT/UPDATE/DELETE
+    ON_CONFLICT_CLAUSE, // `ON CONFLICT [(cols)] DO NOTHING|UPDATE …` (PostgreSQL/SQLite)
+    PREWHERE_CLAUSE,    // `PREWHERE <expr>` (ClickHouse)
+    OUTPUT_CLAUSE,      // Transact-SQL `OUTPUT ... [INTO ...]`
+    FOR_CLAUSE,         // Transact-SQL `FOR JSON|XML ...`
+    STAR_MODIFIER,      // BigQuery `* EXCEPT (…)` / `* REPLACE (…)` select-star modifier
 
     #[doc(hidden)]
     __LAST,
@@ -591,6 +604,8 @@ impl SyntaxKind {
             UNDROP_KW => "UNDROP", ELSEIF_KW => "ELSEIF", WHILE_KW => "WHILE", LOOP_KW => "LOOP",
             REPEAT_KW => "REPEAT", UNTIL_KW => "UNTIL", DO_KW => "DO", EXCEPTION_KW => "EXCEPTION",
             CURSOR_KW => "CURSOR", RESULTSET_KW => "RESULTSET",
+            RETURNING_KW => "RETURNING", CONFLICT_KW => "CONFLICT", DUPLICATE_KW => "DUPLICATE",
+            NOTHING_KW => "NOTHING", PREWHERE_KW => "PREWHERE",
         }
     }
 }

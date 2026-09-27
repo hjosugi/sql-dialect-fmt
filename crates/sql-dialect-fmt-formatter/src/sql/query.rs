@@ -317,6 +317,7 @@ fn is_select_clause(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         FROM_CLAUSE
+            | PREWHERE_CLAUSE
             | WHERE_CLAUSE
             | DISTRIBUTE_BY_CLAUSE
             | SORT_BY_CLAUSE
@@ -329,5 +330,6 @@ fn is_select_clause(kind: SyntaxKind) -> bool {
             | OFFSET_CLAUSE
             | START_WITH_CLAUSE
             | CONNECT_BY_CLAUSE
+            | FOR_CLAUSE
     )
 }
