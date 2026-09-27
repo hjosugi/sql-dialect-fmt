@@ -11,6 +11,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- The docs-site playground now exposes every formatter option (dialect — all 21 names —,
+  data-type/function/identifier casing, AND/OR placement, dense operators, tabs, newline before
+  `;`, blank lines between queries, expression width) and uses the Wasm v2 ABI with a v1
+  fallback.
 - The committed TextMate grammar's keyword alternation is now generated from the full
   dialect keyword table (156 words) by `scripts/generate-textmate-keywords.py`, so `.sql` files
   claimed by this extension highlight every dialect's keywords. A test enforces the grammar is

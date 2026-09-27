@@ -1,4 +1,29 @@
 (() => {
+  // Canonical dialect names, in the same order as the Rust `Dialect::ALL` (the Wasm ABI index).
+  const DIALECTS = [
+    "snowflake",
+    "databricks",
+    "spark",
+    "bigquery",
+    "clickhouse",
+    "db2",
+    "db2i",
+    "duckdb",
+    "hive",
+    "mariadb",
+    "mysql",
+    "tidb",
+    "n1ql",
+    "plsql",
+    "postgresql",
+    "redshift",
+    "singlestoredb",
+    "sqlite",
+    "sql",
+    "transactsql",
+    "trino",
+  ];
+
   if (typeof document !== "undefined") {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", init);
@@ -20,9 +45,18 @@
     const lineWidth = app.querySelector("#playground-line-width");
     const indentWidth = app.querySelector("#playground-indent-width");
     const keywordCase = app.querySelector("#playground-keyword-case");
+    const dataTypeCase = app.querySelector("#playground-data-type-case");
+    const functionCase = app.querySelector("#playground-function-case");
+    const identifierCase = app.querySelector("#playground-identifier-case");
     const selectItemLayout = app.querySelector("#playground-select-layout");
     const commaStyle = app.querySelector("#playground-comma-style");
     const lineEnding = app.querySelector("#playground-line-ending");
+    const logicalOperatorNewline = app.querySelector("#playground-logical-operator-newline");
+    const denseOperators = app.querySelector("#playground-dense-operators");
+    const useTabs = app.querySelector("#playground-use-tabs");
+    const newlineBeforeSemicolon = app.querySelector("#playground-newline-before-semicolon");
+    const linesBetweenQueries = app.querySelector("#playground-lines-between-queries");
+    const expressionWidth = app.querySelector("#playground-expression-width");
     const formatButton = app.querySelector("#playground-format");
     const copyButton = app.querySelector("#playground-copy");
     const status = app.querySelector("#playground-status");
@@ -48,9 +82,18 @@
           lineWidth: normalizeInteger(lineWidth.value, 80),
           indentWidth: normalizeInteger(indentWidth.value, 2),
           keywordCase: keywordCase.value,
+          dataTypeCase: dataTypeCase.value,
+          functionCase: functionCase.value,
+          identifierCase: identifierCase.value,
           selectItemLayout: selectItemLayout.value,
           commaStyle: commaStyle.value,
           lineEnding: lineEnding.value,
+          logicalOperatorNewline: logicalOperatorNewline.value,
+          denseOperators: denseOperators.checked,
+          useTabs: useTabs.checked,
+          newlineBeforeSemicolon: newlineBeforeSemicolon.checked,
+          linesBetweenQueries: optionalInteger(linesBetweenQueries.value),
+          expressionWidth: optionalInteger(expressionWidth.value),
         });
         setStatus(output.value === input.value ? "Already formatted" : "Formatted");
       } catch (error) {
@@ -110,13 +153,15 @@
   }
 
   function renderShell(app) {
+    const dialectOptions = DIALECTS.map(
+      (name) => `<option value="${name}">${DIALECT_LABELS[name] ?? name}</option>`,
+    ).join("\n            ");
     app.innerHTML = `
       <div class="playground-toolbar" aria-label="Formatter options">
         <label>
           <span>Dialect</span>
           <select id="playground-dialect">
-            <option value="snowflake">Snowflake</option>
-            <option value="databricks">Databricks</option>
+            ${dialectOptions}
           </select>
         </label>
         <label>
@@ -133,6 +178,30 @@
             <option value="upper">Upper</option>
             <option value="lower">Lower</option>
             <option value="preserve">Preserve</option>
+          </select>
+        </label>
+        <label>
+          <span>Data type case</span>
+          <select id="playground-data-type-case">
+            <option value="preserve">Preserve</option>
+            <option value="upper">Upper</option>
+            <option value="lower">Lower</option>
+          </select>
+        </label>
+        <label>
+          <span>Function case</span>
+          <select id="playground-function-case">
+            <option value="preserve">Preserve</option>
+            <option value="upper">Upper</option>
+            <option value="lower">Lower</option>
+          </select>
+        </label>
+        <label>
+          <span>Identifier case</span>
+          <select id="playground-identifier-case">
+            <option value="preserve">Preserve</option>
+            <option value="upper">Upper</option>
+            <option value="lower">Lower</option>
           </select>
         </label>
         <label>
@@ -157,6 +226,33 @@
             <option value="crlf">CRLF</option>
           </select>
         </label>
+        <label>
+          <span>AND/OR</span>
+          <select id="playground-logical-operator-newline">
+            <option value="before">Before</option>
+            <option value="after">After</option>
+          </select>
+        </label>
+        <label>
+          <span>Dense operators</span>
+          <input id="playground-dense-operators" type="checkbox">
+        </label>
+        <label>
+          <span>Use tabs</span>
+          <input id="playground-use-tabs" type="checkbox">
+        </label>
+        <label>
+          <span>Newline before ;</span>
+          <input id="playground-newline-before-semicolon" type="checkbox">
+        </label>
+        <label>
+          <span>Blank lines between queries</span>
+          <input id="playground-lines-between-queries" type="number" min="0" max="9">
+        </label>
+        <label>
+          <span>Expression width</span>
+          <input id="playground-expression-width" type="number" min="1" max="240">
+        </label>
         <button id="playground-format" type="button">Format</button>
         <button id="playground-copy" type="button">Copy</button>
         <span id="playground-status" class="playground-status" role="status">Loading formatter</span>
@@ -179,6 +275,31 @@ qualify row_number() over (partition by customer_id order by revenue desc) = 1;<
       </div>
     `;
   }
+
+  // Human labels for the dialect <option>s (fall back to the canonical id).
+  const DIALECT_LABELS = {
+    snowflake: "Snowflake",
+    databricks: "Databricks",
+    spark: "Spark",
+    bigquery: "BigQuery",
+    clickhouse: "ClickHouse",
+    db2: "DB2",
+    db2i: "DB2 for i",
+    duckdb: "DuckDB",
+    hive: "Hive",
+    mariadb: "MariaDB",
+    mysql: "MySQL",
+    tidb: "TiDB",
+    n1ql: "N1QL",
+    plsql: "Oracle PL/SQL",
+    postgresql: "PostgreSQL",
+    redshift: "Redshift",
+    singlestoredb: "SingleStoreDB",
+    sqlite: "SQLite",
+    sql: "SQL (standard)",
+    transactsql: "SQL Server (T-SQL)",
+    trino: "Trino",
+  };
 
   function wasmImportsFor(module) {
     const imports = {};
@@ -215,6 +336,26 @@ qualify row_number() over (partition by customer_id order by revenue desc) = 1;<
   }
 
   function callFormatter(api, inputPtr, inputLength, options) {
+    if (typeof api.sql_dialect_fmt_format_with_options_v2 === "function") {
+      return api.sql_dialect_fmt_format_with_options_v2(
+        inputPtr,
+        inputLength,
+        options.lineWidth,
+        options.indentWidth,
+        enumCode(options.keywordCase, ["upper", "lower", "preserve"]),
+        enumCode(options.selectItemLayout, ["auto", "vertical"]),
+        enumCode(options.commaStyle, ["trailing", "leading"]),
+        enumCode(options.lineEnding, ["auto", "lf", "crlf"]),
+        enumCode(options.dialect, DIALECTS),
+        enumCode(options.dataTypeCase, ["upper", "lower", "preserve"]),
+        enumCode(options.functionCase, ["upper", "lower", "preserve"]),
+        enumCode(options.identifierCase, ["upper", "lower", "preserve"]),
+        enumCode(options.logicalOperatorNewline, ["before", "after"]),
+        booleanFlags(options),
+        optionalInteger(options.linesBetweenQueries),
+        optionalInteger(options.expressionWidth),
+      );
+    }
     return api.sql_dialect_fmt_format_with_options(
       inputPtr,
       inputLength,
@@ -224,8 +365,24 @@ qualify row_number() over (partition by customer_id order by revenue desc) = 1;<
       enumCode(options.selectItemLayout, ["auto", "vertical"]),
       enumCode(options.commaStyle, ["trailing", "leading"]),
       enumCode(options.lineEnding, ["auto", "lf", "crlf"]),
-      enumCode(options.dialect, ["snowflake", "databricks"]),
+      enumCode(options.dialect, DIALECTS),
     );
+  }
+
+  function booleanFlags(options) {
+    return (
+      (options.denseOperators ? 1 : 0) |
+      (options.useTabs ? 2 : 0) |
+      (options.newlineBeforeSemicolon ? 4 : 0)
+    );
+  }
+
+  function optionalInteger(value) {
+    if (value === undefined || value === null || String(value).trim() === "") {
+      return 0xffffffff;
+    }
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 0 ? number : 0xffffffff;
   }
 
   function enumCode(value, variants) {
@@ -257,6 +414,13 @@ qualify row_number() over (partition by customer_id order by revenue desc) = 1;<
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { callFormatter, enumCode, normalizeInteger, validateApi };
+    module.exports = {
+      DIALECTS,
+      callFormatter,
+      enumCode,
+      normalizeInteger,
+      optionalInteger,
+      validateApi,
+    };
   }
 })();
