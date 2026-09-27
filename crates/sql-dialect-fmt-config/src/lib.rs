@@ -68,6 +68,9 @@ pub struct Config {
     /// SQL dialect to parse and format.
     #[serde(default, deserialize_with = "deserialize_dialect")]
     pub dialect: Option<Dialect>,
+    /// Placeholder values applied after formatting (`--param` overrides/extend these).
+    #[serde(default)]
+    pub params: Vec<String>,
     /// Glob patterns skipped during recursive directory discovery.
     #[serde(default)]
     pub exclude: Vec<String>,
@@ -382,7 +385,7 @@ mod tests {
     #[test]
     fn parses_all_keys() {
         let cfg = Config::parse(
-            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\nkeyword_case = \"lower\"\ndata_type_case = \"upper\"\nfunction_case = \"lower\"\nidentifier_case = \"lower\"\nlogical_operator_newline = \"after\"\ndense_operators = true\nuse_tabs = true\nnewline_before_semicolon = true\nlines_between_queries = 2\nexpression_width = 40\nline_ending = \"crlf\"\nselect_item_layout = \"vertical\"\ncomma_style = \"leading\"\ndialect = \"databricks\"\nexclude = [\"target/**\"]\n",
+            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\nkeyword_case = \"lower\"\ndata_type_case = \"upper\"\nfunction_case = \"lower\"\nidentifier_case = \"lower\"\nlogical_operator_newline = \"after\"\ndense_operators = true\nuse_tabs = true\nnewline_before_semicolon = true\nlines_between_queries = 2\nexpression_width = 40\nline_ending = \"crlf\"\nselect_item_layout = \"vertical\"\ncomma_style = \"leading\"\ndialect = \"databricks\"\nparams = [\"'bar'\"]\nexclude = [\"target/**\"]\n",
         )
         .expect("valid");
         assert_eq!(cfg.line_width, Some(80));
@@ -405,6 +408,7 @@ mod tests {
         assert_eq!(cfg.select_item_layout, Some(SelectItemLayout::Vertical));
         assert_eq!(cfg.comma_style, Some(CommaStyle::Leading));
         assert_eq!(cfg.dialect, Some(Dialect::Databricks));
+        assert_eq!(cfg.params, vec!["'bar'"]);
         assert_eq!(cfg.exclude, vec!["target/**"]);
     }
 
@@ -439,6 +443,7 @@ mod tests {
         assert_eq!(cfg.select_item_layout, None);
         assert_eq!(cfg.comma_style, None);
         assert_eq!(cfg.dialect, None);
+        assert!(cfg.params.is_empty());
         assert!(cfg.exclude.is_empty());
     }
 

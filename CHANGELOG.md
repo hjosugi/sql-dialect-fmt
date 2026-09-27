@@ -11,6 +11,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Placeholder substitution (`params`): `sql-dialect-fmt-formatter::substitute_params` and
+  `format_with_params` replace recognized placeholders (`?`, `?n`, `$n`, `:name`, `@name`) with
+  supplied values in order of appearance. The CLI exposes `--param VALUE` (repeatable) and
+  `sql-dialect-fmt.toml` accepts a `params` array.
 - MySQL-family `GROUP_CONCAT(x ORDER BY y SEPARATOR ',')` aggregate options are parsed and
   formatted instead of splitting the statement.
 - The docs-site playground now exposes every formatter option (dialect — all 21 names —,

@@ -86,6 +86,8 @@ struct Args {
     range: Option<(usize, usize)>,
     /// Ignore any `sql-dialect-fmt.toml` and use defaults + CLI flags only.
     no_config: bool,
+    /// Placeholder replacement values (`--param`, repeatable; merged after any config `params`).
+    params: Vec<String>,
     /// CLI-flag overrides, layered on top of any config file. `None` means "not set on the CLI".
     overrides: Overrides,
 }
@@ -280,6 +282,21 @@ fn options_for(args: &Args, path: Option<&Path>) -> Result<FormatOptions, String
     options_for_start(args, path.unwrap_or_else(|| Path::new(".")))
 }
 
+/// Effective placeholder values for an input: config `params` first, then `--param` values.
+fn params_for(args: &Args, path: Option<&Path>) -> Vec<String> {
+    let mut params = Vec::new();
+    if !args.no_config {
+        let start = path.unwrap_or_else(|| Path::new("."));
+        if let Some(config_path) = config::discover(start) {
+            if let Ok(config) = Config::load(&config_path) {
+                params.extend(config.params);
+            }
+        }
+    }
+    params.extend(args.params.iter().cloned());
+    params
+}
+
 fn options_for_start(args: &Args, start: &Path) -> Result<FormatOptions, String> {
     let mut options = FormatOptions::default();
     if !args.no_config {
@@ -346,7 +363,8 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
 
     // Surface parse problems on stderr, but keep going (the formatter passes content through).
     let decoded = DecodedText::decode(&source);
-    let formatted = format_decoded_with_diagnostics(&decoded, &options);
+    let params = params_for(args, args.stdin_filepath.as_deref());
+    let formatted = format_decoded_with_diagnostics(&decoded, &options, &params);
     let parse_errors = collect_parse_error_messages(&formatted.parse_errors, stdin_path);
     for error in &parse_errors {
         eprintln!("{error}");
@@ -510,7 +528,8 @@ fn process_file(
     let source =
         fs::read(file).map_err(|err| format!("failed to read {}: {err}", file.display()))?;
     let decoded = DecodedText::decode(&source);
-    let formatted = format_decoded_with_diagnostics(&decoded, &options);
+    let params = params_for(args, Some(file));
+    let formatted = format_decoded_with_diagnostics(&decoded, &options, &params);
     let parse_errors = collect_parse_error_messages(&formatted.parse_errors, Some(file));
     let changed = formatted.bytes != source;
     let mut written = false;
@@ -702,7 +721,7 @@ fn format_bytes(bytes: &[u8], options: &FormatOptions) -> Vec<u8> {
 
 #[cfg(test)]
 fn format_decoded(decoded: &DecodedText, options: &FormatOptions) -> Vec<u8> {
-    format_decoded_with_diagnostics(decoded, options).bytes
+    format_decoded_with_diagnostics(decoded, options, &[]).bytes
 }
 
 struct FormattedBytes {
@@ -713,6 +732,7 @@ struct FormattedBytes {
 fn format_decoded_with_diagnostics(
     decoded: &DecodedText,
     options: &FormatOptions,
+    params: &[String],
 ) -> FormattedBytes {
     let Some(text) = decoded.as_str() else {
         return FormattedBytes {
@@ -722,7 +742,11 @@ fn format_decoded_with_diagnostics(
     };
     let result = sql_dialect_fmt_formatter::format_with_diagnostics(text, options);
     let parse_errors = result.parse_errors;
-    let formatted = result.formatted;
+    let formatted = if params.is_empty() {
+        result.formatted
+    } else {
+        sql_dialect_fmt_formatter::substitute_params(&result.formatted, options.dialect, params)
+    };
     FormattedBytes {
         bytes: decoded.map_text(|_| formatted).encode(),
         parse_errors,
@@ -853,6 +877,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
     let mut stdin_filepath = None;
     let mut range = None;
     let mut no_config = false;
+    let mut params: Vec<String> = Vec::new();
     let mut overrides = Overrides::default();
     let mut args = raw.into_iter();
 
@@ -914,6 +939,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
             }
             "--stdin-filepath" => stdin_filepath = Some(take_path(&mut args, "--stdin-filepath")?),
             "--range" => range = Some(take_range(&mut args, "--range")?),
+            "--param" => params.push(take_param(&mut args, "--param")?),
             "-h" | "--help" => return Ok(Parsed::Help),
             "-V" | "--version" => return Ok(Parsed::Version),
             "--" => {
@@ -966,6 +992,7 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
                         }
                         "--stdin-filepath" => stdin_filepath = Some(parse_path_flag(flag, value)?),
                         "--range" => range = Some(parse_range(flag, value)?),
+                        "--param" => params.push(value.to_string()),
                         _ => return Err(format!("unknown option {flag}\n\n{}", usage())),
                     }
                 } else {
@@ -1019,8 +1046,16 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
         stdin_filepath,
         range,
         no_config,
+        params,
         overrides,
     }))
+}
+
+fn take_param<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<String, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a value"))?;
+    Ok(value.to_string_lossy().into_owned())
 }
 
 fn take_usize<I: Iterator<Item = OsString>>(args: &mut I, flag: &str) -> Result<usize, String> {
@@ -1255,6 +1290,8 @@ OPTIONS:
                            Force N blank lines between top-level statements
         --expression-width N
                            Flat width cap for parenthesized lists before they wrap
+        --param VALUE      Replace a recognized placeholder (?, ?n, $n, :name) with VALUE,
+                           in order of appearance (repeatable)
         --line-ending NAME
                            Output line endings: auto, lf, or crlf (default auto)
         --select-item-layout NAME
@@ -1507,5 +1544,14 @@ mod tests {
         assert!(options.newline_before_semicolon);
         assert_eq!(options.lines_between_queries, Some(3));
         assert_eq!(options.expression_width, Some(40));
+    }
+
+    #[test]
+    fn param_flag_is_repeatable_in_both_forms() {
+        let parsed = parse_args(["--param", "'x'", "--param=y"].map(Into::into)).expect("valid");
+        let Parsed::Run(args) = parsed else {
+            panic!("expected a run invocation");
+        };
+        assert_eq!(args.params, vec!["'x'".to_string(), "y".to_string()]);
     }
 }

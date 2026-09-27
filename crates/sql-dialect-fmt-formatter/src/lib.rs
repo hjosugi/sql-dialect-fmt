@@ -22,11 +22,13 @@
 
 pub mod doc;
 mod output;
+mod params;
 pub mod range;
 mod sql;
 
 #[doc(inline)]
 pub use doc::{print, Doc, PrintOptions};
+pub use params::substitute_params;
 pub use range::{format_range, RangeEdit};
 use sql_dialect_fmt_parser::ParseError;
 pub use sql_dialect_fmt_syntax::Dialect;
@@ -361,6 +363,12 @@ pub struct FormatResult {
 /// than risking a mangled reflow of a fragmented tree.
 pub fn format(source: &str, options: &FormatOptions) -> String {
     format_with_diagnostics(source, options).formatted
+}
+
+/// Format SQL, then replace recognized parameter placeholders with `params` in order of
+/// appearance (the `params` option). See [`substitute_params`].
+pub fn format_with_params(source: &str, options: &FormatOptions, params: &[String]) -> String {
+    substitute_params(&format(source, options), options.dialect, params)
 }
 
 /// Format SQL and return parse diagnostics from the same lex/parse pass.
