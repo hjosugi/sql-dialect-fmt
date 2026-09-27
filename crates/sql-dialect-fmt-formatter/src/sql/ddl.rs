@@ -360,7 +360,7 @@ impl Lowerer {
             })
             .collect();
         self.resume_after(R_PAREN);
-        bracketed(empty(), defs, trailing, false, self.ctx.comma_style)
+        bracketed(empty(), defs, trailing, None, self.ctx.comma_style)
     }
 
     /// Lower a COPY `COPY_OPTION` or object-DDL `OBJECT_PROPERTY` node, up-casing the recognized

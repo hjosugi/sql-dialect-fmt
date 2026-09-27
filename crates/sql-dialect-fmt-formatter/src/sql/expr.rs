@@ -5,8 +5,8 @@ use sql_dialect_fmt_syntax::{SyntaxKind, SyntaxNode};
 use SyntaxKind::*;
 
 use crate::doc::{
-    concat, empty, group, group_expanded, hard_line, if_group_breaks, indent, join, line,
-    soft_line, space, text, Doc,
+    concat, empty, group, group_expanded, group_with_width, hard_line, if_group_breaks, indent,
+    join, line, soft_line, space, text, Doc,
 };
 use crate::{CommaStyle, LogicalOperatorNewline};
 
@@ -115,12 +115,9 @@ impl Lowerer {
     /// `expression_width` is set and the source exceeds it, the body is placed on its own lines,
     /// matching `sql-formatter`'s `expressionWidth`.
     pub(super) fn lower_paren_expr(&mut self, node: &SyntaxNode) -> Doc {
-        let Some(limit) = self.ctx.expression_width else {
+        let Some(width) = self.ctx.expression_width else {
             return self.lower_children(node);
         };
-        if node.text().to_string().trim().len() <= limit {
-            return self.lower_children(node);
-        }
         let open_sep = self.sep_before(L_PAREN);
         let mut inner = Vec::new();
         for child in node.children_with_tokens() {
@@ -134,15 +131,13 @@ impl Lowerer {
             }
         }
         self.resume_after(R_PAREN);
-        concat(vec![
-            open_sep,
-            group_expanded(concat(vec![
-                text("("),
-                indent(concat(vec![soft_line(), concat(inner)])),
-                soft_line(),
-                text(")"),
-            ])),
-        ])
+        let content = concat(vec![
+            text("("),
+            indent(concat(vec![soft_line(), concat(inner)])),
+            soft_line(),
+            text(")"),
+        ]);
+        concat(vec![open_sep, group_with_width(content, width)])
     }
 
     /// `( item, item )` with width-driven wrapping and magic-trailing-comma explosion. The items
@@ -170,10 +165,15 @@ impl Lowerer {
         };
         let items = self.lower_items(node.children());
         self.resume_after(R_PAREN);
-        let force_break = exceeds_expression_width(node, self.ctx.expression_width);
         concat(vec![
             open_sep,
-            bracketed(prefix, items, trailing, force_break, self.ctx.comma_style),
+            bracketed(
+                prefix,
+                items,
+                trailing,
+                self.ctx.expression_width,
+                self.ctx.comma_style,
+            ),
         ])
     }
 
@@ -189,7 +189,6 @@ impl Lowerer {
         let trailing = delimited_list_has_trailing_comma(node, close);
         let items = self.lower_items(node.children());
         self.resume_after(close);
-        let force_break = exceeds_expression_width(node, self.ctx.expression_width);
         concat(vec![
             open_sep,
             delimited(
@@ -198,7 +197,7 @@ impl Lowerer {
                 empty(),
                 items,
                 trailing,
-                force_break,
+                self.ctx.expression_width,
                 self.ctx.comma_style,
             ),
         ])
@@ -333,11 +332,15 @@ impl Lowerer {
                         let trailing = has_trailing_comma(inner);
                         let items = self.lower_items(inner.children());
                         self.resume_after(R_PAREN);
-                        let force_break =
-                            exceeds_expression_width(inner, self.ctx.expression_width);
                         parts.push(concat(vec![
                             open_sep,
-                            bracketed(empty(), items, trailing, force_break, self.ctx.comma_style),
+                            bracketed(
+                                empty(),
+                                items,
+                                trailing,
+                                self.ctx.expression_width,
+                                self.ctx.comma_style,
+                            ),
                         ]));
                     } else {
                         // A subquery or query expression: keep the parentheses, render inline.
@@ -396,21 +399,17 @@ fn logical_chain_operator(node: &SyntaxNode) -> Option<SyntaxKind> {
 }
 
 /// Build `( items )`: flat when it fits, one-per-line when it does not, and force-exploded (with
-/// the preserved trailing comma) when `trailing` or `force_break` is set. An exploded list
-/// propagates the break to its ancestors, so a multiline collection never sits inline.
+/// the preserved trailing comma) when `trailing` is set. An exploded list propagates the break to
+/// its ancestors, so a multiline collection never sits inline. When `width` is set, the list stays
+/// flat iff its own width is at most `width` (`expression_width`).
 pub(super) fn bracketed(
     prefix: Doc,
     items: Vec<Doc>,
     trailing: bool,
-    force_break: bool,
+    width: Option<usize>,
     comma_style: CommaStyle,
 ) -> Doc {
-    delimited("(", ")", prefix, items, trailing, force_break, comma_style)
-}
-
-/// Whether a parenthesized list's source text exceeds the configured `expression_width` cap.
-pub(super) fn exceeds_expression_width(node: &SyntaxNode, limit: Option<usize>) -> bool {
-    limit.is_some_and(|limit| node.text().to_string().trim().len() > limit)
+    delimited("(", ")", prefix, items, trailing, width, comma_style)
 }
 
 fn delimited(
@@ -419,7 +418,7 @@ fn delimited(
     prefix: Doc,
     items: Vec<Doc>,
     trailing: bool,
-    force_break: bool,
+    width: Option<usize>,
     comma_style: CommaStyle,
 ) -> Doc {
     if items.is_empty() {
@@ -437,7 +436,7 @@ fn delimited(
     } else {
         concat(vec![soft_line(), leading_alignment, joined])
     };
-    let force_break = trailing || force_break;
+
     // `prefix` (e.g. an aggregate `DISTINCT`) hugs the open paren, before the (soft) first break.
     let content = concat(vec![
         text(open),
@@ -446,8 +445,10 @@ fn delimited(
         soft_line(),
         text(close),
     ]);
-    if force_break {
+    if trailing {
         group_expanded(content)
+    } else if let Some(width) = width {
+        group_with_width(content, width)
     } else {
         group(content)
     }

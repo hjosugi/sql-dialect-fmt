@@ -57,6 +57,9 @@ pub enum Doc {
         content: Box<Doc>,
         expand: bool,
         must_break: bool,
+        /// When set, the group stays flat iff its own flat width is at most this many columns
+        /// (independent of the current line column). This backs `expression_width`.
+        width: Option<usize>,
     },
     /// Picks one of two layouts by the enclosing group's mode: `broken` when that group breaks,
     /// `flat` when it stays flat (Prettier's `ifBreak`). Built through [`if_group_breaks`].
@@ -116,6 +119,19 @@ pub fn group(inner: Doc) -> Doc {
         content: Box::new(inner),
         expand: false,
         must_break,
+        width: None,
+    }
+}
+
+/// Like [`group`], but the group stays flat iff its **own** flat width is at most `width` columns,
+/// regardless of the current column. Backs `expression_width`.
+pub fn group_with_width(inner: Doc, width: usize) -> Doc {
+    let must_break = has_forced_break(&inner);
+    Doc::Group {
+        content: Box::new(inner),
+        expand: false,
+        must_break,
+        width: Some(width),
     }
 }
 
@@ -126,6 +142,7 @@ pub fn group_expanded(inner: Doc) -> Doc {
         content: Box::new(inner),
         expand: true,
         must_break: true,
+        width: None,
     }
 }
 
@@ -399,6 +416,21 @@ fn has_forced_break(doc: &Doc) -> bool {
 /// Would `next`, followed by the not-yet-processed `rest` of the print stack, fit on the current
 /// line within `remaining` columns? Everything is measured as if flat until the first newline that
 /// is actually taken (a hard line, or a soft line in an already-broken group).
+/// The width `doc` occupies when rendered flat (all soft lines collapsed). Cached per-node widths
+/// make this a cheap tree sum; it backs a width-bounded group's flat/break decision.
+fn flat_width(doc: &Doc) -> usize {
+    match doc {
+        Doc::Text(_, width) | Doc::SourceCodeSlice(_, width) => *width,
+        Doc::Concat(parts) => parts.iter().map(flat_width).sum(),
+        Doc::Indent(inner) | Doc::Group { content: inner, .. } => flat_width(inner),
+        Doc::LineSuffix(_) | Doc::BreakParent => 0,
+        Doc::Line(LineKind::Space) => 1,
+        Doc::Line(_) => 0,
+        Doc::IfBreak { flat, .. } => flat_width(flat),
+        Doc::BestFitting(candidates) => candidates.first().map_or(0, flat_width),
+    }
+}
+
 fn fits(mut remaining: isize, rest: &[Cmd], next: Cmd, opts: &PrintOptions) -> bool {
     if remaining < 0 {
         return false;
@@ -590,24 +622,23 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
             Doc::Group {
                 content,
                 must_break,
+                width,
                 ..
             } => {
-                let mode = if *must_break {
-                    Mode::Break
-                } else if fits(
-                    opts.line_width as isize - col as isize,
-                    &cmds,
-                    Cmd {
-                        indent: cmd.indent,
-                        mode: Mode::Flat,
-                        doc: content,
-                    },
-                    opts,
-                ) {
-                    Mode::Flat
-                } else {
-                    Mode::Break
-                };
+                let breaks = *must_break
+                    || width.is_some_and(|width| flat_width(content) > width)
+                    || (width.is_none()
+                        && !fits(
+                            opts.line_width as isize - col as isize,
+                            &cmds,
+                            Cmd {
+                                indent: cmd.indent,
+                                mode: Mode::Flat,
+                                doc: content,
+                            },
+                            opts,
+                        ));
+                let mode = if breaks { Mode::Break } else { Mode::Flat };
                 cmds.push(Cmd {
                     indent: cmd.indent,
                     mode,
@@ -1007,5 +1038,15 @@ mod tests {
         let mut f = DocBuffer::new();
         f.write_with_rule(&AssignRule, "v");
         assert_eq!(p(&f.finish(), 80), "x => \"v\"\n");
+    }
+
+    #[test]
+    fn width_bounded_group_uses_its_own_width_not_the_column() {
+        // A group at column 0 whose flat width (7) exceeds its cap (3) breaks...
+        let wide = group_with_width(concat(vec![text("abc"), line(), text("def")]), 3);
+        assert_eq!(print(&wide, &PrintOptions::default()), "abc\ndef\n");
+        // ...while one within the cap stays flat regardless of the line width.
+        let narrow = group_with_width(concat(vec![text("ab"), line(), text("cd")]), 10);
+        assert_eq!(print(&narrow, &PrintOptions::default()), "ab cd\n");
     }
 }
