@@ -32,9 +32,18 @@ test("every public style setting is normalized", () => {
         indentWidth: 3,
         useEditorIndentation: false,
         keywordCase: "lower",
+        dataTypeCase: "upper",
+        functionCase: "lower",
+        identifierCase: "upper",
         selectItemLayout: "auto",
         commaStyle: "leading",
         lineEnding: "crlf",
+        logicalOperatorNewline: "after",
+        denseOperators: true,
+        useTabs: true,
+        newlineBeforeSemicolon: true,
+        linesBetweenQueries: 2,
+        expressionWidth: 40,
       }),
       { tabSize: 8 },
     ),
@@ -43,11 +52,36 @@ test("every public style setting is normalized", () => {
       lineWidth: 120,
       indentWidth: 3,
       keywordCase: "lower",
+      dataTypeCase: "upper",
+      functionCase: "lower",
+      identifierCase: "upper",
       selectItemLayout: "auto",
       commaStyle: "leading",
       lineEnding: "crlf",
+      logicalOperatorNewline: "after",
+      denseOperators: true,
+      useTabs: true,
+      newlineBeforeSemicolon: true,
+      linesBetweenQueries: 2,
+      expressionWidth: 40,
     },
   );
+});
+
+test("dialect aliases normalize to canonical names", () => {
+  assert.equal(readFormatterOptions(config({ dialect: "oracle" })).dialect, "plsql");
+  assert.equal(readFormatterOptions(config({ dialect: "tsql" })).dialect, "transactsql");
+  assert.equal(readFormatterOptions(config({ dialect: "POSTGRES" })).dialect, "postgresql");
+  assert.equal(readFormatterOptions(config({ dialect: "nonsense" })).dialect, "snowflake");
+});
+
+test("optional numeric settings accept zero or positive values and reject the rest", () => {
+  const options = readFormatterOptions(config({ linesBetweenQueries: 0, expressionWidth: 40 }));
+  assert.equal(options.linesBetweenQueries, 0);
+  assert.equal(options.expressionWidth, 40);
+  const unset = readFormatterOptions(config({ linesBetweenQueries: -1, expressionWidth: "x" }));
+  assert.equal(unset.linesBetweenQueries, null);
+  assert.equal(unset.expressionWidth, null);
 });
 
 test("legacy uppercase setting remains compatible until keywordCase is explicitly set", () => {

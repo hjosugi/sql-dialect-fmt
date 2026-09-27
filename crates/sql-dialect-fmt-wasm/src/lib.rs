@@ -8,7 +8,8 @@
 use std::{cell::RefCell, mem, ptr, slice, str};
 
 use sql_dialect_fmt_formatter::{
-    format, CommaStyle, Dialect, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+    format, CommaStyle, Dialect, FormatOptions, KeywordCase, LineEnding, LogicalOperatorNewline,
+    SelectItemLayout,
 };
 
 thread_local! {
@@ -123,6 +124,58 @@ pub unsafe extern "C" fn sql_dialect_fmt_format_with_options(
     )
 }
 
+/// Format UTF-8 SQL with the **extended** (v2) option set, including the options added in 1.24:
+/// independent data-type/function/identifier casing, logical-operator placement, dense operators,
+/// tab indentation, a newline before the terminator, and the `lines_between_queries` /
+/// `expression_width` knobs.
+///
+/// `lines_between_queries` and `expression_width` use `u32::MAX` as the "unset" sentinel (the
+/// formatter then preserves the author's grouping / uses `line_width`). `flags` packs the booleans:
+/// bit 0 `dense_operators`, bit 1 `use_tabs`, bit 2 `newline_before_semicolon`.
+///
+/// # Safety
+///
+/// `ptr` must point to `len` initialized bytes in Wasm memory for the duration of the call.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub unsafe extern "C" fn sql_dialect_fmt_format_with_options_v2(
+    ptr: u32,
+    len: u32,
+    line_width: u32,
+    indent_width: u32,
+    keyword_case: u32,
+    select_item_layout: u32,
+    comma_style: u32,
+    line_ending: u32,
+    dialect: u32,
+    data_type_case: u32,
+    function_case: u32,
+    identifier_case: u32,
+    logical_operator_newline: u32,
+    flags: u32,
+    lines_between_queries: u32,
+    expression_width: u32,
+) -> u32 {
+    let bytes = slice::from_raw_parts(ptr as *const u8, len as usize);
+    format_bytes_with_options_v2(
+        bytes,
+        line_width,
+        indent_width,
+        keyword_case,
+        select_item_layout,
+        comma_style,
+        line_ending,
+        dialect,
+        data_type_case,
+        function_case,
+        identifier_case,
+        logical_operator_newline,
+        flags,
+        lines_between_queries,
+        expression_width,
+    )
+}
+
 /// The safe core of the format ABI: validate `bytes` as UTF-8, format with the decoded raw
 /// options, and stash the result for the `result_ptr`/`result_len` accessors. Split out so the
 /// exact option decoding (clamping, dialect fallback) is testable without Wasm linear memory.
@@ -173,6 +226,66 @@ fn format_bytes_with_options(
 
     store_last_result(format(source, &options).into_bytes().into_boxed_slice());
     0
+}
+
+/// The extended counterpart of [`format_bytes_with_options`]. See
+/// [`sql_dialect_fmt_format_with_options_v2`] for the encoding.
+#[allow(clippy::too_many_arguments)]
+fn format_bytes_with_options_v2(
+    bytes: &[u8],
+    line_width: u32,
+    indent_width: u32,
+    keyword_case: u32,
+    select_item_layout: u32,
+    comma_style: u32,
+    line_ending: u32,
+    dialect: u32,
+    data_type_case: u32,
+    function_case: u32,
+    identifier_case: u32,
+    logical_operator_newline: u32,
+    flags: u32,
+    lines_between_queries: u32,
+    expression_width: u32,
+) -> u32 {
+    clear_last_result();
+
+    let Ok(source) = str::from_utf8(bytes) else {
+        return 1;
+    };
+
+    let options = FormatOptions::default()
+        .with_line_width(line_width.max(1) as usize)
+        .with_indent_width(indent_width.clamp(1, 16) as usize)
+        .with_keyword_case(keyword_case_from_u32(keyword_case))
+        .with_select_item_layout(select_item_layout_from_u32(select_item_layout))
+        .with_comma_style(comma_style_from_u32(comma_style))
+        .with_line_ending(line_ending_from_u32(line_ending))
+        .with_dialect(dialect_from_u32(dialect))
+        .with_data_type_case(keyword_case_from_u32(data_type_case))
+        .with_function_case(keyword_case_from_u32(function_case))
+        .with_identifier_case(keyword_case_from_u32(identifier_case))
+        .with_logical_operator_newline(logical_operator_newline_from_u32(logical_operator_newline))
+        .with_dense_operators(flags & 1 != 0)
+        .with_use_tabs(flags & 2 != 0)
+        .with_newline_before_semicolon(flags & 4 != 0)
+        .with_lines_between_queries(optional_usize(lines_between_queries))
+        .with_expression_width(optional_usize(expression_width));
+
+    store_last_result(format(source, &options).into_bytes().into_boxed_slice());
+    0
+}
+
+/// Decode an optional `usize` argument: `u32::MAX` means "not set".
+fn optional_usize(value: u32) -> Option<usize> {
+    (value != u32::MAX).then_some(value as usize)
+}
+
+fn logical_operator_newline_from_u32(value: u32) -> LogicalOperatorNewline {
+    match value {
+        1 => LogicalOperatorNewline::After,
+        _ => LogicalOperatorNewline::Before,
+    }
 }
 
 fn keyword_case_from_u32(value: u32) -> KeywordCase {
@@ -381,6 +494,115 @@ mod tests {
         let result = String::from_utf8(last_result_bytes()).expect("UTF-8 result");
         clear_last_result();
         result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn format_to_string_with_options_v2(
+        source: &str,
+        line_width: u32,
+        indent_width: u32,
+        keyword_case: u32,
+        data_type_case: u32,
+        function_case: u32,
+        identifier_case: u32,
+        logical_operator_newline: u32,
+        flags: u32,
+        lines_between_queries: u32,
+        expression_width: u32,
+    ) -> String {
+        let status = format_bytes_with_options_v2(
+            source.as_bytes(),
+            line_width,
+            indent_width,
+            keyword_case,
+            1,
+            0,
+            0,
+            0,
+            data_type_case,
+            function_case,
+            identifier_case,
+            logical_operator_newline,
+            flags,
+            lines_between_queries,
+            expression_width,
+        );
+        assert_eq!(status, 0, "format_bytes_with_options_v2({source:?}) failed");
+        let result = String::from_utf8(last_result_bytes()).expect("UTF-8 result");
+        clear_last_result();
+        result
+    }
+
+    #[test]
+    fn v2_options_apply_dense_operators_and_newline_before_semicolon() {
+        // flags: bit0 dense_operators, bit2 newline_before_semicolon.
+        assert_eq!(
+            format_to_string_with_options_v2(
+                "select a + b from t",
+                80,
+                2,
+                0,
+                2,
+                2,
+                2,
+                0,
+                1 | 4,
+                u32::MAX,
+                u32::MAX,
+            ),
+            "SELECT\n  a+b\nFROM t\n;\n"
+        );
+    }
+
+    #[test]
+    fn v2_options_apply_function_case_and_lines_between_queries() {
+        assert_eq!(
+            format_to_string_with_options_v2(
+                "select COUNT(x) from t",
+                80,
+                2,
+                0,
+                2,
+                1,
+                2,
+                0,
+                0,
+                u32::MAX,
+                u32::MAX,
+            ),
+            "SELECT\n  count(x)\nFROM t;\n"
+        );
+        assert_eq!(
+            format_to_string_with_options_v2(
+                "select 1; select 2;",
+                80,
+                2,
+                0,
+                2,
+                2,
+                2,
+                0,
+                0,
+                2,
+                u32::MAX,
+            ),
+            "SELECT\n  1;\n\n\nSELECT\n  2;\n"
+        );
+    }
+
+    #[test]
+    fn v2_optional_usize_uses_u32_max_as_unset() {
+        assert_eq!(optional_usize(u32::MAX), None);
+        assert_eq!(optional_usize(0), Some(0));
+        assert_eq!(optional_usize(40), Some(40));
+        assert_eq!(
+            logical_operator_newline_from_u32(1),
+            LogicalOperatorNewline::After
+        );
+        assert_eq!(
+            logical_operator_newline_from_u32(99),
+            LogicalOperatorNewline::Before
+        );
     }
 
     #[test]

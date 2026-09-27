@@ -87,10 +87,29 @@
           "type": "string",
           "enum": [
             "snowflake",
-            "databricks"
+            "databricks",
+            "spark",
+            "bigquery",
+            "clickhouse",
+            "db2",
+            "db2i",
+            "duckdb",
+            "hive",
+            "mariadb",
+            "mysql",
+            "tidb",
+            "n1ql",
+            "plsql",
+            "postgresql",
+            "redshift",
+            "singlestoredb",
+            "sqlite",
+            "sql",
+            "transactsql",
+            "trino"
           ],
           "default": "snowflake",
-          "markdownDescription": "SQL dialect used when formatting `snowflake-sql` documents."
+          "markdownDescription": "SQL dialect used when formatting `snowflake-sql` documents. Aliases such as `oracle`, `tsql`, `postgres`, and `presto` are accepted."
         },
         "sqlDialectFmt.lineWidth": {
           "type": "integer",
@@ -153,6 +172,70 @@
           ],
           "default": "auto",
           "description": "Output line endings. Auto preserves the first line ending found in the document."
+        },
+        "sqlDialectFmt.dataTypeCase": {
+          "type": "string",
+          "enum": [
+            "upper",
+            "lower",
+            "preserve"
+          ],
+          "default": "preserve",
+          "description": "Letter case for built-in data-type words in type positions."
+        },
+        "sqlDialectFmt.functionCase": {
+          "type": "string",
+          "enum": [
+            "upper",
+            "lower",
+            "preserve"
+          ],
+          "default": "preserve",
+          "description": "Letter case for recognized function names."
+        },
+        "sqlDialectFmt.identifierCase": {
+          "type": "string",
+          "enum": [
+            "upper",
+            "lower",
+            "preserve"
+          ],
+          "default": "preserve",
+          "description": "Letter case for unquoted identifiers that are not keywords, types, or function names."
+        },
+        "sqlDialectFmt.logicalOperatorNewline": {
+          "type": "string",
+          "enum": [
+            "before",
+            "after"
+          ],
+          "default": "before",
+          "description": "Where AND/OR sit when a boolean expression wraps across lines."
+        },
+        "sqlDialectFmt.denseOperators": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pack binary operators without surrounding spaces (price+(price*tax))."
+        },
+        "sqlDialectFmt.useTabs": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Indent with tab characters instead of spaces. `sqlDialectFmt.indentWidth` still sets one tab's width."
+        },
+        "sqlDialectFmt.newlineBeforeSemicolon": {
+          "type": "boolean",
+          "default": false,
+          "description": "Place the statement-terminating semicolon on its own line."
+        },
+        "sqlDialectFmt.linesBetweenQueries": {
+          "type": "integer",
+          "minimum": 0,
+          "markdownDescription": "Force this many blank lines between top-level statements. Leave unset to preserve the author's grouping."
+        },
+        "sqlDialectFmt.expressionWidth": {
+          "type": "integer",
+          "minimum": 1,
+          "markdownDescription": "Flat width cap for parenthesized lists before they wrap. Leave unset to use `sqlDialectFmt.lineWidth`."
         },
         "sqlDialectFmt.useEditorIndentation": {
           "type": "boolean",

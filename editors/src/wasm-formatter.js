@@ -3,6 +3,8 @@
 const fs = require("fs");
 const path = require("path");
 
+const { DIALECTS } = require("./config");
+
 let wasmInstancePromise = null;
 
 async function formatText(context, source, options) {
@@ -29,6 +31,26 @@ async function formatText(context, source, options) {
 }
 
 function callFormatter(api, inputPtr, inputLength, options) {
+  if (typeof api.sql_dialect_fmt_format_with_options_v2 === "function") {
+    return api.sql_dialect_fmt_format_with_options_v2(
+      inputPtr,
+      inputLength,
+      options.lineWidth,
+      options.indentWidth,
+      enumCode(options.keywordCase, ["upper", "lower", "preserve"]),
+      enumCode(options.selectItemLayout, ["auto", "vertical"]),
+      enumCode(options.commaStyle, ["trailing", "leading"]),
+      enumCode(options.lineEnding, ["auto", "lf", "crlf"]),
+      enumCode(options.dialect, DIALECTS),
+      enumCode(options.dataTypeCase, ["upper", "lower", "preserve"]),
+      enumCode(options.functionCase, ["upper", "lower", "preserve"]),
+      enumCode(options.identifierCase, ["upper", "lower", "preserve"]),
+      enumCode(options.logicalOperatorNewline, ["before", "after"]),
+      booleanFlags(options),
+      optionalInteger(options.linesBetweenQueries),
+      optionalInteger(options.expressionWidth),
+    );
+  }
   return api.sql_dialect_fmt_format_with_options(
     inputPtr,
     inputLength,
@@ -38,8 +60,22 @@ function callFormatter(api, inputPtr, inputLength, options) {
     enumCode(options.selectItemLayout, ["auto", "vertical"]),
     enumCode(options.commaStyle, ["trailing", "leading"]),
     enumCode(options.lineEnding, ["auto", "lf", "crlf"]),
-    enumCode(options.dialect, ["snowflake", "databricks"]),
+    enumCode(options.dialect, DIALECTS),
   );
+}
+
+/** Pack the boolean v2 options into the ABI's flag word (bit 0 dense, bit 1 tabs, bit 2 newline). */
+function booleanFlags(options) {
+  return (
+    (options.denseOperators ? 1 : 0) |
+    (options.useTabs ? 2 : 0) |
+    (options.newlineBeforeSemicolon ? 4 : 0)
+  );
+}
+
+/** Encode an optional integer: `null`/`undefined` becomes the `u32::MAX` "unset" sentinel. */
+function optionalInteger(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0xffffffff;
 }
 
 function enumCode(value, variants) {

@@ -11,6 +11,11 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- WebAssembly ABI v2 (`sql_dialect_fmt_format_with_options_v2`) and VS Code settings expose
+  the extended formatter options (`dataTypeCase`, `functionCase`, `identifierCase`,
+  `logicalOperatorNewline`, `denseOperators`, `useTabs`, `newlineBeforeSemicolon`,
+  `linesBetweenQueries`, `expressionWidth`). The extension prefers v2 and falls back to the
+  v1 export, and the dialect setting now offers every supported dialect (aliases included).
 - The Language Server's editor settings now cover the extended formatter options
   (`dataTypeCase`, `functionCase`, `identifierCase`, `logicalOperatorNewline`,
   `denseOperators`, `useTabs`, `newlineBeforeSemicolon`, `linesBetweenQueries`,
