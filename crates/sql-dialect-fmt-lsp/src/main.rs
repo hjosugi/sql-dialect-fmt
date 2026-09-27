@@ -41,7 +41,7 @@ use lsp_types::{
 use serde::Deserialize;
 use sql_dialect_fmt_config::Config;
 use sql_dialect_fmt_formatter::{
-    CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+    CommaStyle, FormatOptions, KeywordCase, LineEnding, LogicalOperatorNewline, SelectItemLayout,
 };
 use sql_dialect_fmt_lsp::{
     apply_change_with_encoding, completion_items, diagnostic_lint_code,
@@ -154,6 +154,24 @@ struct FormatterSettings {
     select_item_layout: Option<String>,
     #[serde(alias = "comma_style")]
     comma_style: Option<String>,
+    #[serde(alias = "data_type_case")]
+    data_type_case: Option<String>,
+    #[serde(alias = "function_case")]
+    function_case: Option<String>,
+    #[serde(alias = "identifier_case")]
+    identifier_case: Option<String>,
+    #[serde(alias = "logical_operator_newline")]
+    logical_operator_newline: Option<String>,
+    #[serde(alias = "dense_operators")]
+    dense_operators: Option<bool>,
+    #[serde(alias = "use_tabs")]
+    use_tabs: Option<bool>,
+    #[serde(alias = "newline_before_semicolon")]
+    newline_before_semicolon: Option<bool>,
+    #[serde(alias = "lines_between_queries")]
+    lines_between_queries: Option<usize>,
+    #[serde(alias = "expression_width")]
+    expression_width: Option<usize>,
     dialect: Option<String>,
     #[serde(default)]
     lint: LintSettings,
@@ -207,6 +225,33 @@ impl FormatterSettings {
         }
         if other.comma_style.is_some() {
             self.comma_style = other.comma_style.clone();
+        }
+        if other.data_type_case.is_some() {
+            self.data_type_case = other.data_type_case.clone();
+        }
+        if other.function_case.is_some() {
+            self.function_case = other.function_case.clone();
+        }
+        if other.identifier_case.is_some() {
+            self.identifier_case = other.identifier_case.clone();
+        }
+        if other.logical_operator_newline.is_some() {
+            self.logical_operator_newline = other.logical_operator_newline.clone();
+        }
+        if other.dense_operators.is_some() {
+            self.dense_operators = other.dense_operators;
+        }
+        if other.use_tabs.is_some() {
+            self.use_tabs = other.use_tabs;
+        }
+        if other.newline_before_semicolon.is_some() {
+            self.newline_before_semicolon = other.newline_before_semicolon;
+        }
+        if other.lines_between_queries.is_some() {
+            self.lines_between_queries = other.lines_between_queries;
+        }
+        if other.expression_width.is_some() {
+            self.expression_width = other.expression_width;
         }
         if other.dialect.is_some() {
             self.dialect = other.dialect.clone();
@@ -301,6 +346,49 @@ fn apply_editor_format(options: &mut FormatOptions, settings: &FormatterSettings
     }
     if let Some(comma_style) = settings.comma_style.as_deref().and_then(parse_comma_style) {
         *options = (*options).with_comma_style(comma_style);
+    }
+    if let Some(data_type_case) = settings
+        .data_type_case
+        .as_deref()
+        .and_then(parse_data_type_case)
+    {
+        *options = (*options).with_data_type_case(data_type_case);
+    }
+    if let Some(function_case) = settings
+        .function_case
+        .as_deref()
+        .and_then(parse_function_case)
+    {
+        *options = (*options).with_function_case(function_case);
+    }
+    if let Some(identifier_case) = settings
+        .identifier_case
+        .as_deref()
+        .and_then(parse_identifier_case)
+    {
+        *options = (*options).with_identifier_case(identifier_case);
+    }
+    if let Some(logical_operator_newline) = settings
+        .logical_operator_newline
+        .as_deref()
+        .and_then(parse_logical_operator_newline)
+    {
+        *options = (*options).with_logical_operator_newline(logical_operator_newline);
+    }
+    if let Some(dense_operators) = settings.dense_operators {
+        *options = (*options).with_dense_operators(dense_operators);
+    }
+    if let Some(use_tabs) = settings.use_tabs {
+        *options = (*options).with_use_tabs(use_tabs);
+    }
+    if let Some(newline_before_semicolon) = settings.newline_before_semicolon {
+        *options = (*options).with_newline_before_semicolon(newline_before_semicolon);
+    }
+    if let Some(lines_between_queries) = settings.lines_between_queries {
+        *options = (*options).with_lines_between_queries(Some(lines_between_queries));
+    }
+    if let Some(expression_width) = settings.expression_width {
+        *options = (*options).with_expression_width(Some(expression_width));
     }
     if let Some(dialect) = settings.dialect.as_deref().and_then(parse_dialect) {
         options.dialect = dialect;
@@ -434,6 +522,22 @@ fn parse_select_item_layout(value: &str) -> Option<SelectItemLayout> {
 
 fn parse_comma_style(value: &str) -> Option<CommaStyle> {
     sql_dialect_fmt_config::parse_comma_style(value).ok()
+}
+
+fn parse_data_type_case(value: &str) -> Option<KeywordCase> {
+    sql_dialect_fmt_config::parse_data_type_case(value).ok()
+}
+
+fn parse_function_case(value: &str) -> Option<KeywordCase> {
+    sql_dialect_fmt_config::parse_function_case(value).ok()
+}
+
+fn parse_identifier_case(value: &str) -> Option<KeywordCase> {
+    sql_dialect_fmt_config::parse_identifier_case(value).ok()
+}
+
+fn parse_logical_operator_newline(value: &str) -> Option<LogicalOperatorNewline> {
+    sql_dialect_fmt_config::parse_logical_operator_newline(value).ok()
 }
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
@@ -1239,5 +1343,46 @@ mod tests {
         .iter()
         .all(|diagnostic| diagnostic.code
             != Some(lsp_types::NumberOrString::String("SDF001".to_string()))));
+    }
+
+    #[test]
+    fn editor_settings_apply_the_extended_options() {
+        // camelCase (serde rename_all) keys, mirroring VS Code settings.
+        let settings: FormatterSettings = serde_json::from_value(serde_json::json!({
+            "dataTypeCase": "upper",
+            "functionCase": "lower",
+            "identifierCase": "lower",
+            "logicalOperatorNewline": "after",
+            "denseOperators": true,
+            "useTabs": true,
+            "newlineBeforeSemicolon": true,
+            "linesBetweenQueries": 3,
+            "expressionWidth": 40
+        }))
+        .expect("settings");
+        let mut options = FormatOptions::default();
+        apply_editor_format(&mut options, &settings);
+        assert_eq!(options.data_type_case, KeywordCase::Upper);
+        assert_eq!(options.function_case, KeywordCase::Lower);
+        assert_eq!(options.identifier_case, KeywordCase::Lower);
+        assert_eq!(
+            options.logical_operator_newline,
+            LogicalOperatorNewline::After
+        );
+        assert!(options.dense_operators);
+        assert!(options.use_tabs);
+        assert!(options.newline_before_semicolon);
+        assert_eq!(options.lines_between_queries, Some(3));
+        assert_eq!(options.expression_width, Some(40));
+    }
+
+    #[test]
+    fn editor_settings_accept_snake_case_aliases() {
+        let settings: FormatterSettings =
+            serde_json::from_value(serde_json::json!({ "function_case": "upper" }))
+                .expect("settings");
+        let mut options = FormatOptions::default();
+        apply_editor_format(&mut options, &settings);
+        assert_eq!(options.function_case, KeywordCase::Upper);
     }
 }
