@@ -57,6 +57,36 @@ use sql_dialect_fmt_parser::Dialect;
 struct Document {
     text: String,
     version: Option<i32>,
+    language_id: Option<String>,
+}
+
+/// Map a VS Code language id (see the editor manifest) to its default dialect. `None` when the
+/// language carries no dialect (for example a plain `sql` document).
+fn dialect_from_language_id(language_id: &str) -> Option<Dialect> {
+    Some(match language_id {
+        "snowflake-sql" => Dialect::Snowflake,
+        "sql-databricks" => Dialect::Databricks,
+        "sql-spark" => Dialect::Spark,
+        "sql-bigquery" => Dialect::BigQuery,
+        "sql-clickhouse" => Dialect::ClickHouse,
+        "sql-db2" => Dialect::Db2,
+        "sql-db2i" => Dialect::Db2i,
+        "sql-duckdb" => Dialect::DuckDb,
+        "sql-hive" => Dialect::Hive,
+        "sql-mariadb" => Dialect::MariaDb,
+        "sql-mysql" => Dialect::MySql,
+        "sql-tidb" => Dialect::TiDb,
+        "sql-n1ql" => Dialect::N1ql,
+        "sql-plsql" => Dialect::PlSql,
+        "sql-postgresql" => Dialect::PostgreSql,
+        "sql-redshift" => Dialect::Redshift,
+        "sql-singlestoredb" => Dialect::SingleStoreDb,
+        "sql-sqlite" => Dialect::Sqlite,
+        "sql-standard" => Dialect::Sql,
+        "sql-transactsql" => Dialect::TransactSql,
+        "sql-trino" => Dialect::Trino,
+        _ => return None,
+    })
 }
 
 type Docs = HashMap<Uri, Document>;
@@ -111,13 +141,28 @@ impl ServerState {
         }
     }
 
-    /// Resolve effective format options for `uri`: defaults → nearest config file → editor overlay.
-    fn effective_options(&self, uri: &Uri) -> FormatOptions {
+    /// Resolve effective format options for `uri`: defaults → nearest config file → editor overlay
+    /// → the document's language id (only when no dialect was set explicitly).
+    fn effective_options(&self, uri: &Uri, docs: &Docs) -> FormatOptions {
         let mut options = FormatOptions::default();
+        let mut dialect_set = false;
         if let Some(config) = discover_config(uri) {
+            dialect_set = config.dialect.is_some();
             config.apply_to(&mut options);
         }
+        if self.editor.dialect.is_some() {
+            dialect_set = true;
+        }
         apply_editor_format(&mut options, &self.editor);
+        if !dialect_set {
+            if let Some(dialect) = docs
+                .get(uri)
+                .and_then(|document| document.language_id.as_deref())
+                .and_then(dialect_from_language_id)
+            {
+                options.dialect = dialect;
+            }
+        }
         options
     }
 
@@ -689,7 +734,7 @@ fn formatting(
     let Some(document) = docs.get(&params.text_document.uri) else {
         return Vec::new();
     };
-    let mut options = state.effective_options(&params.text_document.uri);
+    let mut options = state.effective_options(&params.text_document.uri, docs);
     apply_request_indentation(&mut options, &params.options, &state.editor);
     format_edits_with_encoding(&document.text, &options, state.position_encoding)
 }
@@ -702,7 +747,7 @@ fn range_formatting(
     let Some(document) = docs.get(&params.text_document.uri) else {
         return Vec::new();
     };
-    let mut options = state.effective_options(&params.text_document.uri);
+    let mut options = state.effective_options(&params.text_document.uri, docs);
     apply_request_indentation(&mut options, &params.options, &state.editor);
     format_range_edits_with_encoding(
         &document.text,
@@ -721,7 +766,7 @@ fn on_type_formatting(
     let Some(document) = docs.get(uri) else {
         return Vec::new();
     };
-    let mut options = state.effective_options(uri);
+    let mut options = state.effective_options(uri, docs);
     apply_request_indentation(&mut options, &params.options, &state.editor);
     on_type_formatting_edits_with_encoding(
         &document.text,
@@ -737,7 +782,9 @@ fn semantic_tokens_full(
     state: &mut ServerState,
 ) -> Option<lsp_types::SemanticTokensResult> {
     let text = &docs.get(&params.text_document.uri)?.text;
-    let dialect = state.effective_options(&params.text_document.uri).dialect;
+    let dialect = state
+        .effective_options(&params.text_document.uri, docs)
+        .dialect;
     Some(
         SemanticTokens {
             result_id: Some(state.next_semantic_result_id()),
@@ -753,7 +800,9 @@ fn semantic_tokens_full_delta(
     state: &mut ServerState,
 ) -> Option<SemanticTokensFullDeltaResult> {
     let text = &docs.get(&params.text_document.uri)?.text;
-    let dialect = state.effective_options(&params.text_document.uri).dialect;
+    let dialect = state
+        .effective_options(&params.text_document.uri, docs)
+        .dialect;
     Some(
         SemanticTokens {
             result_id: Some(state.next_semantic_result_id()),
@@ -769,7 +818,9 @@ fn semantic_tokens_range(
     state: &ServerState,
 ) -> Option<SemanticTokensRangeResult> {
     let text = &docs.get(&params.text_document.uri)?.text;
-    let dialect = state.effective_options(&params.text_document.uri).dialect;
+    let dialect = state
+        .effective_options(&params.text_document.uri, docs)
+        .dialect;
     Some(
         SemanticTokens {
             result_id: None,
@@ -801,7 +852,7 @@ fn document_symbol_request(
     state: &ServerState,
 ) -> Option<DocumentSymbolResponse> {
     let text = &docs.get(&params.text_document.uri)?.text;
-    let options = state.effective_options(&params.text_document.uri);
+    let options = state.effective_options(&params.text_document.uri, docs);
     Some(document_symbols_with_encoding(text, &options, state.position_encoding).into())
 }
 
@@ -896,6 +947,7 @@ fn handle_notification(
                 Document {
                     text: params.text_document.text,
                     version: Some(params.text_document.version),
+                    language_id: Some(params.text_document.language_id),
                 },
             );
             publish_diagnostics(connection, docs, &uri, state)?;
@@ -906,9 +958,9 @@ fn handle_notification(
             let uri = params.text_document.uri;
             // Incremental sync: apply each change in order, splicing range edits and honoring
             // whole-document replacements (a change with no range).
-            let mut text = docs
+            let (mut text, language_id) = docs
                 .remove(&uri)
-                .map(|document| document.text)
+                .map(|document| (document.text, document.language_id))
                 .unwrap_or_default();
             for change in params.content_changes {
                 text = apply_change_with_encoding(
@@ -923,6 +975,7 @@ fn handle_notification(
                 Document {
                     text,
                     version: Some(params.text_document.version),
+                    language_id,
                 },
             );
             publish_diagnostics(connection, docs, &uri, state)?;
@@ -950,7 +1003,7 @@ fn publish_diagnostics(
         .map(|document| {
             diagnostics_with_lint_options(
                 &document.text,
-                &state.effective_options(uri),
+                &state.effective_options(uri, docs),
                 state.effective_lint(),
                 state.position_encoding,
             )
@@ -1082,6 +1135,7 @@ mod tests {
         docs.insert(
             uri.clone(),
             Document {
+                language_id: None,
                 text: "select * from".to_string(),
                 version: Some(7),
             },
@@ -1121,6 +1175,7 @@ mod tests {
         docs.insert(
             uri.clone(),
             Document {
+                language_id: None,
                 text: "select * from".to_string(),
                 version: Some(9),
             },
@@ -1150,6 +1205,7 @@ mod tests {
         docs.insert(
             uri.clone(),
             Document {
+                language_id: None,
                 text: "SELECT a <=> b FROM t;".to_string(),
                 version: Some(4),
             },
@@ -1172,7 +1228,7 @@ mod tests {
         handle_notification(&server, notification, &mut docs, &mut state)
             .expect("handle didChangeConfiguration");
 
-        let options = state.effective_options(&uri);
+        let options = state.effective_options(&uri, &docs);
         assert_eq!(options.dialect, Dialect::Databricks);
         assert_eq!(options.keyword_case, KeywordCase::Lower);
         assert_eq!(options.line_ending, LineEnding::Crlf);
@@ -1196,6 +1252,7 @@ mod tests {
         docs.insert(
             uri.clone(),
             Document {
+                language_id: None,
                 text: "SELECT id FROM t WHERE id IN (1, 2, 3);".to_string(),
                 version: Some(5),
             },
@@ -1262,14 +1319,14 @@ mod tests {
 
         // With no editor settings, the config file supplies dialect and widths.
         let mut state = test_state();
-        let options = state.effective_options(&uri);
+        let options = state.effective_options(&uri, &Docs::new());
         assert_eq!(options.dialect, Dialect::Databricks);
         assert_eq!(options.line_width, 40);
         assert_eq!(options.indent_width, 8);
 
         // Editor settings win over the config file, field by field.
         state.apply_settings(&serde_json::json!({ "sqlDialectFmt": { "lineWidth": 120 } }));
-        let options = state.effective_options(&uri);
+        let options = state.effective_options(&uri, &Docs::new());
         assert_eq!(options.line_width, 120); // editor override
         assert_eq!(options.indent_width, 8); // still from the config file
         assert_eq!(options.dialect, Dialect::Databricks); // still from the config file
@@ -1282,6 +1339,7 @@ mod tests {
         let docs = HashMap::from([(
             uri.clone(),
             Document {
+                language_id: None,
                 text: text.to_string(),
                 version: Some(1),
             },
@@ -1384,5 +1442,28 @@ mod tests {
         let mut options = FormatOptions::default();
         apply_editor_format(&mut options, &settings);
         assert_eq!(options.function_case, KeywordCase::Upper);
+    }
+
+    #[test]
+    fn document_language_id_supplies_the_default_dialect() {
+        let mut state = test_state();
+        let uri = test_uri();
+        let mut docs = Docs::new();
+        docs.insert(
+            uri.clone(),
+            Document {
+                text: "select 1".to_string(),
+                version: Some(1),
+                language_id: Some("sql-postgresql".to_string()),
+            },
+        );
+        assert_eq!(
+            state.effective_options(&uri, &docs).dialect,
+            Dialect::PostgreSql
+        );
+
+        // An explicit editor dialect wins over the language id.
+        state.apply_settings(&serde_json::json!({ "sqlDialectFmt": { "dialect": "mysql" } }));
+        assert_eq!(state.effective_options(&uri, &docs).dialect, Dialect::MySql);
     }
 }
