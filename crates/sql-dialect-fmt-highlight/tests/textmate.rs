@@ -356,12 +356,10 @@ fn keyword_list_is_complete_against_the_keyword_table() {
         words.extend(alternation(repo[rule]["match"].as_str().unwrap()));
     }
 
+    // The grammar lists every reserved keyword from every dialect (`.sql` is claimed by this
+    // extension, so other dialects must highlight too); `scripts/generate-textmate-keywords.py`
+    // is the single writer of the list.
     for kw in keyword_texts() {
-        // The committed grammar is the Snowflake grammar; dialect-specific keywords that Snowflake
-        // does not reserve (conflict/duplicate/nothing/prewhere/returning) are intentionally absent.
-        if keyword_kind_for(kw, Dialect::Snowflake).is_none() {
-            continue;
-        }
         assert!(
             words.contains(kw),
             "no grammar keyword rule covers reserved word `{kw}`"

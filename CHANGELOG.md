@@ -11,6 +11,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- The committed TextMate grammar's keyword alternation is now generated from the full
+  dialect keyword table (156 words) by `scripts/generate-textmate-keywords.py`, so `.sql` files
+  claimed by this extension highlight every dialect's keywords. A test enforces the grammar is
+  in sync (`--check` guards drift).
 - The committed TextMate grammar now also colours the dialect-specific clause keywords
   (`RETURNING`, `ON CONFLICT`, `DUPLICATE`, `NOTHING`, `PREWHERE`), so dialect SQL pasted into
   the editor language still highlights its keywords.
