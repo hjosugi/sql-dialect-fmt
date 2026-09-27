@@ -9,6 +9,12 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- The language server infers the dialect from a document's language id (for example
+  `sql-postgresql`) when neither the config file nor editor settings set `dialect`, so
+  formatting and semantic tokens match the extension's language inference.
+
 ## [1.28.0] - 2026-09-27
 
 ### Added
