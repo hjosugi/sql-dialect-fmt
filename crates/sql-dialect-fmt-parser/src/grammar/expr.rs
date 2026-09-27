@@ -612,6 +612,58 @@ pub(super) fn arg_list(p: &mut Parser) {
     m.complete(p, ARG_LIST);
 }
 
+/// Whether the argument starting here has a top-level `AS <name>` alias before the closing
+/// paren/comma (bounded scan; used to decide on the `ALIASED_ARG` wrapper).
+fn at_argument_alias(p: &Parser) -> bool {
+    let mut depth: i32 = 0;
+    let mut i = 0usize;
+    while i < 64 {
+        if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
+            depth += 1;
+        } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
+            if depth == 0 {
+                return false;
+            }
+            depth -= 1;
+        } else if depth == 0 {
+            if p.nth_at(i, AS_KW) {
+                return true;
+            }
+            if p.nth_at(i, COMMA) {
+                return false;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Whether the argument starting here contains a top-level `ORDER BY` before the closing paren/comma
+/// (bounded scan; used to decide on the `ORDERED_ARG` wrapper).
+fn at_argument_order_by(p: &Parser) -> bool {
+    let mut depth: i32 = 0;
+    let mut i = 0usize;
+    while i < 64 {
+        if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
+            depth += 1;
+        } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
+            if depth == 0 {
+                return false;
+            }
+            depth -= 1;
+        } else if depth == 0 {
+            if p.nth_at(i, ORDER_KW) && p.nth_at(i + 1, BY_KW) {
+                return true;
+            }
+            if p.nth_at(i, COMMA) {
+                return false;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 fn arg(p: &mut Parser) {
     if p.at(STAR) {
         let m = p.start();
@@ -625,7 +677,25 @@ fn arg(p: &mut Parser) {
         expr(p);
         m.complete(p, NAMED_ARG);
     } else if at_expr_start(p) {
-        expr(p);
+        // Dialect argument forms wrap the argument in a node so the trailing clause/alias is a
+        // child of a node the formatter can render (a bare clause would be dropped by ARG_LIST).
+        if p.dialect().supports_argument_aliases() && at_argument_alias(p) {
+            let m = p.start();
+            expr(p);
+            if p.eat(AS_KW) && p.at_name() {
+                super::name(p);
+            }
+            m.complete(p, ALIASED_ARG);
+        } else if p.dialect().supports_argument_order_by() && at_argument_order_by(p) {
+            let m = p.start();
+            expr(p);
+            if p.at(ORDER_KW) {
+                super::order_by_clause(p);
+            }
+            m.complete(p, ORDERED_ARG);
+        } else {
+            expr(p);
+        }
     } else {
         p.error("expected an argument");
     }
@@ -792,7 +862,7 @@ fn infix_bp(p: &Parser) -> Option<(u8, u8)> {
         || p.at(ILIKE_KW)
     {
         BP_CMP
-    } else if p.at(CONCAT) {
+    } else if p.at(CONCAT) || p.at(JSON_ARROW) || p.at(JSON_ARROW_TEXT) {
         BP_CONCAT
     } else if p.at(PLUS) || p.at(MINUS) {
         BP_ADD

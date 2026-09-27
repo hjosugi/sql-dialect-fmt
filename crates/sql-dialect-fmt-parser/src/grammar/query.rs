@@ -90,6 +90,15 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     }
     if p.at(DISTINCT_KW) {
         p.bump(DISTINCT_KW);
+        // PostgreSQL/DuckDB `DISTINCT ON (expr, ...)`.
+        if p.dialect().supports_distinct_on() && p.at(ON_KW) {
+            p.bump(ON_KW);
+            if p.at(L_PAREN) {
+                balanced_parens(p);
+            } else {
+                p.error("expected '(' after DISTINCT ON");
+            }
+        }
     } else if p.at(ALL_KW) {
         p.bump(ALL_KW);
     }
@@ -97,6 +106,13 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
         top_clause(p);
     }
     select_list(p);
+    // Transact-SQL `SELECT ... INTO <target> FROM ...`.
+    if p.dialect().supports_select_into() && p.at(INTO_KW) {
+        let into = p.start();
+        p.bump(INTO_KW);
+        name_ref(p);
+        into.complete(p, INTO_CLAUSE);
+    }
     if p.at(FROM_KW) {
         from_clause(p);
     }
@@ -391,6 +407,11 @@ pub(super) fn table_ref(p: &mut Parser) {
         pivot_clause(p);
     }
     table_alias(p);
+    // Transact-SQL table hints: `<table> [AS alias] WITH (NOLOCK, ...)`.
+    if p.dialect().supports_table_hints() && p.at(WITH_KW) && p.nth_at(1, L_PAREN) {
+        p.bump(WITH_KW);
+        balanced_parens(p);
+    }
     m.complete(p, TABLE_REF);
 }
 

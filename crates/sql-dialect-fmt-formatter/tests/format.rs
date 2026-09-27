@@ -1691,3 +1691,79 @@ fn tsql_for_json_and_offset_fetch() {
         "SELECT\n  a\nFROM t\nORDER BY a\nOFFSET 10 ROWS\nFETCH NEXT 5 ROWS ONLY;\n"
     );
 }
+
+#[test]
+fn postgres_distinct_on_and_for_update() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let pg = FormatOptions::default().with_dialect(Dialect::PostgreSql);
+    let once = format("select distinct on (a) a, b from t order by a, b", &pg);
+    assert_eq!(
+        once,
+        "SELECT DISTINCT ON (a)\n  a,\n  b\nFROM t\nORDER BY a, b;\n"
+    );
+    assert_eq!(format(&once, &pg), once);
+    assert_eq!(
+        format("select a from t for update", &pg),
+        "SELECT\n  a\nFROM t\nFOR UPDATE;\n"
+    );
+}
+
+#[test]
+fn mysql_insert_set_and_replace_into() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let mysql = FormatOptions::default().with_dialect(Dialect::MySql);
+    assert_eq!(
+        format("insert into t set a = 1, b = 2", &mysql),
+        "INSERT INTO t SET a = 1, b = 2;\n"
+    );
+    assert_eq!(
+        format("replace into t (a) values (1)", &mysql),
+        "REPLACE INTO t (a)\nVALUES (1);\n"
+    );
+}
+
+#[test]
+fn tsql_select_into_and_table_hints() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let tsql = FormatOptions::default().with_dialect(Dialect::TransactSql);
+    assert_eq!(
+        format("select a into #tmp from t", &tsql),
+        "SELECT\n  a\nINTO #tmp\nFROM t;\n"
+    );
+    assert_eq!(
+        format("select a from t with (nolock)", &tsql),
+        "SELECT\n  a\nFROM t WITH (nolock);\n"
+    );
+}
+
+#[test]
+fn postgres_json_arrows_and_aggregate_order_by() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let pg = FormatOptions::default().with_dialect(Dialect::PostgreSql);
+    assert_eq!(
+        format("select b -> 'k', c ->> 'k' from t", &pg),
+        "SELECT\n  b -> 'k',\n  c ->> 'k'\nFROM t;\n"
+    );
+    assert_eq!(
+        format("select array_agg(x order by y) from t", &pg),
+        "SELECT\n  array_agg(x ORDER BY y)\nFROM t;\n"
+    );
+}
+
+#[test]
+fn bigquery_struct_argument_aliases() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let bq = FormatOptions::default().with_dialect(Dialect::BigQuery);
+    assert_eq!(
+        format("select struct(1 as x, 2 as y) as s", &bq),
+        "SELECT\n  struct(1 AS x, 2 AS y) AS s;\n"
+    );
+}
+
+#[test]
+fn snowflake_flow_operator_is_unchanged_by_json_arrows() {
+    // `->>` is the Snowflake flow operator, not a JSON arrow, so the statement chain is preserved.
+    let out = fmt("select a from t ->> select b from u");
+    assert!(out.contains("->>"), "{out}");
+    assert_eq!(fmt(&out), out);
+}

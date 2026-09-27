@@ -28,43 +28,45 @@ pub enum SyntaxKind {
     // nested braces so embedded-in-source SQL still formats and highlights.
 
     // ---- Punctuation & operators ----
-    L_PAREN,      // (
-    R_PAREN,      // )
-    L_BRACKET,    // [
-    R_BRACKET,    // ]
-    L_BRACE,      // {   (lexed for lossless recovery; no grammar support yet)
-    R_BRACE,      // }
-    COMMA,        // ,
-    DOT,          // .
-    SEMICOLON,    // ;
-    COLON,        // :   (semi-structured path access, named args in some dialects)
-    COLON2,       // ::  (cast)
-    ASSIGN,       // :=  (Snowflake Scripting assignment)
-    EQ,           // =
-    NEQ,          // <> or !=
-    LT,           // <
-    LTE,          // <=
-    NULL_SAFE_EQ, // <=> (Databricks/Spark null-safe equality)
-    GT,           // >
-    GTE,          // >=
-    PLUS,         // +
-    MINUS,        // -
-    STAR,         // *
-    SLASH,        // /
-    PERCENT,      // %
-    CONCAT,       // ||
-    PIPE,         // |
-    PIPE_GT,      // |>  (unsupported but lexed for compatibility and corpus coverage)
-    FLOW_PIPE,    // ->> (Snowflake flow / pipe operator)
-    ARROW,        // ->  (lambda)
-    FAT_ARROW,    // =>  (named argument)
-    AMP,          // &   (unsupported but lexed for lossless recovery)
-    CARET,        // ^   (unsupported but lexed for lossless recovery)
-    TILDE,        // ~
-    AT,           // @   (stage reference)
-    DOLLAR,       // $   (lone dollar, not a variable or $$ )
-    QUESTION,     // ?   (bind marker token; unsupported by the grammar today)
-    BANG,         // !   (unsupported standalone; only `!=` is accepted as NEQ)
+    L_PAREN,         // (
+    R_PAREN,         // )
+    L_BRACKET,       // [
+    R_BRACKET,       // ]
+    L_BRACE,         // {   (lexed for lossless recovery; no grammar support yet)
+    R_BRACE,         // }
+    COMMA,           // ,
+    DOT,             // .
+    SEMICOLON,       // ;
+    COLON,           // :   (semi-structured path access, named args in some dialects)
+    COLON2,          // ::  (cast)
+    ASSIGN,          // :=  (Snowflake Scripting assignment)
+    EQ,              // =
+    NEQ,             // <> or !=
+    LT,              // <
+    LTE,             // <=
+    NULL_SAFE_EQ,    // <=> (Databricks/Spark null-safe equality)
+    GT,              // >
+    GTE,             // >=
+    PLUS,            // +
+    MINUS,           // -
+    STAR,            // *
+    SLASH,           // /
+    PERCENT,         // %
+    CONCAT,          // ||
+    PIPE,            // |
+    PIPE_GT,         // |>  (unsupported but lexed for compatibility and corpus coverage)
+    FLOW_PIPE,       // ->> (Snowflake flow / pipe operator)
+    JSON_ARROW,      // ->  (JSON member access, PostgreSQL/DuckDB/MySQL)
+    JSON_ARROW_TEXT, // ->> (JSON member access as text)
+    ARROW,           // ->  (lambda)
+    FAT_ARROW,       // =>  (named argument)
+    AMP,             // &   (unsupported but lexed for lossless recovery)
+    CARET,           // ^   (unsupported but lexed for lossless recovery)
+    TILDE,           // ~
+    AT,              // @   (stage reference)
+    DOLLAR,          // $   (lone dollar, not a variable or $$ )
+    QUESTION,        // ?   (bind marker token; unsupported by the grammar today)
+    BANG,            // !   (unsupported standalone; only `!=` is accepted as NEQ)
 
     // ---- Keywords (case-insensitive; recognized via keyword_kind) ----
     // NOTE: this is an intentionally partial but representative set covering the SELECT
@@ -313,6 +315,7 @@ pub enum SyntaxKind {
     VALUES_ROW,
     // Phase 6: DML statements
     INSERT_STMT,
+    REPLACE_STMT, // MySQL-family `REPLACE [INTO] t ...`
     UPDATE_STMT,
     DELETE_STMT,
     MERGE_STMT,
@@ -360,6 +363,10 @@ pub enum SyntaxKind {
     WITHIN_GROUP,
     PIVOT_CLAUSE,
     NAMED_ARG,
+    /// An aggregate argument with a trailing `ORDER BY` (`array_agg(x ORDER BY y)`).
+    ORDERED_ARG,
+    /// An argument with an `AS` alias (`STRUCT(1 AS x)`).
+    ALIASED_ARG,
     MATCH_RECOGNIZE,
     // MATCH_RECOGNIZE body sub-clauses
     MEASURES_CLAUSE,
@@ -526,6 +533,8 @@ impl SyntaxKind {
             PIPE => "'|'",
             PIPE_GT => "'|>'",
             FLOW_PIPE => "'->>'",
+            JSON_ARROW => "'->'",
+            JSON_ARROW_TEXT => "'->>'",
             ARROW => "'->'",
             FAT_ARROW => "'=>'",
             AMP => "'&'",

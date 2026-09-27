@@ -173,6 +173,8 @@ fn is_operator(kind: SyntaxKind) -> bool {
             | SyntaxKind::PIPE
             | SyntaxKind::PIPE_GT
             | SyntaxKind::FLOW_PIPE
+            | SyntaxKind::JSON_ARROW
+            | SyntaxKind::JSON_ARROW_TEXT
             | SyntaxKind::ARROW
             | SyntaxKind::FAT_ARROW
             | SyntaxKind::AMP

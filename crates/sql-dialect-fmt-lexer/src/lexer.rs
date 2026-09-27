@@ -670,12 +670,25 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 }
             }
             b'-' => {
+                let dialect = self.options.dialect;
                 if self.peek() == b'>' && self.peek_at(1) == b'>' {
-                    self.pos += 2;
-                    SyntaxKind::FLOW_PIPE
+                    if dialect.supports_flow_operator() {
+                        self.pos += 2;
+                        SyntaxKind::FLOW_PIPE
+                    } else if dialect.supports_json_arrow() {
+                        self.pos += 2;
+                        SyntaxKind::JSON_ARROW_TEXT
+                    } else {
+                        self.pos += 1; // `->` then the following `>` lexes separately
+                        SyntaxKind::ARROW
+                    }
                 } else if self.peek() == b'>' {
                     self.pos += 1;
-                    SyntaxKind::ARROW
+                    if dialect.supports_json_arrow() {
+                        SyntaxKind::JSON_ARROW
+                    } else {
+                        SyntaxKind::ARROW
+                    }
                 } else {
                     SyntaxKind::MINUS
                 }

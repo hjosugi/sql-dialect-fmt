@@ -405,7 +405,7 @@ impl Lowerer {
             SUBQUERY => self.lower_subquery(node),
             WITH_QUERY => self.lower_with_query(node),
             SET_OP => self.lower_set_op(node),
-            INSERT_STMT => self.lower_insert(node),
+            INSERT_STMT | REPLACE_STMT => self.lower_insert(node),
             UPDATE_STMT => self.lower_update(node),
             DELETE_STMT => self.lower_delete(node),
             MERGE_STMT => self.lower_merge(node),

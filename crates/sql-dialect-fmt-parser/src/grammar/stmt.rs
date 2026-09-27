@@ -37,6 +37,7 @@ pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
         || p.at(WITH_KW)
         || p.at(VALUES_KW)
         || p.at(INSERT_KW)
+        || (p.dialect().supports_replace_into() && p.at(REPLACE_KW))
         || p.at(UPDATE_KW)
         || p.at(DELETE_KW)
         || p.at(MERGE_KW)
@@ -69,6 +70,8 @@ pub(super) fn statement(p: &mut Parser) {
         super::with_query(p);
     } else if p.at(INSERT_KW) {
         super::dml::insert_stmt(p);
+    } else if p.dialect().supports_replace_into() && p.at(REPLACE_KW) {
+        super::dml::replace_stmt(p);
     } else if p.at(UPDATE_KW) {
         super::dml::update_stmt(p);
     } else if p.at(DELETE_KW) {

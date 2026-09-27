@@ -487,10 +487,98 @@ impl Dialect {
         matches!(self, Dialect::TransactSql)
     }
 
-    /// Transact-SQL `FOR JSON|XML ...` output clause at the end of a `SELECT`.
+    /// A trailing `FOR ...` clause on a `SELECT`: Transact-SQL `FOR JSON|XML ...` output, and
+    /// the row-locking `FOR UPDATE` / `FOR SHARE` of PostgreSQL, the MySQL family, DuckDB and
+    /// Redshift.
     #[must_use]
     pub fn supports_select_for_clause(self) -> bool {
+        matches!(
+            self,
+            Dialect::TransactSql
+                | Dialect::PostgreSql
+                | Dialect::MySql
+                | Dialect::MariaDb
+                | Dialect::TiDb
+                | Dialect::SingleStoreDb
+                | Dialect::DuckDb
+                | Dialect::Redshift
+        )
+    }
+
+    /// PostgreSQL/DuckDB `SELECT DISTINCT ON (<expr>, ...)`.
+    #[must_use]
+    pub fn supports_distinct_on(self) -> bool {
+        matches!(self, Dialect::PostgreSql | Dialect::DuckDb)
+    }
+
+    /// MySQL-family `INSERT INTO t SET col = expr, ...`.
+    #[must_use]
+    pub fn supports_insert_set(self) -> bool {
+        matches!(
+            self,
+            Dialect::MySql | Dialect::MariaDb | Dialect::TiDb | Dialect::SingleStoreDb
+        )
+    }
+
+    /// MySQL-family `REPLACE [INTO] t ...` (delete-then-insert upsert).
+    #[must_use]
+    pub fn supports_replace_into(self) -> bool {
+        matches!(
+            self,
+            Dialect::MySql | Dialect::MariaDb | Dialect::TiDb | Dialect::SingleStoreDb
+        )
+    }
+
+    /// Transact-SQL `SELECT ... INTO <target> FROM ...`.
+    #[must_use]
+    pub fn supports_select_into(self) -> bool {
         matches!(self, Dialect::TransactSql)
+    }
+
+    /// `<table> WITH (NOLOCK, ...)` Transact-SQL table hints.
+    #[must_use]
+    pub fn supports_table_hints(self) -> bool {
+        matches!(self, Dialect::TransactSql)
+    }
+
+    /// JSON member-access arrows `->` / `->>`. PostgreSQL, DuckDB and the MySQL family. (Snowflake
+    /// uses `:`; `->>` there is the statement-level flow operator.)
+    #[must_use]
+    pub fn supports_json_arrow(self) -> bool {
+        matches!(
+            self,
+            Dialect::PostgreSql
+                | Dialect::DuckDb
+                | Dialect::MySql
+                | Dialect::MariaDb
+                | Dialect::TiDb
+                | Dialect::SingleStoreDb
+        )
+    }
+
+    /// `f(expr AS alias, ...)` argument aliases. BigQuery `STRUCT(...)`.
+    #[must_use]
+    pub fn supports_argument_aliases(self) -> bool {
+        matches!(self, Dialect::BigQuery)
+    }
+
+    /// `agg(expr ORDER BY ...)` order inside an aggregate argument list. PostgreSQL, Redshift,
+    /// BigQuery, DuckDB, ClickHouse, the MySQL family and Trino.
+    #[must_use]
+    pub fn supports_argument_order_by(self) -> bool {
+        matches!(
+            self,
+            Dialect::PostgreSql
+                | Dialect::Redshift
+                | Dialect::BigQuery
+                | Dialect::DuckDb
+                | Dialect::ClickHouse
+                | Dialect::MySql
+                | Dialect::MariaDb
+                | Dialect::TiDb
+                | Dialect::SingleStoreDb
+                | Dialect::Trino
+        )
     }
 
     /// BigQuery `SELECT * EXCEPT (...)` / `SELECT * REPLACE (...)` star modifiers.

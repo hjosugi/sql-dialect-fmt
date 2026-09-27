@@ -39,7 +39,9 @@ pub(super) fn insert_stmt(p: &mut Parser) {
         if p.dialect().supports_output_clause() && p.at(OUTPUT_KW) {
             output_clause(p);
         }
-        if p.at(VALUES_KW) {
+        if p.dialect().supports_insert_set() && p.at(SET_KW) {
+            set_clause(p);
+        } else if p.at(VALUES_KW) {
             super::values_clause(p);
         } else {
             super::query_expr(p);
@@ -47,6 +49,25 @@ pub(super) fn insert_stmt(p: &mut Parser) {
         insert_tails(p);
     }
     m.complete(p, INSERT_STMT);
+}
+
+/// MySQL-family `REPLACE [INTO] t [(cols)] { VALUES ... | SET ... | <query> }`.
+pub(super) fn replace_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(REPLACE_KW);
+    p.eat(INTO_KW);
+    super::name_ref(p);
+    if p.at(L_PAREN) {
+        super::column_list(p);
+    }
+    if p.dialect().supports_insert_set() && p.at(SET_KW) {
+        set_clause(p);
+    } else if p.at(VALUES_KW) {
+        super::values_clause(p);
+    } else {
+        super::query_expr(p);
+    }
+    m.complete(p, REPLACE_STMT);
 }
 
 /// Dialect-specific `INSERT` clauses that follow the source rows: `ON CONFLICT … DO …` (PostgreSQL/
