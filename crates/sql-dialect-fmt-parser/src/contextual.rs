@@ -359,4 +359,6 @@ contextual_keywords! {
     Exec => "exec",
     /// ClickHouse `... SETTINGS k = v` query tail.
     Settings => "settings",
+    /// MySQL-family `GROUP_CONCAT(x ... SEPARATOR ',')`.
+    Separator => "separator",
 }

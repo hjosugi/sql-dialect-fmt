@@ -11,6 +11,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- MySQL-family `GROUP_CONCAT(x ORDER BY y SEPARATOR ',')` aggregate options are parsed and
+  formatted instead of splitting the statement.
 - The docs-site playground now exposes every formatter option (dialect — all 21 names —,
   data-type/function/identifier casing, AND/OR placement, dense operators, tabs, newline before
   `;`, blank lines between queries, expression width) and uses the Wasm v2 ABI with a v1

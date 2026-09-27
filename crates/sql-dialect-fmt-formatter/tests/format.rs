@@ -1794,3 +1794,16 @@ fn tsql_exec_and_sqlite_glob() {
         "SELECT\n  a\nFROM t\nWHERE b GLOB 'x*';\n"
     );
 }
+
+#[test]
+fn mysql_group_concat_separator() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let mysql = FormatOptions::default().with_dialect(Dialect::MySql);
+    assert_eq!(
+        format(
+            "select group_concat(a order by b separator ',') from t",
+            &mysql
+        ),
+        "SELECT\n  group_concat(a ORDER BY b SEPARATOR ',')\nFROM t;\n"
+    );
+}

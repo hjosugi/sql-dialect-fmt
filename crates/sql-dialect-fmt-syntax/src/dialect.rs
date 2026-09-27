@@ -614,6 +614,15 @@ impl Dialect {
         matches!(self, Dialect::ClickHouse)
     }
 
+    /// MySQL-family `GROUP_CONCAT(x ... SEPARATOR ',')` aggregate option.
+    #[must_use]
+    pub fn supports_aggregate_separator(self) -> bool {
+        matches!(
+            self,
+            Dialect::MySql | Dialect::MariaDb | Dialect::TiDb | Dialect::SingleStoreDb
+        )
+    }
+
     /// BigQuery `SELECT * EXCEPT (...)` / `SELECT * REPLACE (...)` star modifiers.
     #[must_use]
     pub fn supports_select_star_modifier(self) -> bool {

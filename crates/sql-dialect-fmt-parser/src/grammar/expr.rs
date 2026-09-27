@@ -624,6 +624,46 @@ pub(super) fn arg_list(p: &mut Parser) {
     m.complete(p, ARG_LIST);
 }
 
+/// Consume a MySQL-family `SEPARATOR <value>` aggregate option if present.
+fn aggregate_separator(p: &mut Parser) {
+    if !p.dialect().supports_aggregate_separator()
+        || !p.nth_contextual(0, ContextualKeyword::Separator)
+    {
+        return;
+    }
+    p.bump_as(CONTEXTUAL_KEYWORD); // SEPARATOR
+    if at_expr_start(p) {
+        expr(p);
+    } else {
+        p.error("expected a SEPARATOR value");
+    }
+}
+
+/// Whether the argument has a top-level `SEPARATOR` before the closing paren/comma.
+fn at_argument_separator(p: &Parser) -> bool {
+    let mut depth: i32 = 0;
+    let mut i = 0usize;
+    while i < 64 {
+        if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
+            depth += 1;
+        } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
+            if depth == 0 {
+                return false;
+            }
+            depth -= 1;
+        } else if depth == 0 {
+            if p.nth_contextual(i, ContextualKeyword::Separator) {
+                return true;
+            }
+            if p.nth_at(i, COMMA) {
+                return false;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Whether the argument starting here has a top-level `AS <name>` alias before the closing
 /// paren/comma (bounded scan; used to decide on the `ALIASED_ARG` wrapper).
 fn at_argument_alias(p: &Parser) -> bool {
@@ -704,6 +744,12 @@ fn arg(p: &mut Parser) {
             if p.at(ORDER_KW) {
                 super::order_by_clause(p);
             }
+            aggregate_separator(p);
+            m.complete(p, ORDERED_ARG);
+        } else if p.dialect().supports_aggregate_separator() && at_argument_separator(p) {
+            let m = p.start();
+            expr(p);
+            aggregate_separator(p);
             m.complete(p, ORDERED_ARG);
         } else {
             expr(p);
