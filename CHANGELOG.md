@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-09-27
+
 ### Added
 
 - `param_types.custom` regex patterns: `sql-dialect-fmt.toml` can list regexes (for example
@@ -811,7 +813,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.26.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.27.0...HEAD
+[1.27.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.26.0...v1.27.0
 [1.26.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.25.0...v1.26.0
 [1.25.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.24.0...v1.25.0
 [1.24.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.23.0...v1.24.0
