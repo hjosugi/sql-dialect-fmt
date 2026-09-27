@@ -163,7 +163,7 @@
 - ✅ `RETURNING`（PostgreSQL/SQLite/DuckDB/MariaDB/N1QL）、`ON CONFLICT … DO NOTHING|UPDATE`（`ON CONSTRAINT`・部分インデックス `WHERE` 含む）、`ON DUPLICATE KEY UPDATE`（MySQL 系）、SQLite `INSERT OR …`、ClickHouse `PREWHERE`、BigQuery `SELECT * EXCEPT/REPLACE (…)`、T-SQL `OUTPUT … [INTO …]` と `FOR JSON|XML`、`OFFSET n ROWS` / `FETCH FIRST|NEXT n ROWS ONLY` をパース＋整形。方言ゲートで Snowflake/Databricks は不変
 - ✅ 追加: PostgreSQL/DuckDB `DISTINCT ON`、`FOR UPDATE`/`FOR SHARE`、`->`/`->>` JSON 演算子（MySQL 系含む）、集約内 `ORDER BY`、MySQL 系 `INSERT … SET`/`REPLACE INTO`、T-SQL `SELECT … INTO`/`WITH (NOLOCK)`/`FETCH NEXT`、BigQuery `STRUCT(expr AS name)`、ClickHouse `SETTINGS`/`FORMAT`/`FINAL`、T-SQL `EXEC`、SQLite `GLOB`
 - ✅ 安全網: 非コア方言は `;` なしの文境界を診断（未対応の尾部を新規文として誤分割しない）。Snowflake/Databricks は従来どおり
-- ⏳ 残り: T-SQL `GO` バッチ／`FOR XML` 詳細、ClickHouse `FORMAT`/`FINAL`/`SETTINGS`、Oracle PL/SQL ブロック・`RETURNING … INTO`、DuckDB `FROM … SELECT`、`LATERAL`/`USING` 差分など。頻度 × 価値で個別 issue 化
+- ⏳ 残り: T-SQL `GO` バッチ／`FOR XML` 詳細、ClickHouse `FORMAT`/`FINAL`/`SETTINGS`、名付き PL/SQL ルーチン（`IS`/`RETURN`）・`RETURNING … INTO`、DuckDB `FROM … SELECT`、`LATERAL`/`USING` 差分など。頻度 × 価値で個別 issue 化
 
 ### Phase 11d — ハイライトの全面対応 🚧
 - ✅ LSP semantic token を `options.dialect` に追随（`highlight_for_dialect` ベースの `semantic_tokens_lsp_for_dialect` を追加し、`textDocument/semanticTokens/full|range` が文書の方言設定を使う） … [semantic.rs](crates/sql-dialect-fmt-highlight/src/semantic.rs) / [lsp/lib.rs](crates/sql-dialect-fmt-lsp/src/lib.rs) / [lsp/main.rs](crates/sql-dialect-fmt-lsp/src/main.rs)

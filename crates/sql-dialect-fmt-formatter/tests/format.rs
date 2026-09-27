@@ -1807,3 +1807,31 @@ fn mysql_group_concat_separator() {
         "SELECT\n  group_concat(a ORDER BY b SEPARATOR ',')\nFROM t;\n"
     );
 }
+
+#[test]
+fn oracle_plsql_anonymous_block() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let plsql = FormatOptions::default().with_dialect(Dialect::PlSql);
+    let once = format("begin null; end;", &plsql);
+    assert_eq!(once, "BEGIN\n  NULL;\nEND;\n");
+    assert_eq!(format(&once, &plsql), once);
+
+    let select_into = format(
+        "begin select 1 into :x from dual; exception when no_data_found then null; end;",
+        &plsql,
+    );
+    assert_eq!(
+        select_into,
+        "BEGIN\n  SELECT 1 INTO :x FROM dual;\nEXCEPTION\n  WHEN no_data_found THEN\n    NULL;\nEND;\n"
+    );
+    assert_eq!(format(&select_into, &plsql), select_into);
+
+    let if_block = format(
+        "begin if :x > 1 then :y := 2; else :y := 3; end if; end;",
+        &plsql,
+    );
+    assert_eq!(
+        if_block,
+        "BEGIN\n  IF :x > 1 THEN\n    :y := 2;\n  ELSE\n    :y := 3;\n  END IF;\nEND;\n"
+    );
+}

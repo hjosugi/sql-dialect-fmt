@@ -346,7 +346,10 @@ impl Dialect {
     /// assignment operator. Snowflake and Databricks both support compound SQL blocks.
     #[must_use]
     pub fn supports_scripting_blocks(self) -> bool {
-        matches!(self, Dialect::Snowflake | Dialect::Databricks)
+        matches!(
+            self,
+            Dialect::Snowflake | Dialect::Databricks | Dialect::PlSql
+        )
     }
 
     /// Stage references: `@stage` / `@~` / `@%table` paths in `FROM`, `COPY`, and `PUT`/`GET`.
@@ -532,7 +535,7 @@ impl Dialect {
     /// Transact-SQL `SELECT ... INTO <target> FROM ...`.
     #[must_use]
     pub fn supports_select_into(self) -> bool {
-        matches!(self, Dialect::TransactSql)
+        matches!(self, Dialect::TransactSql | Dialect::PlSql)
     }
 
     /// `<table> WITH (NOLOCK, ...)` Transact-SQL table hints.

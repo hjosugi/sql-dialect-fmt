@@ -110,7 +110,14 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.dialect().supports_select_into() && p.at(INTO_KW) {
         let into = p.start();
         p.bump(INTO_KW);
-        name_ref(p);
+        if p.at(VARIABLE) {
+            // Oracle `SELECT ... INTO :bind ...` — the target may be a bind variable.
+            let target = p.start();
+            p.bump(VARIABLE);
+            target.complete(p, NAME_REF);
+        } else {
+            name_ref(p);
+        }
         into.complete(p, INTO_CLAUSE);
     }
     if p.at(FROM_KW) {

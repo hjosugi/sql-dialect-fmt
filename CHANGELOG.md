@@ -11,6 +11,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Oracle PL/SQL anonymous blocks (`DECLARE ... BEGIN ... EXCEPTION ... END;`) parse and
+  format, including `IF`/`ELSE`, `SELECT ... INTO :bind`, and structured `EXCEPTION WHEN`
+  sections. `EXCEPTION` and `CURSOR` are reserved under PL/SQL; Snowflake/Databricks unchanged.
 - Placeholder substitution (`params`): `sql-dialect-fmt-formatter::substitute_params` and
   `format_with_params` replace recognized placeholders (`?`, `?n`, `$n`, `:name`, `@name`) with
   supplied values in order of appearance. The CLI exposes `--param VALUE` (repeatable) and
