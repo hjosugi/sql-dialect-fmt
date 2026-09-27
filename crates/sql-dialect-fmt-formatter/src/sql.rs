@@ -131,7 +131,7 @@ fn lower_source_impl(
         let lowered = lower_stmt(&stmt, ctx, statement_bodies);
         parts.push(lowered.body);
         // A `GO` batch separator is a bare line, not a semicolon-terminated statement.
-        if stmt.kind() != GO_STMT {
+        if !matches!(stmt.kind(), GO_STMT | TEMPLATE_STMT) {
             if ctx.newline_before_semicolon {
                 parts.push(hard_line());
             }

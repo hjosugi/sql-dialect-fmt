@@ -1967,3 +1967,12 @@ fn custom_placeholders_format_and_substitute() {
         "SELECT\n  42\nFROM t;\n"
     );
 }
+
+#[test]
+fn jinja_control_tags_are_statement_boundaries() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let options = FormatOptions::default().with_dialect(Dialect::PostgreSql);
+    let once = format("{% if x %}\nselect a from t\n{% endif %}", &options);
+    assert_eq!(once, "{% if x %}\nSELECT\n  a\nFROM t;\n{% endif %}\n");
+    assert_eq!(format(&once, &options), once);
+}

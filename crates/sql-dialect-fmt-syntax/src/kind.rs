@@ -22,8 +22,9 @@ pub enum SyntaxKind {
     FILE_URI,      // unquoted file:// URI used by Snowflake PUT / GET
     INT_NUMBER,
     FLOAT_NUMBER,
-    VARIABLE,    // $1, $42 (positional)  or  $name (session/binding)
-    PLACEHOLDER, // ${ ... } template-substitution placeholder (JS template literals, Databricks /
+    VARIABLE,     // $1, $42 (positional)  or  $name (session/binding)
+    PLACEHOLDER,  // ${ ... } / {{ ... }} template-substitution placeholder
+    TEMPLATE_TAG, // {% ... %} Jinja/dbt control tag (a statement boundary) (JS template literals, Databricks /
     // Spark / dbt variable substitution). Lexed as one atomic token with balanced
     // nested braces so embedded-in-source SQL still formats and highlights.
 
@@ -315,8 +316,9 @@ pub enum SyntaxKind {
     VALUES_ROW,
     // Phase 6: DML statements
     INSERT_STMT,
-    REPLACE_STMT, // MySQL-family `REPLACE [INTO] t ...`
-    GO_STMT,      // Transact-SQL `GO` batch separator
+    REPLACE_STMT,  // MySQL-family `REPLACE [INTO] t ...`
+    GO_STMT,       // Transact-SQL `GO` batch separator
+    TEMPLATE_STMT, // a `{% ... %}` Jinja/dbt control tag standing as its own statement
     UPDATE_STMT,
     DELETE_STMT,
     MERGE_STMT,

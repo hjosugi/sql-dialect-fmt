@@ -56,6 +56,12 @@ pub(crate) fn source_file(p: &mut Parser) {
         if p.at(SEMICOLON) {
             p.bump(SEMICOLON); // statement separator / empty statement
             need_separator = false;
+        } else if p.at(TEMPLATE_TAG) {
+            // A `{% … %}` control tag is its own statement and a boundary: no `;` needed around it.
+            let m = p.start();
+            p.bump(TEMPLATE_TAG);
+            m.complete(p, TEMPLATE_STMT);
+            need_separator = false;
         } else if p.dialect().supports_go_batch() && p.nth_contextual(0, ContextualKeyword::Go) {
             // Transact-SQL batch separator: `GO` alone on a line, no terminator.
             let m = p.start();
@@ -83,7 +89,10 @@ pub(crate) fn source_file(p: &mut Parser) {
 /// statement. Lenient statement parsers consult this so `->>` is left for `stmt::statement_or_flow`
 /// instead of being swallowed into the preceding flat token run.
 fn at_stmt_terminator(p: &Parser) -> bool {
-    p.at(SEMICOLON) || (p.dialect().supports_flow_operator() && p.at(FLOW_PIPE)) || p.at_eof()
+    p.at(SEMICOLON)
+        || p.at(TEMPLATE_TAG)
+        || (p.dialect().supports_flow_operator() && p.at(FLOW_PIPE))
+        || p.at_eof()
 }
 
 // ---- names ----

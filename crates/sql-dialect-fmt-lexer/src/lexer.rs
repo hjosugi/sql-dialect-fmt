@@ -195,12 +195,15 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 }
                 // Jinja / dbt `{{ ... }}` expression tags are lexed as one atomic placeholder so
                 // templated SQL still parses, formats, and highlights. (`${ ... }` is handled above.)
-                // Control blocks (`{% ... %}`) are intentionally not special-cased: they cannot be
-                // formatted as SQL, so they stay a parse error and the statement passes through
-                // verbatim rather than having a `;` invented inside the block.
+                // Control tags (`{% ... %}`) become their own `TEMPLATE_TAG` token so the parser can
+                // treat them as statement boundaries (see `TEMPLATE_STMT`) instead of inventing a `;`.
                 b'{' if self.peek_at(1) == b'{' => {
                     self.template_placeholder(start, b"{{", b"}}");
                     self.push(SyntaxKind::PLACEHOLDER, start);
+                }
+                b'{' if self.peek_at(1) == b'%' => {
+                    self.template_placeholder(start, b"{%", b"%}");
+                    self.push(SyntaxKind::TEMPLATE_TAG, start);
                 }
                 b'#' if self.options.dialect.supports_hash_line_comments() => {
                     self.line_comment_from(1);

@@ -357,3 +357,11 @@ fn jinja_expression_tag_is_one_placeholder() {
         vec![(PLACEHOLDER, "{{ col }}")]
     );
 }
+
+#[test]
+fn jinja_control_tag_is_one_template_tag() {
+    assert_eq!(
+        non_trivia_for("{% if x %}", Dialect::BigQuery),
+        vec![(TEMPLATE_TAG, "{% if x %}")]
+    );
+}

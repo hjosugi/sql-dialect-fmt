@@ -34,6 +34,7 @@ pub(super) fn at_stmt_start(p: &Parser) -> bool {
 
 pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
     p.at(SELECT_KW)
+        || p.at(TEMPLATE_TAG)
         || (p.dialect().supports_from_first() && p.at(FROM_KW))
         || p.at(WITH_KW)
         || p.at(VALUES_KW)
@@ -68,7 +69,9 @@ pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
 }
 
 pub(super) fn statement(p: &mut Parser) {
-    if p.at(WITH_KW) {
+    if p.at(TEMPLATE_TAG) {
+        template_tag_stmt(p);
+    } else if p.at(WITH_KW) {
         super::with_query(p);
     } else if p.dialect().supports_from_first() && p.at(FROM_KW) {
         super::query::from_first_select(p);
@@ -220,4 +223,11 @@ fn execute_stmt(p: &mut Parser) {
         }
     }
     m.complete(p, EXECUTE_STMT);
+}
+
+/// A `{% … %}` Jinja/dbt control tag standing as its own statement (no terminator).
+fn template_tag_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(TEMPLATE_TAG);
+    m.complete(p, TEMPLATE_STMT);
 }
