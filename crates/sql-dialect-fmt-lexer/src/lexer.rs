@@ -195,17 +195,12 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.hash_ident();
                     self.push(SyntaxKind::IDENT, start);
                 }
-                b'@' if self.options.dialect.supports_at_variables()
-                    && (is_ident_start(self.peek_at(1)) || self.peek_at(1) == b'@') =>
-                {
-                    self.at_variable();
+                b'@' if self.at_parameter_at() => {
+                    self.at_parameter();
                     self.push(SyntaxKind::VARIABLE, start);
                 }
-                b':' if self.options.dialect.supports_colon_variables()
-                    && is_ident_start(self.peek_at(1)) =>
-                {
-                    self.pos += 1; // :
-                    self.eat_while(is_ident_continue);
+                b':' if self.colon_parameter_at() => {
+                    self.colon_parameter();
                     self.push(SyntaxKind::VARIABLE, start);
                 }
                 // `${ ... }` template-substitution placeholder. A `$` immediately followed by `{`
@@ -220,11 +215,8 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 }
                 // $1 / $name variables (but not body delimiters, handled above). Gated on dollar
                 // quoting so non-Snowflake dialects lex a bare `$` as the DOLLAR operator instead.
-                b'$' if dollar_quoting
-                    && (is_ident_start(self.peek_at(1)) || self.peek_at(1).is_ascii_digit()) =>
-                {
-                    self.pos += 1; // $
-                    self.eat_while(is_ident_continue);
+                b'$' if self.dollar_parameter_at() => {
+                    self.dollar_parameter();
                     self.push(SyntaxKind::VARIABLE, start);
                 }
                 c if c.is_ascii_digit() => self.number(start),
@@ -363,13 +355,82 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
         self.eat_while(is_ident_continue);
     }
 
-    /// Consume a Transact-SQL / MySQL `@name` or `@@name` variable.
-    fn at_variable(&mut self) {
+    /// Effective placeholder spellings for this lex.
+    fn param_types(&self) -> crate::ParamTypes {
+        self.options.effective_param_types()
+    }
+
+    /// Whether the cursor is on a recognized `@` placeholder (`@name`, `@@global`, `@"name"`).
+    fn at_parameter_at(&self) -> bool {
+        let param_types = self.param_types();
+        let next = self.peek_at(1);
+        (param_types.named_at && (is_ident_start(next) || next == b'@'))
+            || (param_types.quoted_at && next == b'"')
+    }
+
+    /// Consume a recognized `@` placeholder.
+    fn at_parameter(&mut self) {
         self.pos += 1; // @
         if self.peek() == b'@' {
-            self.pos += 1;
+            self.pos += 1; // @@global
         }
-        self.eat_while(is_ident_continue);
+        if self.peek() == b'"' {
+            self.quoted_parameter_body();
+        } else {
+            self.eat_while(is_ident_continue);
+        }
+    }
+
+    /// Whether the cursor is on a recognized `:` placeholder (`:name`, `:1`, `:"name"`).
+    fn colon_parameter_at(&self) -> bool {
+        let param_types = self.param_types();
+        let next = self.peek_at(1);
+        if next == b':' || next == b'=' {
+            return false; // `::` cast / `:=` assignment
+        }
+        (param_types.named_colon && is_ident_start(next))
+            || (param_types.numbered_colon && next.is_ascii_digit())
+            || (param_types.quoted_colon && next == b'"')
+    }
+
+    /// Consume a recognized `:` placeholder.
+    fn colon_parameter(&mut self) {
+        self.pos += 1; // :
+        if self.peek() == b'"' {
+            self.quoted_parameter_body();
+        } else {
+            self.eat_while(is_ident_continue);
+        }
+    }
+
+    /// Whether the cursor is on a recognized `$` placeholder (`$name`, `$1`, `$"name"`).
+    fn dollar_parameter_at(&self) -> bool {
+        let param_types = self.param_types();
+        let next = self.peek_at(1);
+        (param_types.named_dollar && is_ident_start(next))
+            || (param_types.numbered_dollar && next.is_ascii_digit())
+            || (param_types.quoted_dollar && next == b'"')
+    }
+
+    /// Consume a recognized `$` placeholder.
+    fn dollar_parameter(&mut self) {
+        self.pos += 1; // $
+        if self.peek() == b'"' {
+            self.quoted_parameter_body();
+        } else {
+            self.eat_while(is_ident_continue);
+        }
+    }
+
+    /// Consume a `"..."` body of a quoted placeholder (`:"name"`, `@"name"`, `$"name"`). Lossless:
+    /// unterminated input simply consumes to the end.
+    fn quoted_parameter_body(&mut self) {
+        self.pos += 1; // opening "
+        while !self.at_end() {
+            if self.bump() == b'"' && self.peek() != b'"' {
+                break;
+            }
+        }
     }
 
     /// When the cursor is on a dialect-specific string prefix letter (`e`, `n`, `x`, `b`, `r`)

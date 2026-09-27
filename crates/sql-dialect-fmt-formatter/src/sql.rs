@@ -75,6 +75,8 @@ pub(crate) struct Ctx {
     pub lines_between_queries: Option<usize>,
     /// Bound on the flat width of a parenthesized expression (`None` uses `line_width`).
     pub expression_width: Option<usize>,
+    /// Override for recognized placeholder spellings (`None` uses the dialect default).
+    pub param_types: Option<sql_dialect_fmt_lexer::ParamTypes>,
     /// The SQL dialect being formatted. Used to parse the source with matching grammar/lexing
     /// rules; dialect-specific lowering will gate on this in later phases.
     pub dialect: Dialect,

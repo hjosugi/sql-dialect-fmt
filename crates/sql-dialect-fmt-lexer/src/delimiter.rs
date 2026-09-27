@@ -8,6 +8,8 @@
 
 use sql_dialect_fmt_syntax::Dialect;
 
+use crate::ParamTypes;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BodyDelimiter {
     pub name: &'static str,
@@ -43,6 +45,9 @@ pub struct LexOptions<'cfg> {
     /// The SQL dialect being lexed. Drives quoting and special-token behavior (`$$`/`$n`, `@stage`)
     /// so the same lexer can serve multiple dialects. Defaults to [`Dialect::Snowflake`].
     pub dialect: Dialect,
+    /// Overrides which placeholder spellings are recognized. `None` uses
+    /// [`ParamTypes::for_dialect`] for [`LexOptions::dialect`].
+    pub param_types: Option<ParamTypes>,
 }
 
 impl Default for LexOptions<'static> {
@@ -50,6 +55,7 @@ impl Default for LexOptions<'static> {
         LexOptions {
             body_delimiters: DEFAULT_BODY_DELIMITERS,
             dialect: Dialect::default(),
+            param_types: None,
         }
     }
 }
@@ -60,5 +66,19 @@ impl<'cfg> LexOptions<'cfg> {
     pub fn with_dialect(mut self, dialect: Dialect) -> Self {
         self.dialect = dialect;
         self
+    }
+
+    /// Override the recognized placeholder spellings, returning the updated options.
+    #[must_use]
+    pub fn with_param_types(mut self, param_types: Option<ParamTypes>) -> Self {
+        self.param_types = param_types;
+        self
+    }
+
+    /// The effective placeholder types (the override, or the dialect default).
+    #[must_use]
+    pub fn effective_param_types(&self) -> ParamTypes {
+        self.param_types
+            .unwrap_or_else(|| ParamTypes::for_dialect(self.dialect))
     }
 }

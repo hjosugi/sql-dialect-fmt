@@ -177,7 +177,7 @@
 - ✅ Wasm ABI v2（`sql_dialect_fmt_format_with_options_v2`）と VS Code 設定（dataTypeCase/functionCase/identifierCase/logicalOperatorNewline/denseOperators/useTabs/newlineBeforeSemicolon/linesBetweenQueries/expressionWidth）、方言一覧（別名含む）を配線。拡張は v2 を優先し v1 に fallback
 - ✅ playground（docs-site）に全オプション UI を追加（全 21 方言、v2 ABI 優先・v1 フォールバック）
 - ✅ `params`：プレースホルダ置換（`substitute_params`/`format_with_params`、CLI `--param`、config `params`）
-- ⏳ `param_types`（positional/numbered/named/quoted/custom）で認識するプレースホルダ種別を制御（現状は dialect 依存）、プレイグラウンド UI は対応済み、`sql-formatter.toml` 相当の JSON schema
+- ✅ `param_types`：認識するプレースホルダ種別を config で制御（positional/named/numbered/quoted の各 flag、未設定は dialect 依存）。custom regex は対応外
 - 📝 `expression_width` は現状、括弧付きリスト（関数引数 ARG_LIST・`IN (...)`・`VALUES`・列リスト等）の flat 幅上限として適用する。`(expr)` グルーピングの構造的折返しは今後の formatter 改修で対応
 
 ---

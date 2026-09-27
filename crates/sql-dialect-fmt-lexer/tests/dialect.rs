@@ -291,3 +291,61 @@ fn every_dialect_lexes_a_mixed_sample_losslessly() {
         assert_eq!(joined, sample, "lossless round-trip failed for {dialect:?}");
     }
 }
+
+#[test]
+fn param_types_override_placeholder_recognition() {
+    use sql_dialect_fmt_lexer::{tokenize_with_options, LexOptions, ParamTypes};
+
+    // MySQL does not recognize `:name` natively...
+    assert!(
+        tokenize_for_dialect(":name", Dialect::MySql)
+            .tokens
+            .iter()
+            .filter(|t| !t.kind.is_trivia())
+            .count()
+            > 1
+    );
+
+    // ...but a `param_types` override does (named colon).
+    let param_types = ParamTypes {
+        named_colon: true,
+        ..ParamTypes::for_dialect(Dialect::MySql)
+    };
+    let lexed = tokenize_with_options(
+        ":name",
+        LexOptions::default()
+            .with_dialect(Dialect::MySql)
+            .with_param_types(Some(param_types)),
+    );
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    assert_eq!(
+        lexed
+            .tokens
+            .iter()
+            .filter(|t| !t.kind.is_trivia())
+            .map(|t| (t.kind, t.text))
+            .collect::<Vec<_>>(),
+        vec![(VARIABLE, ":name")]
+    );
+
+    // Quoted placeholders become one token too.
+    let quoted = ParamTypes {
+        quoted_colon: true,
+        ..ParamTypes::for_dialect(Dialect::MySql)
+    };
+    let lexed = tokenize_with_options(
+        ":\"a b\"",
+        LexOptions::default()
+            .with_dialect(Dialect::MySql)
+            .with_param_types(Some(quoted)),
+    );
+    assert_eq!(
+        lexed
+            .tokens
+            .iter()
+            .filter(|t| !t.kind.is_trivia())
+            .map(|t| (t.kind, t.text))
+            .collect::<Vec<_>>(),
+        vec![(VARIABLE, ":\"a b\"")]
+    );
+}

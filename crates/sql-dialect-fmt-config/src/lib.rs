@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Deserializer};
 use sql_dialect_fmt_formatter::{
-    CommaStyle, FormatOptions, KeywordCase, LineEnding, LogicalOperatorNewline, SelectItemLayout,
+    CommaStyle, FormatOptions, KeywordCase, LineEnding, LogicalOperatorNewline, ParamTypes,
+    SelectItemLayout,
 };
 use sql_dialect_fmt_parser::Dialect;
 
@@ -71,9 +72,52 @@ pub struct Config {
     /// Placeholder values applied after formatting (`--param` overrides/extend these).
     #[serde(default)]
     pub params: Vec<String>,
+    /// Which placeholder spellings the lexer recognizes (overrides the dialect default).
+    pub param_types: Option<ParamTypesSpec>,
     /// Glob patterns skipped during recursive directory discovery.
     #[serde(default)]
     pub exclude: Vec<String>,
+}
+
+/// `[param_types]` overrides. Every flag is optional; unset flags keep the dialect's native answer.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
+pub struct ParamTypesSpec {
+    pub positional: Option<bool>,
+    pub numbered_question: Option<bool>,
+    pub numbered_colon: Option<bool>,
+    pub numbered_dollar: Option<bool>,
+    pub named_colon: Option<bool>,
+    pub named_at: Option<bool>,
+    pub named_dollar: Option<bool>,
+    pub quoted_colon: Option<bool>,
+    pub quoted_at: Option<bool>,
+    pub quoted_dollar: Option<bool>,
+}
+
+impl ParamTypesSpec {
+    fn apply_to(&self, dialect: Dialect) -> ParamTypes {
+        let mut param_types = ParamTypes::for_dialect(dialect);
+        for (flag, value) in [
+            ("positional", self.positional),
+            ("numbered_question", self.numbered_question),
+            ("numbered_colon", self.numbered_colon),
+            ("numbered_dollar", self.numbered_dollar),
+            ("named_colon", self.named_colon),
+            ("named_at", self.named_at),
+            ("named_dollar", self.named_dollar),
+            ("quoted_colon", self.quoted_colon),
+            ("quoted_at", self.quoted_at),
+            ("quoted_dollar", self.quoted_dollar),
+        ] {
+            if let Some(value) = value {
+                param_types = param_types
+                    .with_flag(flag, value)
+                    .expect("field names match ParamTypes::FLAGS");
+            }
+        }
+        param_types
+    }
 }
 
 /// Parse a dialect name (canonical or alias) into a [`Dialect`].
@@ -321,6 +365,9 @@ impl Config {
         if let Some(dialect) = self.dialect {
             options.dialect = dialect;
         }
+        if let Some(spec) = &self.param_types {
+            *options = (*options).with_param_types(Some(spec.apply_to(options.dialect)));
+        }
     }
 }
 
@@ -486,6 +533,24 @@ mod tests {
         // Aliases people actually type.
         assert_eq!(parse_dialect("oracle").as_ref(), Ok(&Dialect::PlSql));
         assert_eq!(parse_dialect("tsql").as_ref(), Ok(&Dialect::TransactSql));
+    }
+
+    #[test]
+    fn param_types_overrides_are_parsed_and_applied() {
+        let cfg = Config::parse("dialect = \"mysql\"\n[param_types]\nnamed_colon = true\n")
+            .expect("valid");
+        let mut options = FormatOptions::default();
+        cfg.apply_to(&mut options);
+        let param_types = options.param_types.expect("param_types set");
+        assert!(param_types.named_colon);
+        // Unset flags keep the dialect default.
+        assert!(!param_types.named_dollar);
+        assert!(param_types.named_at);
+    }
+
+    #[test]
+    fn invalid_param_types_flag_is_rejected() {
+        assert!(Config::parse("[param_types]\nnonsense = true\n").is_err());
     }
 
     #[test]

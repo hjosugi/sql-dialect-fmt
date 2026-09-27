@@ -541,7 +541,12 @@ fn format_embedded_sql_body_token(text: &str, ctx: Ctx) -> Option<String> {
     if text.starts_with('\'') && !is_sql_scripting_body(source) {
         return None;
     }
-    let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(source, ctx.dialect);
+    let lexed = sql_dialect_fmt_lexer::tokenize_with_options(
+        source,
+        sql_dialect_fmt_lexer::LexOptions::default()
+            .with_dialect(ctx.dialect)
+            .with_param_types(ctx.param_types),
+    );
     if !lexed.errors.is_empty()
         || lexed.tokens.iter().any(|token| {
             !token.kind.is_trivia() && crate::multiline_token_has_line_trailing_space(token.text)

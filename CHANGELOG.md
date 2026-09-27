@@ -9,6 +9,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- `param_types`: `sql-dialect-fmt.toml` can override which placeholder spellings the lexer
+  recognizes (`positional`, `named_colon`/`named_at`/`named_dollar`,
+  `numbered_question`/`numbered_colon`/`numbered_dollar`,
+  `quoted_colon`/`quoted_at`/`quoted_dollar`). Unset flags keep the dialect's native answer.
+
 ## [1.24.0] - 2026-09-27
 
 ### Added

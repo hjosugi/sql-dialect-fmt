@@ -5,7 +5,7 @@
 //! meaningful token stream. Keeping that pipeline here prevents formatter orchestration from
 //! accumulating lexer-specific postconditions.
 
-use sql_dialect_fmt_lexer::{tokenize_for_dialect, Lexed, Token};
+use sql_dialect_fmt_lexer::{tokenize_with_options, LexOptions, Lexed, ParamTypes, Token};
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind, SyntaxNode, SyntaxToken};
 
 use crate::LineEnding;
@@ -50,8 +50,13 @@ impl OutputGuard {
     }
 
     /// Whether `candidate` is lexically valid and preserves every meaningful source token.
-    pub(crate) fn accepts(&self, candidate: &str, dialect: Dialect) -> bool {
-        let lexed = tokenize_for_dialect(candidate, dialect);
+    pub(crate) fn accepts(
+        &self,
+        candidate: &str,
+        dialect: Dialect,
+        param_types: Option<ParamTypes>,
+    ) -> bool {
+        let lexed = lex(candidate, dialect, param_types);
         if !lexed.errors.is_empty() || self.source.len() != self.may_rewrite_text.len() {
             return false;
         }
@@ -78,8 +83,23 @@ pub(crate) fn finalize_candidate(
     source: &str,
     line_ending: LineEnding,
     dialect: Dialect,
+    param_types: Option<ParamTypes>,
 ) -> String {
-    separate_adjacent_comments(apply_line_ending(printed, source, line_ending), dialect)
+    separate_adjacent_comments(
+        apply_line_ending(printed, source, line_ending),
+        dialect,
+        param_types,
+    )
+}
+
+/// Tokenize with the same placeholder settings the formatter used.
+fn lex(source: &str, dialect: Dialect, param_types: Option<ParamTypes>) -> Lexed<'_> {
+    tokenize_with_options(
+        source,
+        LexOptions::default()
+            .with_dialect(dialect)
+            .with_param_types(param_types),
+    )
 }
 
 /// Check only token kinds. Used after enabled and verbatim directive regions are concatenated: each
@@ -89,12 +109,13 @@ pub(crate) fn preserves_meaningful_token_kinds(
     source: &str,
     candidate: &str,
     dialect: Dialect,
+    param_types: Option<ParamTypes>,
 ) -> bool {
     if source == candidate {
         return true;
     }
-    let source = tokenize_for_dialect(source, dialect);
-    let candidate = tokenize_for_dialect(candidate, dialect);
+    let source = lex(source, dialect, param_types);
+    let candidate = lex(candidate, dialect, param_types);
     source.errors.is_empty()
         && candidate.errors.is_empty()
         && meaningful_tokens(&source)
@@ -141,8 +162,12 @@ fn is_meaningful(kind: SyntaxKind) -> bool {
 /// lexically valid (`+-- comment` is still PLUS + COMMENT) but the next formatting pass inserts a
 /// space, violating the fixed-point contract. Reconstructing from the lossless token stream keeps
 /// quoted text untouched and handles both line and block comments without scanning their spelling.
-fn separate_adjacent_comments(formatted: String, dialect: Dialect) -> String {
-    let lexed = tokenize_for_dialect(&formatted, dialect);
+fn separate_adjacent_comments(
+    formatted: String,
+    dialect: Dialect,
+    param_types: Option<ParamTypes>,
+) -> String {
+    let lexed = lex(&formatted, dialect, param_types);
     if !lexed.errors.is_empty() {
         return formatted;
     }
@@ -181,18 +206,18 @@ mod tests {
     #[test]
     fn guard_rejects_kind_and_text_changes_but_allows_one_explicit_rewrite() {
         let source = "select 'original'";
-        let lexed = tokenize_for_dialect(source, Dialect::Snowflake);
+        let lexed = lex(source, Dialect::Snowflake, None);
         let mut guard = OutputGuard::from_lexed(&lexed);
 
-        assert!(guard.accepts("SELECT 'original';\n", Dialect::Snowflake));
-        assert!(!guard.accepts("SELECT 'changed';\n", Dialect::Snowflake));
-        assert!(!guard.accepts("SELECT 1;\n", Dialect::Snowflake));
+        assert!(guard.accepts("SELECT 'original';\n", Dialect::Snowflake, None));
+        assert!(!guard.accepts("SELECT 'changed';\n", Dialect::Snowflake, None));
+        assert!(!guard.accepts("SELECT 1;\n", Dialect::Snowflake, None));
 
         let parse = sql_dialect_fmt_parser::parse(source);
         guard.record_text_rewrite_permissions(&parse.syntax(), |token| {
             token.kind() == SyntaxKind::STRING
         });
-        assert!(guard.accepts("SELECT 'changed';\n", Dialect::Snowflake));
+        assert!(guard.accepts("SELECT 'changed';\n", Dialect::Snowflake, None));
     }
 
     #[test]
@@ -202,7 +227,8 @@ mod tests {
                 "+-- note\n",
                 "+\n-- note",
                 LineEnding::Auto,
-                Dialect::Databricks
+                Dialect::Databricks,
+                None
             ),
             "+ -- note\n"
         );
@@ -213,12 +239,14 @@ mod tests {
         assert!(preserves_meaningful_token_kinds(
             "select a",
             "SELECT a;\n",
-            Dialect::Snowflake
+            Dialect::Snowflake,
+            None
         ));
         assert!(!preserves_meaningful_token_kinds(
             "select a",
             "SELECT b + a;\n",
-            Dialect::Snowflake
+            Dialect::Snowflake,
+            None
         ));
     }
 

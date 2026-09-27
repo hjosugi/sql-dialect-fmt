@@ -745,7 +745,12 @@ fn format_decoded_with_diagnostics(
     let formatted = if params.is_empty() {
         result.formatted
     } else {
-        sql_dialect_fmt_formatter::substitute_params(&result.formatted, options.dialect, params)
+        sql_dialect_fmt_formatter::substitute_params_with(
+            &result.formatted,
+            options.dialect,
+            options.param_types,
+            params,
+        )
     };
     FormattedBytes {
         bytes: decoded.map_text(|_| formatted).encode(),

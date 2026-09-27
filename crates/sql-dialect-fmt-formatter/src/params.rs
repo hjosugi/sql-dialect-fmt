@@ -12,7 +12,7 @@
 //! Values are inserted verbatim, so callers pass already-quoted SQL (for example `"'bar'"`).
 //! Placeholders beyond the supplied values are left untouched.
 
-use sql_dialect_fmt_lexer::{tokenize_for_dialect, SyntaxKind};
+use sql_dialect_fmt_lexer::{tokenize_with_options, LexOptions, ParamTypes, SyntaxKind};
 use sql_dialect_fmt_syntax::Dialect;
 
 /// Replace recognized placeholders in `formatted` with `params`, in order of appearance.
@@ -20,11 +20,27 @@ use sql_dialect_fmt_syntax::Dialect;
 /// Returns `formatted` unchanged when `params` is empty.
 #[must_use]
 pub fn substitute_params(formatted: &str, dialect: Dialect, params: &[String]) -> String {
+    substitute_params_with(formatted, dialect, None, params)
+}
+
+/// Like [`substitute_params`], but with an explicit placeholder-recognition override.
+#[must_use]
+pub fn substitute_params_with(
+    formatted: &str,
+    dialect: Dialect,
+    param_types: Option<ParamTypes>,
+    params: &[String],
+) -> String {
     if params.is_empty() {
         return formatted.to_string();
     }
 
-    let lexed = tokenize_for_dialect(formatted, dialect);
+    let lexed = tokenize_with_options(
+        formatted,
+        LexOptions::default()
+            .with_dialect(dialect)
+            .with_param_types(param_types),
+    );
     let tokens = &lexed.tokens;
 
     let mut out = String::with_capacity(formatted.len());

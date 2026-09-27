@@ -28,8 +28,9 @@ mod sql;
 
 #[doc(inline)]
 pub use doc::{print, Doc, PrintOptions};
-pub use params::substitute_params;
+pub use params::{substitute_params, substitute_params_with};
 pub use range::{format_range, RangeEdit};
+pub use sql_dialect_fmt_lexer::ParamTypes;
 use sql_dialect_fmt_parser::ParseError;
 pub use sql_dialect_fmt_syntax::Dialect;
 
@@ -147,6 +148,9 @@ pub struct FormatOptions {
     /// Maximum flat length a parenthesized expression may occupy before it must wrap. `None` uses
     /// [`FormatOptions::line_width`].
     pub expression_width: Option<usize>,
+    /// Overrides which placeholder spellings the lexer recognizes. `None` uses the dialect's native
+    /// forms (see [`ParamTypes`]).
+    pub param_types: Option<ParamTypes>,
     /// The SQL dialect to parse and format. Defaults to [`Dialect::Snowflake`].
     pub dialect: Dialect,
 }
@@ -170,6 +174,7 @@ impl Default for FormatOptions {
             newline_before_semicolon: false,
             lines_between_queries: None,
             expression_width: None,
+            param_types: None,
             dialect: Dialect::Snowflake,
         }
     }
@@ -293,6 +298,13 @@ impl FormatOptions {
         self
     }
 
+    /// Override which placeholder spellings the lexer recognizes.
+    #[must_use]
+    pub fn with_param_types(mut self, param_types: Option<ParamTypes>) -> Self {
+        self.param_types = param_types;
+        self
+    }
+
     /// Choose whether indentation uses tab characters.
     #[must_use]
     pub fn with_use_tabs(mut self, use_tabs: bool) -> Self {
@@ -332,6 +344,7 @@ impl FormatOptions {
             newline_before_semicolon: self.newline_before_semicolon,
             lines_between_queries: self.lines_between_queries,
             expression_width: self.expression_width,
+            param_types: self.param_types,
             dialect: self.dialect,
         }
     }
@@ -368,7 +381,12 @@ pub fn format(source: &str, options: &FormatOptions) -> String {
 /// Format SQL, then replace recognized parameter placeholders with `params` in order of
 /// appearance (the `params` option). See [`substitute_params`].
 pub fn format_with_params(source: &str, options: &FormatOptions, params: &[String]) -> String {
-    substitute_params(&format(source, options), options.dialect, params)
+    substitute_params_with(
+        &format(source, options),
+        options.dialect,
+        options.param_types,
+        params,
+    )
 }
 
 /// Format SQL and return parse diagnostics from the same lex/parse pass.
@@ -377,7 +395,12 @@ pub fn format_with_diagnostics(source: &str, options: &FormatOptions) -> FormatR
         // Region formatting assembles several independently safe documents with verbatim spans.
         // Validate their final concatenation too, because a boundary between regions can still
         // place two punctuation tokens beside each other.
-        if !output::preserves_meaningful_token_kinds(source, &result.formatted, options.dialect) {
+        if !output::preserves_meaningful_token_kinds(
+            source,
+            &result.formatted,
+            options.dialect,
+            options.param_types,
+        ) {
             result.formatted = source.to_string();
         }
         return result;
@@ -391,7 +414,12 @@ fn format_plain_with_diagnostics(
     base_offset: usize,
 ) -> FormatResult {
     let ctx = options.ctx();
-    let lexed = sql_dialect_fmt_lexer::tokenize_for_dialect(source, ctx.dialect);
+    let lexed = sql_dialect_fmt_lexer::tokenize_with_options(
+        source,
+        sql_dialect_fmt_lexer::LexOptions::default()
+            .with_dialect(ctx.dialect)
+            .with_param_types(ctx.param_types),
+    );
     let has_lex_errors = !lexed.errors.is_empty();
     let mut output_guard = OutputGuard::from_lexed(&lexed);
     let has_multiline_trailing_space = lexed.tokens.iter().any(|token| {
@@ -422,8 +450,14 @@ fn format_plain_with_diagnostics(
         sql::lower_source(&root, ctx)
     };
     let printed = print(&doc, &options.print_options());
-    let formatted = output::finalize_candidate(&printed, source, options.line_ending, ctx.dialect);
-    if !output_guard.accepts(&formatted, ctx.dialect) {
+    let formatted = output::finalize_candidate(
+        &printed,
+        source,
+        options.line_ending,
+        ctx.dialect,
+        ctx.param_types,
+    );
+    if !output_guard.accepts(&formatted, ctx.dialect, ctx.param_types) {
         return FormatResult {
             formatted: source.to_string(),
             parse_errors,
