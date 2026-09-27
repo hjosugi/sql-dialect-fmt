@@ -31,7 +31,8 @@ use ignore::WalkBuilder;
 use rayon::prelude::*;
 use sql_dialect_fmt_encoding::DecodedText;
 use sql_dialect_fmt_formatter::{
-    format_range, CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+    format_range, CommaStyle, FormatOptions, KeywordCase, LineEnding, LogicalOperatorNewline,
+    SelectItemLayout,
 };
 use sql_dialect_fmt_lint::LintOptions;
 use sql_dialect_fmt_parser::{Dialect, ParseError};
@@ -96,6 +97,15 @@ struct Overrides {
     indent_width: Option<usize>,
     uppercase_keywords: Option<bool>,
     keyword_case: Option<KeywordCase>,
+    data_type_case: Option<KeywordCase>,
+    function_case: Option<KeywordCase>,
+    identifier_case: Option<KeywordCase>,
+    logical_operator_newline: Option<LogicalOperatorNewline>,
+    dense_operators: Option<bool>,
+    use_tabs: Option<bool>,
+    newline_before_semicolon: Option<bool>,
+    lines_between_queries: Option<usize>,
+    expression_width: Option<usize>,
     line_ending: Option<LineEnding>,
     select_item_layout: Option<SelectItemLayout>,
     comma_style: Option<CommaStyle>,
@@ -115,6 +125,33 @@ impl Overrides {
         }
         if let Some(keyword_case) = self.keyword_case {
             *options = (*options).with_keyword_case(keyword_case);
+        }
+        if let Some(data_type_case) = self.data_type_case {
+            *options = (*options).with_data_type_case(data_type_case);
+        }
+        if let Some(function_case) = self.function_case {
+            *options = (*options).with_function_case(function_case);
+        }
+        if let Some(identifier_case) = self.identifier_case {
+            *options = (*options).with_identifier_case(identifier_case);
+        }
+        if let Some(logical_operator_newline) = self.logical_operator_newline {
+            *options = (*options).with_logical_operator_newline(logical_operator_newline);
+        }
+        if let Some(dense_operators) = self.dense_operators {
+            *options = (*options).with_dense_operators(dense_operators);
+        }
+        if let Some(use_tabs) = self.use_tabs {
+            *options = (*options).with_use_tabs(use_tabs);
+        }
+        if let Some(newline_before_semicolon) = self.newline_before_semicolon {
+            *options = (*options).with_newline_before_semicolon(newline_before_semicolon);
+        }
+        if let Some(lines_between_queries) = self.lines_between_queries {
+            *options = (*options).with_lines_between_queries(Some(lines_between_queries));
+        }
+        if let Some(expression_width) = self.expression_width {
+            *options = (*options).with_expression_width(Some(expression_width));
         }
         if let Some(line_ending) = self.line_ending {
             options.line_ending = line_ending;
@@ -831,6 +868,35 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
             "--keyword-case" => {
                 overrides.keyword_case = Some(take_keyword_case(&mut args, "--keyword-case")?)
             }
+            "--data-type-case" => {
+                overrides.data_type_case = Some(take_data_type_case(&mut args, "--data-type-case")?)
+            }
+            "--function-case" => {
+                overrides.function_case = Some(take_function_case(&mut args, "--function-case")?)
+            }
+            "--identifier-case" => {
+                overrides.identifier_case =
+                    Some(take_identifier_case(&mut args, "--identifier-case")?)
+            }
+            "--logical-operator-newline" => {
+                overrides.logical_operator_newline = Some(take_logical_operator_newline(
+                    &mut args,
+                    "--logical-operator-newline",
+                )?)
+            }
+            "--dense-operators" => overrides.dense_operators = Some(true),
+            "--no-dense-operators" => overrides.dense_operators = Some(false),
+            "--use-tabs" => overrides.use_tabs = Some(true),
+            "--no-use-tabs" => overrides.use_tabs = Some(false),
+            "--newline-before-semicolon" => overrides.newline_before_semicolon = Some(true),
+            "--no-newline-before-semicolon" => overrides.newline_before_semicolon = Some(false),
+            "--lines-between-queries" => {
+                overrides.lines_between_queries =
+                    Some(take_usize(&mut args, "--lines-between-queries")?)
+            }
+            "--expression-width" => {
+                overrides.expression_width = Some(take_usize(&mut args, "--expression-width")?)
+            }
             "--line-ending" => {
                 overrides.line_ending = Some(take_line_ending(&mut args, "--line-ending")?)
             }
@@ -868,6 +934,25 @@ fn parse_args<I: IntoIterator<Item = OsString>>(raw: I) -> Result<Parsed, String
                         "--dialect" => overrides.dialect = Some(parse_dialect_flag(value)?),
                         "--keyword-case" => {
                             overrides.keyword_case = Some(parse_keyword_case_flag(value)?)
+                        }
+                        "--data-type-case" => {
+                            overrides.data_type_case = Some(parse_data_type_case_flag(value)?)
+                        }
+                        "--function-case" => {
+                            overrides.function_case = Some(parse_function_case_flag(value)?)
+                        }
+                        "--identifier-case" => {
+                            overrides.identifier_case = Some(parse_identifier_case_flag(value)?)
+                        }
+                        "--logical-operator-newline" => {
+                            overrides.logical_operator_newline =
+                                Some(parse_logical_operator_newline_flag(value)?)
+                        }
+                        "--lines-between-queries" => {
+                            overrides.lines_between_queries = Some(parse_usize(flag, value)?)
+                        }
+                        "--expression-width" => {
+                            overrides.expression_width = Some(parse_usize(flag, value)?)
                         }
                         "--line-ending" => {
                             overrides.line_ending = Some(parse_line_ending_flag(value)?)
@@ -962,6 +1047,46 @@ fn take_keyword_case<I: Iterator<Item = OsString>>(
     parse_keyword_case_flag(value.to_string_lossy().as_ref())
 }
 
+fn take_data_type_case<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<KeywordCase, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a case (upper, lower, preserve)"))?;
+    parse_data_type_case_flag(value.to_string_lossy().as_ref())
+}
+
+fn take_function_case<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<KeywordCase, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a case (upper, lower, preserve)"))?;
+    parse_function_case_flag(value.to_string_lossy().as_ref())
+}
+
+fn take_identifier_case<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<KeywordCase, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires a case (upper, lower, preserve)"))?;
+    parse_identifier_case_flag(value.to_string_lossy().as_ref())
+}
+
+fn take_logical_operator_newline<I: Iterator<Item = OsString>>(
+    args: &mut I,
+    flag: &str,
+) -> Result<LogicalOperatorNewline, String> {
+    let value = args
+        .next()
+        .ok_or_else(|| format!("{flag} requires before or after"))?;
+    parse_logical_operator_newline_flag(value.to_string_lossy().as_ref())
+}
+
 fn take_line_ending<I: Iterator<Item = OsString>>(
     args: &mut I,
     flag: &str,
@@ -1031,6 +1156,22 @@ fn parse_keyword_case_flag(value: &str) -> Result<KeywordCase, String> {
     config::parse_keyword_case(value)
 }
 
+fn parse_data_type_case_flag(value: &str) -> Result<KeywordCase, String> {
+    config::parse_data_type_case(value)
+}
+
+fn parse_function_case_flag(value: &str) -> Result<KeywordCase, String> {
+    config::parse_function_case(value)
+}
+
+fn parse_identifier_case_flag(value: &str) -> Result<KeywordCase, String> {
+    config::parse_identifier_case(value)
+}
+
+fn parse_logical_operator_newline_flag(value: &str) -> Result<LogicalOperatorNewline, String> {
+    config::parse_logical_operator_newline(value)
+}
+
 fn parse_line_ending_flag(value: &str) -> Result<LineEnding, String> {
     config::parse_line_ending(value)
 }
@@ -1091,9 +1232,29 @@ OPTIONS:
                            (stdin only; prints the whole document to stdout)
         --line-width N    Target line width (default 80)
         --indent-width N  Spaces per indent level (default 2)
-        --dialect NAME    SQL dialect: snowflake or databricks (default snowflake)
+        --dialect NAME    SQL dialect: snowflake (default), databricks, spark,
+                          bigquery, clickhouse, db2, db2i, duckdb, hive, mariadb,
+                          mysql, tidb, n1ql, plsql/oracle, postgresql, redshift,
+                          singlestoredb, sqlite, sql, transactsql/tsql, trino
         --keyword-case NAME
                            Keyword case: upper, lower, or preserve (default upper)
+        --data-type-case NAME
+                           Data-type case for type positions: upper, lower, or preserve
+                           (default preserve)
+        --function-case NAME
+                           Function-name case: upper, lower, or preserve (default preserve)
+        --identifier-case NAME
+                           Unquoted-identifier case: upper, lower, or preserve (default preserve)
+        --logical-operator-newline NAME
+                           AND/OR placement when wrapping: before or after (default before)
+        --dense-operators  Pack binary operators without surrounding spaces
+        --use-tabs         Indent with tabs instead of spaces
+        --newline-before-semicolon
+                           Place the statement-terminating ; on its own line
+        --lines-between-queries N
+                           Force N blank lines between top-level statements
+        --expression-width N
+                           Flat width cap for parenthesized lists before they wrap
         --line-ending NAME
                            Output line endings: auto, lf, or crlf (default auto)
         --select-item-layout NAME
@@ -1285,7 +1446,7 @@ mod tests {
 
     #[test]
     fn invalid_dialect_arg_errors() {
-        assert!(parse_args(["--dialect", "oracle"].map(Into::into)).is_err());
+        assert!(parse_args(["--dialect", "nonsense"].map(Into::into)).is_err());
         assert!(parse_args(["--dialect"].map(Into::into)).is_err());
     }
 
@@ -1309,5 +1470,42 @@ mod tests {
         assert_eq!(options.line_width, 42);
         assert_eq!(options.dialect, Dialect::Databricks);
         assert_eq!(options.indent_width, 2);
+    }
+
+    #[test]
+    fn expanded_format_flags_parse_and_apply() {
+        let parsed = parse_args(
+            [
+                "--function-case",
+                "lower",
+                "--identifier-case",
+                "upper",
+                "--logical-operator-newline",
+                "after",
+                "--dense-operators",
+                "--newline-before-semicolon",
+                "--lines-between-queries",
+                "3",
+                "--expression-width",
+                "40",
+            ]
+            .map(Into::into),
+        )
+        .expect("valid flags");
+        let Parsed::Run(args) = parsed else {
+            panic!("expected a run invocation");
+        };
+        let mut options = FormatOptions::default();
+        args.overrides.apply_to(&mut options);
+        assert_eq!(options.function_case, KeywordCase::Lower);
+        assert_eq!(options.identifier_case, KeywordCase::Upper);
+        assert_eq!(
+            options.logical_operator_newline,
+            LogicalOperatorNewline::After
+        );
+        assert!(options.dense_operators);
+        assert!(options.newline_before_semicolon);
+        assert_eq!(options.lines_between_queries, Some(3));
+        assert_eq!(options.expression_width, Some(40));
     }
 }

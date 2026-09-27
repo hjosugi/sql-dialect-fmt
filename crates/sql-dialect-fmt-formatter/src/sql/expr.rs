@@ -8,7 +8,7 @@ use crate::doc::{
     concat, empty, group, group_expanded, hard_line, if_group_breaks, indent, join, line,
     soft_line, space, text, Doc,
 };
-use crate::CommaStyle;
+use crate::{CommaStyle, LogicalOperatorNewline};
 
 use super::Lowerer;
 
@@ -50,11 +50,23 @@ impl Lowerer {
             _ => unreachable!("logical_chain_operator only returns AND/OR"),
         });
         let mut tail = Vec::new();
-        for operand in operands {
-            tail.push(line());
-            tail.push(op_doc.clone());
-            tail.push(space());
-            tail.push(operand);
+        match self.ctx.logical_operator_newline {
+            LogicalOperatorNewline::Before => {
+                for operand in operands {
+                    tail.push(line());
+                    tail.push(op_doc.clone());
+                    tail.push(space());
+                    tail.push(operand);
+                }
+            }
+            LogicalOperatorNewline::After => {
+                for operand in operands {
+                    tail.push(space());
+                    tail.push(op_doc.clone());
+                    tail.push(line());
+                    tail.push(operand);
+                }
+            }
         }
         parts.push(indent(concat(tail)));
         group(concat(parts))
@@ -101,9 +113,10 @@ impl Lowerer {
         };
         let items = self.lower_items(node.children());
         self.resume_after(R_PAREN);
+        let force_break = exceeds_expression_width(node, self.ctx.expression_width);
         concat(vec![
             open_sep,
-            bracketed(prefix, items, trailing, self.ctx.comma_style),
+            bracketed(prefix, items, trailing, force_break, self.ctx.comma_style),
         ])
     }
 
@@ -119,6 +132,7 @@ impl Lowerer {
         let trailing = delimited_list_has_trailing_comma(node, close);
         let items = self.lower_items(node.children());
         self.resume_after(close);
+        let force_break = exceeds_expression_width(node, self.ctx.expression_width);
         concat(vec![
             open_sep,
             delimited(
@@ -127,6 +141,7 @@ impl Lowerer {
                 empty(),
                 items,
                 trailing,
+                force_break,
                 self.ctx.comma_style,
             ),
         ])
@@ -261,9 +276,11 @@ impl Lowerer {
                         let trailing = has_trailing_comma(inner);
                         let items = self.lower_items(inner.children());
                         self.resume_after(R_PAREN);
+                        let force_break =
+                            exceeds_expression_width(inner, self.ctx.expression_width);
                         parts.push(concat(vec![
                             open_sep,
-                            bracketed(empty(), items, trailing, self.ctx.comma_style),
+                            bracketed(empty(), items, trailing, force_break, self.ctx.comma_style),
                         ]));
                     } else {
                         // A subquery or query expression: keep the parentheses, render inline.
@@ -322,15 +339,21 @@ fn logical_chain_operator(node: &SyntaxNode) -> Option<SyntaxKind> {
 }
 
 /// Build `( items )`: flat when it fits, one-per-line when it does not, and force-exploded (with
-/// the preserved trailing comma) when `trailing` is set. An exploded list propagates the break to
-/// its ancestors, so a multiline collection never sits inline.
+/// the preserved trailing comma) when `trailing` or `force_break` is set. An exploded list
+/// propagates the break to its ancestors, so a multiline collection never sits inline.
 pub(super) fn bracketed(
     prefix: Doc,
     items: Vec<Doc>,
     trailing: bool,
+    force_break: bool,
     comma_style: CommaStyle,
 ) -> Doc {
-    delimited("(", ")", prefix, items, trailing, comma_style)
+    delimited("(", ")", prefix, items, trailing, force_break, comma_style)
+}
+
+/// Whether a parenthesized list's source text exceeds the configured `expression_width` cap.
+pub(super) fn exceeds_expression_width(node: &SyntaxNode, limit: Option<usize>) -> bool {
+    limit.is_some_and(|limit| node.text().to_string().trim().len() > limit)
 }
 
 fn delimited(
@@ -339,6 +362,7 @@ fn delimited(
     prefix: Doc,
     items: Vec<Doc>,
     trailing: bool,
+    force_break: bool,
     comma_style: CommaStyle,
 ) -> Doc {
     if items.is_empty() {
@@ -356,6 +380,7 @@ fn delimited(
     } else {
         concat(vec![soft_line(), leading_alignment, joined])
     };
+    let force_break = trailing || force_break;
     // `prefix` (e.g. an aggregate `DISTINCT`) hugs the open paren, before the (soft) first break.
     let content = concat(vec![
         text(open),
@@ -364,7 +389,7 @@ fn delimited(
         soft_line(),
         text(close),
     ]);
-    if trailing {
+    if force_break {
         group_expanded(content)
     } else {
         group(content)

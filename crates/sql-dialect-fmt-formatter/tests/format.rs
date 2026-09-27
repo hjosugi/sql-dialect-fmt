@@ -1504,3 +1504,96 @@ fn mid_statement_leading_comment_starts_on_its_own_line() {
     assert_eq!(once, "CREATE SELECT SELECT\n-- y\nSELECT;\n");
     assert_eq!(fmt(&once), once);
 }
+
+#[test]
+fn use_tabs_indents_with_tab_characters() {
+    let options = sql_dialect_fmt_formatter::FormatOptions::default().with_use_tabs(true);
+    let out = format("select a, b from t", &options);
+    assert_eq!(out, "SELECT\n\ta,\n\tb\nFROM t;\n");
+    // Idempotent, and the tab indentation does not introduce trailing whitespace.
+    assert_eq!(format(&out, &options), out);
+}
+
+#[test]
+fn data_type_case_cases_builtin_types_in_type_positions() {
+    use sql_dialect_fmt_formatter::KeywordCase;
+    let lower =
+        sql_dialect_fmt_formatter::FormatOptions::default().with_data_type_case(KeywordCase::Lower);
+    let out = format("select cast(x as VARCHAR), y::NUMBER from t", &lower);
+    assert!(out.contains("AS varchar"), "{out}");
+    assert!(out.contains("::number"), "{out}");
+    // A column that merely shares a type's spelling is left alone.
+    let column = format("select text from t", &lower);
+    assert!(column.contains("text"), "{column}");
+}
+
+#[test]
+fn function_case_and_identifier_case_are_independent() {
+    use sql_dialect_fmt_formatter::{FormatOptions, KeywordCase};
+    let fn_lower = FormatOptions::default().with_function_case(KeywordCase::Lower);
+    assert_eq!(
+        format("select COUNT(x) from t", &fn_lower),
+        "SELECT\n  count(x)\nFROM t;\n"
+    );
+    // A table name in DDL is not a call callee, so function_case leaves it alone.
+    let ddl = format("create table t (a int)", &fn_lower);
+    assert!(ddl.contains("CREATE TABLE t"), "{ddl}");
+
+    let id_lower = FormatOptions::default().with_identifier_case(KeywordCase::Lower);
+    assert_eq!(
+        format("select Foo from Bar", &id_lower),
+        "SELECT\n  foo\nFROM bar;\n"
+    );
+}
+
+#[test]
+fn dense_operators_pack_binary_operators() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let dense = FormatOptions::default().with_dense_operators(true);
+    assert_eq!(
+        format("select a + b * c from t", &dense),
+        "SELECT\n  a+b*c\nFROM t;\n"
+    );
+    // `SELECT *` keeps its space (a wildcard is not a binary operator).
+    assert_eq!(format("select * from t", &dense), "SELECT\n  *\nFROM t;\n");
+}
+
+#[test]
+fn newline_before_semicolon_puts_the_terminator_on_its_own_line() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let options = FormatOptions::default().with_newline_before_semicolon(true);
+    let out = format("select a from t", &options);
+    assert!(out.ends_with("\n;\n"), "{out:?}");
+    assert_eq!(format(&out, &options), out);
+}
+
+#[test]
+fn lines_between_queries_forces_a_fixed_gap() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let options = FormatOptions::default().with_lines_between_queries(Some(2));
+    assert_eq!(
+        format("select 1; select 2;", &options),
+        "SELECT\n  1;\n\n\nSELECT\n  2;\n"
+    );
+    let zero = FormatOptions::default().with_lines_between_queries(Some(0));
+    assert_eq!(
+        format("select 1; select 2;", &zero),
+        "SELECT\n  1;\nSELECT\n  2;\n"
+    );
+}
+
+#[test]
+fn logical_operator_newline_controls_operator_placement() {
+    use sql_dialect_fmt_formatter::{FormatOptions, LogicalOperatorNewline};
+    let src = "select a from t where aaaaaaaaaa and bbbbbbbbbb and cccccccccc";
+    let before = FormatOptions::default().with_line_width(24);
+    let after = FormatOptions::default()
+        .with_line_width(24)
+        .with_logical_operator_newline(LogicalOperatorNewline::After);
+    let b = format(src, &before);
+    let a = format(src, &after);
+    assert!(b.contains("AND bbbbbbbbbb"), "before: {b:?}");
+    assert!(!b.contains("aaaaaaaaaa AND"), "before: {b:?}");
+    assert!(a.contains("aaaaaaaaaa AND"), "after: {a:?}");
+    assert!(!a.contains("AND bbbbbbbbbb"), "after: {a:?}");
+}

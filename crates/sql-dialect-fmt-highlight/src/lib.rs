@@ -4,14 +4,17 @@
 //! new keywords are highlighted by `keyword_kind`, while newly-added punctuation only needs a
 //! `SyntaxKind` classification here before LSP/TextMate adapters consume it.
 
-use sql_dialect_fmt_lexer::{tokenize, LexError};
-use sql_dialect_fmt_syntax::{is_builtin_type, keyword_kind, SyntaxKind};
+use sql_dialect_fmt_lexer::{tokenize_for_dialect, LexError};
+use sql_dialect_fmt_syntax::{is_builtin_type, keyword_kind_for, Dialect, SyntaxKind};
 
 pub mod semantic;
 pub use semantic::{
-    delta_encode, detect_injections, line_tokens, resolve_tokens, semantic_token, semantic_tokens,
-    semantic_tokens_lsp, semantic_tokens_lsp_utf8, InjectedLanguage, Injection, LineToken,
-    ResolvedToken, SemanticTokenModifiers, SemanticTokenType, SemanticTokens,
+    delta_encode, detect_injections, detect_injections_for_dialect, line_tokens,
+    line_tokens_for_dialect, resolve_tokens, resolve_tokens_for_dialect, semantic_token,
+    semantic_tokens, semantic_tokens_for_dialect, semantic_tokens_lsp,
+    semantic_tokens_lsp_for_dialect, semantic_tokens_lsp_utf8,
+    semantic_tokens_lsp_utf8_for_dialect, InjectedLanguage, Injection, LineToken, ResolvedToken,
+    SemanticTokenModifiers, SemanticTokenType, SemanticTokens,
 };
 
 /// The result of [`highlight`]: a lossless token stream plus any lexer errors. `#[non_exhaustive]`
@@ -75,8 +78,20 @@ impl HighlightKind {
     }
 }
 
+/// Lexically highlight `input` using **Snowflake** keyword/type semantics.
+///
+/// Equivalent to [`highlight_for_dialect`] with [`Dialect::Snowflake`].
 pub fn highlight(input: &str) -> Highlighted<'_> {
-    let lexed = tokenize(input);
+    highlight_for_dialect(input, Dialect::Snowflake)
+}
+
+/// Lexically highlight `input` for `dialect`.
+///
+/// The dialect drives both tokenization (identifier quotes, comment markers, variables) and
+/// keyword classification, so a word reserved in one dialect but an ordinary identifier in another
+/// is coloured accordingly.
+pub fn highlight_for_dialect(input: &str, dialect: Dialect) -> Highlighted<'_> {
+    let lexed = tokenize_for_dialect(input, dialect);
     let tokens = lexed
         .tokens
         .into_iter()
@@ -84,7 +99,7 @@ pub fn highlight(input: &str) -> Highlighted<'_> {
             let start = *offset;
             *offset += token.text.len();
             Some(HighlightToken {
-                kind: classify(token.kind, token.text),
+                kind: classify_for(token.kind, token.text, dialect),
                 text: token.text,
                 range: start..*offset,
             })
@@ -98,6 +113,11 @@ pub fn highlight(input: &str) -> Highlighted<'_> {
 }
 
 pub fn classify(kind: SyntaxKind, text: &str) -> HighlightKind {
+    classify_for(kind, text, Dialect::Snowflake)
+}
+
+/// Classify a token for `dialect`, so keyword recognition matches the active grammar.
+pub fn classify_for(kind: SyntaxKind, text: &str, dialect: Dialect) -> HighlightKind {
     if kind.is_trivia() {
         return match kind {
             SyntaxKind::COMMENT | SyntaxKind::BLOCK_COMMENT => HighlightKind::Comment,
@@ -107,7 +127,7 @@ pub fn classify(kind: SyntaxKind, text: &str) -> HighlightKind {
 
     if kind.is_keyword()
         || kind == SyntaxKind::CONTEXTUAL_KEYWORD
-        || (kind == SyntaxKind::IDENT && keyword_kind(text).is_some())
+        || (kind == SyntaxKind::IDENT && keyword_kind_for(text, dialect).is_some())
     {
         return HighlightKind::Keyword;
     }
@@ -226,5 +246,67 @@ mod tests {
             .tokens
             .iter()
             .any(|token| token.kind == HighlightKind::Comment));
+    }
+
+    #[test]
+    fn dialect_aware_highlighting_differs_by_quote_style() {
+        use crate::HighlightKind::{Identifier, QuotedIdentifier, String, Variable};
+
+        // MySQL: `"x"` is a string, backticks quote identifiers.
+        let mysql = highlight_for_dialect("SELECT \"x\", `y`, @v", Dialect::MySql);
+        let kinds: Vec<_> = mysql
+            .tokens
+            .iter()
+            .filter(|t| !matches!(t.kind, HighlightKind::Whitespace))
+            .map(|t| (t.text, t.kind))
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("SELECT", HighlightKind::Keyword),
+                ("\"x\"", String),
+                (",", HighlightKind::Punctuation),
+                ("`y`", QuotedIdentifier),
+                (",", HighlightKind::Punctuation),
+                ("@v", Variable),
+            ]
+        );
+        assert!(mysql.errors.is_empty(), "{:?}", mysql.errors);
+
+        // Snowflake: `"x"` is a quoted identifier, `$1` a variable.
+        let snowflake = highlight_for_dialect("SELECT \"x\", $1", Dialect::Snowflake);
+        let kinds: Vec<_> = snowflake
+            .tokens
+            .iter()
+            .filter(|t| !matches!(t.kind, HighlightKind::Whitespace))
+            .map(|t| (t.text, t.kind))
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("SELECT", HighlightKind::Keyword),
+                ("\"x\"", QuotedIdentifier),
+                (",", HighlightKind::Punctuation),
+                ("$1", Variable),
+            ]
+        );
+
+        // Transact-SQL: `[x]` is a quoted identifier, `#temp` an identifier.
+        let tsql = highlight_for_dialect("SELECT [x], #temp", Dialect::TransactSql);
+        let kinds: Vec<_> = tsql
+            .tokens
+            .iter()
+            .filter(|t| !matches!(t.kind, HighlightKind::Whitespace))
+            .map(|t| (t.text, t.kind))
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("SELECT", HighlightKind::Keyword),
+                ("[x]", QuotedIdentifier),
+                (",", HighlightKind::Punctuation),
+                ("#temp", Identifier),
+            ]
+        );
     }
 }

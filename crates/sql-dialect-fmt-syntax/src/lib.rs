@@ -12,7 +12,7 @@
 //! ## Modules
 //! * `kind` — the [`SyntaxKind`] enum plus its `u16` conversions and predicates.
 //! * `keyword` — case-insensitive recognition of keyword text ([`keyword_kind`]) plus its
-//!   dialect-aware reservation ([`keyword_kind_for`], [`KeywordDialect`]).
+//!   dialect-aware reservation ([`keyword_kind_for`], [`DialectSet`]).
 //! * `types` — canonical built-in type words shared by highlighters and editor integrations.
 //! * `dialect` — the [`Dialect`] runtime selector threaded through lexer, parser, and formatter.
 //! * `lang` — `rowan` lossless-tree integration, behind the `rowan` feature.
@@ -27,8 +27,8 @@ mod kind;
 mod lang;
 mod types;
 
-pub use dialect::Dialect;
-pub use keyword::{keyword_kind, keyword_kind_for, keyword_texts, KeywordDialect};
+pub use dialect::{Dialect, DialectSet};
+pub use keyword::{keyword_kind, keyword_kind_for, keyword_texts};
 pub use kind::SyntaxKind;
 pub use types::{is_builtin_type, BUILTIN_TYPE_WORDS};
 

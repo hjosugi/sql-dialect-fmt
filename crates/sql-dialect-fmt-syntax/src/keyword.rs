@@ -1,7 +1,7 @@
 //! Case-insensitive recognition of keyword text, and its **dialect-aware reservation**.
 //!
 //! A single table — [`KEYWORDS`] — is the one source of truth: every reserved keyword appears
-//! exactly once as `(lowercase text, SyntaxKind, KeywordDialect)`. From it we derive both the
+//! exactly once as `(lowercase text, SyntaxKind, DialectSet)`. From it we derive both the
 //! text→kind lookup ([`keyword_kind`]) and the dialect-aware variant ([`keyword_kind_for`]), and a
 //! completeness test proves the table covers the whole `__KW_START..__KW_END` block so the two can
 //! never drift.
@@ -10,217 +10,244 @@
 //! Whether a word is *reserved* (forced into the grammar instead of being a plain identifier)
 //! differs by dialect. Snowflake reserves words like `TASK`, `WAREHOUSE`, `FLATTEN`, `QUALIFY` that
 //! Databricks treats as ordinary identifiers (they are Snowflake-specific DDL/feature words and do
-//! not appear in the Spark SQL keyword table). [`KeywordDialect`] records, per keyword, *which*
+//! not appear in the Spark SQL keyword table). [`DialectSet`] records, per keyword, *which*
 //! dialects reserve it; the parser consults this so `SELECT task, flatten FROM t` parses clean
 //! under Databricks while Snowflake's reservation is unchanged.
 
-use crate::{Dialect, SyntaxKind};
+use crate::{Dialect, DialectSet, SyntaxKind};
 
-/// Which dialect(s) reserve a given keyword. The grammar treats a word as a keyword only when the
-/// active [`Dialect`] reserves it; otherwise the word is an ordinary identifier.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum KeywordDialect {
-    /// Reserved in every dialect (standard SQL words: `SELECT`, `FROM`, `JOIN`, …).
-    Shared,
-    /// Reserved in Snowflake only; a plain identifier under Databricks. These are Snowflake-specific
-    /// DDL/feature/scripting words that are absent from the Spark SQL keyword table.
-    SnowflakeOnly,
-    /// Reserved in Databricks only; a plain identifier under Snowflake. (None today — the variant
-    /// exists so a Databricks-specific reserved word can be added without reshaping the model.)
-    #[allow(dead_code)]
-    DatabricksOnly,
-}
+// Per-keyword dialect reservation is a [`DialectSet`]: a bitmask over [`Dialect`]. `DialectSet::ALL`
+// is the standard-SQL "reserved everywhere" set; Snowflake-only words use
+// `DialectSet::SNOWFLAKE_ONLY`, and so on. See `dialect.rs`.
 
-impl KeywordDialect {
-    /// Does `dialect` reserve a keyword carrying this classification?
-    #[inline]
-    #[must_use]
-    pub fn reserved_in(self, dialect: Dialect) -> bool {
-        match self {
-            KeywordDialect::Shared => true,
-            KeywordDialect::SnowflakeOnly => matches!(dialect, Dialect::Snowflake),
-            KeywordDialect::DatabricksOnly => matches!(dialect, Dialect::Databricks),
-        }
-    }
-}
-
-/// The single source of truth for keyword recognition: `(lowercase text, kind, dialect class)`.
+/// The single source of truth for keyword recognition: `(lowercase text, kind, dialect set)`.
 ///
 /// Each entry's text must be ASCII lowercase (lookups lowercase the input before matching). The
 /// `every_keyword_variant_is_mapped` test asserts this list covers exactly the `SyntaxKind` keyword
 /// block, so a keyword cannot be added to the enum without a matching entry (and dialect class)
 /// here. Entries must remain sorted by text because lookup uses binary search.
-const KEYWORDS: &[(&str, SyntaxKind, KeywordDialect)] = {
-    use KeywordDialect::{Shared, SnowflakeOnly};
+const KEYWORDS: &[(&str, SyntaxKind, DialectSet)] = {
     use SyntaxKind::*;
     &[
-        ("after", AFTER_KW, Shared),
-        ("all", ALL_KW, Shared),
-        ("alter", ALTER_KW, Shared),
-        ("and", AND_KW, Shared),
-        ("any", ANY_KW, Shared),
-        ("as", AS_KW, Shared),
-        ("asc", ASC_KW, Shared),
-        ("begin", BEGIN_KW, Shared),
-        ("between", BETWEEN_KW, Shared),
-        ("by", BY_KW, Shared),
-        ("call", CALL_KW, Shared),
-        ("called", CALLED_KW, SnowflakeOnly),
-        ("caller", CALLER_KW, SnowflakeOnly),
-        ("case", CASE_KW, Shared),
-        ("cast", CAST_KW, Shared),
-        ("commit", COMMIT_KW, Shared),
+        ("after", AFTER_KW, DialectSet::ALL),
+        ("all", ALL_KW, DialectSet::ALL),
+        ("alter", ALTER_KW, DialectSet::ALL),
+        ("and", AND_KW, DialectSet::ALL),
+        ("any", ANY_KW, DialectSet::ALL),
+        ("as", AS_KW, DialectSet::ALL),
+        ("asc", ASC_KW, DialectSet::ALL),
+        ("begin", BEGIN_KW, DialectSet::ALL),
+        ("between", BETWEEN_KW, DialectSet::ALL),
+        ("by", BY_KW, DialectSet::ALL),
+        ("call", CALL_KW, DialectSet::ALL),
+        ("called", CALLED_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("caller", CALLER_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("case", CASE_KW, DialectSet::ALL),
+        ("cast", CAST_KW, DialectSet::ALL),
+        ("commit", COMMIT_KW, DialectSet::ALL),
         // CONNECT/PRIOR: Snowflake hierarchical `CONNECT BY`; absent from the Spark keyword table.
-        ("connect", CONNECT_KW, SnowflakeOnly),
-        ("copy", COPY_KW, SnowflakeOnly),
-        ("create", CREATE_KW, Shared),
-        ("cross", CROSS_KW, Shared),
-        ("current", CURRENT_KW, Shared),
-        ("cursor", CURSOR_KW, SnowflakeOnly),
-        ("declare", DECLARE_KW, Shared),
-        ("delete", DELETE_KW, Shared),
-        ("desc", DESC_KW, Shared),
-        ("describe", DESCRIBE_KW, Shared),
-        ("distinct", DISTINCT_KW, Shared),
-        ("do", DO_KW, Shared),
-        ("drop", DROP_KW, Shared),
-        ("else", ELSE_KW, Shared),
-        ("elseif", ELSEIF_KW, SnowflakeOnly),
-        ("end", END_KW, Shared),
-        ("except", EXCEPT_KW, Shared),
-        ("exception", EXCEPTION_KW, SnowflakeOnly),
-        ("execute", EXECUTE_KW, Shared),
-        ("exists", EXISTS_KW, Shared),
-        ("false", FALSE_KW, Shared),
-        ("fetch", FETCH_KW, Shared),
-        ("first", FIRST_KW, Shared),
+        ("connect", CONNECT_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("copy", COPY_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("create", CREATE_KW, DialectSet::ALL),
+        ("cross", CROSS_KW, DialectSet::ALL),
+        ("current", CURRENT_KW, DialectSet::ALL),
+        ("cursor", CURSOR_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("declare", DECLARE_KW, DialectSet::ALL),
+        ("delete", DELETE_KW, DialectSet::ALL),
+        ("desc", DESC_KW, DialectSet::ALL),
+        ("describe", DESCRIBE_KW, DialectSet::ALL),
+        ("distinct", DISTINCT_KW, DialectSet::ALL),
+        ("do", DO_KW, DialectSet::ALL),
+        ("drop", DROP_KW, DialectSet::ALL),
+        ("else", ELSE_KW, DialectSet::ALL),
+        ("elseif", ELSEIF_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("end", END_KW, DialectSet::ALL),
+        ("except", EXCEPT_KW, DialectSet::ALL),
+        ("exception", EXCEPTION_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("execute", EXECUTE_KW, DialectSet::ALL),
+        ("exists", EXISTS_KW, DialectSet::ALL),
+        ("false", FALSE_KW, DialectSet::ALL),
+        ("fetch", FETCH_KW, DialectSet::ALL),
+        ("first", FIRST_KW, DialectSet::ALL),
         // FLATTEN: Snowflake table function; not a Spark keyword.
-        ("flatten", FLATTEN_KW, SnowflakeOnly),
-        ("following", FOLLOWING_KW, Shared),
-        ("for", FOR_KW, Shared),
-        ("from", FROM_KW, Shared),
-        ("full", FULL_KW, Shared),
-        ("function", FUNCTION_KW, Shared),
-        ("grant", GRANT_KW, Shared),
-        ("grants", GRANTS_KW, SnowflakeOnly),
-        ("group", GROUP_KW, Shared),
-        ("handler", HANDLER_KW, SnowflakeOnly),
-        ("having", HAVING_KW, Shared),
-        ("if", IF_KW, Shared),
+        ("flatten", FLATTEN_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("following", FOLLOWING_KW, DialectSet::ALL),
+        ("for", FOR_KW, DialectSet::ALL),
+        ("from", FROM_KW, DialectSet::ALL),
+        ("full", FULL_KW, DialectSet::ALL),
+        ("function", FUNCTION_KW, DialectSet::ALL),
+        ("grant", GRANT_KW, DialectSet::ALL),
+        ("grants", GRANTS_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("group", GROUP_KW, DialectSet::ALL),
+        ("handler", HANDLER_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("having", HAVING_KW, DialectSet::ALL),
+        ("if", IF_KW, DialectSet::ALL),
         // ILIKE/RLIKE/REGEXP: Snowflake operators; non-reserved in Spark, so identifiers there.
-        ("ilike", ILIKE_KW, SnowflakeOnly),
-        ("immediate", IMMEDIATE_KW, SnowflakeOnly),
-        ("imports", IMPORTS_KW, SnowflakeOnly),
-        ("in", IN_KW, Shared),
-        ("inner", INNER_KW, Shared),
-        ("input", INPUT_KW, Shared),
-        ("insert", INSERT_KW, Shared),
-        ("intersect", INTERSECT_KW, Shared),
-        ("into", INTO_KW, Shared),
-        ("is", IS_KW, Shared),
-        ("java", JAVA_KW, Shared),
+        (
+            "ilike",
+            ILIKE_KW,
+            DialectSet::of(&[
+                Dialect::Snowflake,
+                Dialect::Databricks,
+                Dialect::Spark,
+                Dialect::Hive,
+                Dialect::PostgreSql,
+                Dialect::Redshift,
+                Dialect::DuckDb,
+                Dialect::ClickHouse,
+                Dialect::Trino,
+            ]),
+        ),
+        ("immediate", IMMEDIATE_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("imports", IMPORTS_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("in", IN_KW, DialectSet::ALL),
+        ("inner", INNER_KW, DialectSet::ALL),
+        ("input", INPUT_KW, DialectSet::ALL),
+        ("insert", INSERT_KW, DialectSet::ALL),
+        ("intersect", INTERSECT_KW, DialectSet::ALL),
+        ("into", INTO_KW, DialectSet::ALL),
+        ("is", IS_KW, DialectSet::ALL),
+        ("java", JAVA_KW, DialectSet::ALL),
         // JAVASCRIPT/SCALA: Snowflake `LANGUAGE` values, not Spark keywords. (JAVA/PYTHON/SQL also
         // serve as type/language words common to both, so they stay shared.)
-        ("javascript", JAVASCRIPT_KW, SnowflakeOnly),
-        ("join", JOIN_KW, Shared),
-        ("language", LANGUAGE_KW, Shared),
-        ("last", LAST_KW, Shared),
-        ("lateral", LATERAL_KW, Shared),
-        ("left", LEFT_KW, Shared),
-        ("let", LET_KW, Shared),
-        ("like", LIKE_KW, Shared),
-        ("limit", LIMIT_KW, Shared),
-        ("loop", LOOP_KW, Shared),
-        ("matched", MATCHED_KW, Shared),
-        ("merge", MERGE_KW, Shared),
-        ("minus", MINUS_KW, Shared),
-        ("natural", NATURAL_KW, Shared),
-        ("not", NOT_KW, Shared),
-        ("null", NULL_KW, Shared),
-        ("nulls", NULLS_KW, Shared),
-        ("offset", OFFSET_KW, Shared),
-        ("on", ON_KW, Shared),
-        ("or", OR_KW, Shared),
-        ("order", ORDER_KW, Shared),
-        ("out", OUT_KW, Shared),
-        ("outer", OUTER_KW, Shared),
-        ("output", OUTPUT_KW, Shared),
-        ("over", OVER_KW, Shared),
-        ("overwrite", OVERWRITE_KW, Shared),
-        ("owner", OWNER_KW, SnowflakeOnly),
-        ("packages", PACKAGES_KW, SnowflakeOnly),
-        ("partition", PARTITION_KW, Shared),
-        ("pivot", PIVOT_KW, Shared),
-        ("preceding", PRECEDING_KW, Shared),
-        ("prior", PRIOR_KW, SnowflakeOnly),
-        ("procedure", PROCEDURE_KW, Shared),
-        ("python", PYTHON_KW, Shared),
+        ("javascript", JAVASCRIPT_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("join", JOIN_KW, DialectSet::ALL),
+        ("language", LANGUAGE_KW, DialectSet::ALL),
+        ("last", LAST_KW, DialectSet::ALL),
+        ("lateral", LATERAL_KW, DialectSet::ALL),
+        ("left", LEFT_KW, DialectSet::ALL),
+        ("let", LET_KW, DialectSet::ALL),
+        ("like", LIKE_KW, DialectSet::ALL),
+        ("limit", LIMIT_KW, DialectSet::ALL),
+        ("loop", LOOP_KW, DialectSet::ALL),
+        ("matched", MATCHED_KW, DialectSet::ALL),
+        ("merge", MERGE_KW, DialectSet::ALL),
+        ("minus", MINUS_KW, DialectSet::ALL),
+        ("natural", NATURAL_KW, DialectSet::ALL),
+        ("not", NOT_KW, DialectSet::ALL),
+        ("null", NULL_KW, DialectSet::ALL),
+        ("nulls", NULLS_KW, DialectSet::ALL),
+        ("offset", OFFSET_KW, DialectSet::ALL),
+        ("on", ON_KW, DialectSet::ALL),
+        ("or", OR_KW, DialectSet::ALL),
+        ("order", ORDER_KW, DialectSet::ALL),
+        ("out", OUT_KW, DialectSet::ALL),
+        ("outer", OUTER_KW, DialectSet::ALL),
+        ("output", OUTPUT_KW, DialectSet::ALL),
+        ("over", OVER_KW, DialectSet::ALL),
+        ("overwrite", OVERWRITE_KW, DialectSet::ALL),
+        ("owner", OWNER_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("packages", PACKAGES_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("partition", PARTITION_KW, DialectSet::ALL),
+        ("pivot", PIVOT_KW, DialectSet::ALL),
+        ("preceding", PRECEDING_KW, DialectSet::ALL),
+        ("prior", PRIOR_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("procedure", PROCEDURE_KW, DialectSet::ALL),
+        ("python", PYTHON_KW, DialectSet::ALL),
         // QUALIFY: a window-filter clause in BOTH dialects. Databricks SQL supports `SELECT ...
         // QUALIFY <predicate>` (Databricks Runtime 10.4 LTS+), so it must stay reserved under
         // Databricks too — otherwise the parser treats it as a plain identifier and mis-splits the
         // query. Reserving it in both dialects leaves Snowflake byte-identical (it was reserved
         // there already).
-        ("qualify", QUALIFY_KW, Shared),
-        ("range", RANGE_KW, Shared),
-        ("recursive", RECURSIVE_KW, Shared),
-        ("regexp", REGEXP_KW, SnowflakeOnly),
-        ("repeat", REPEAT_KW, Shared),
-        ("replace", REPLACE_KW, Shared),
-        ("resultset", RESULTSET_KW, SnowflakeOnly),
-        ("return", RETURN_KW, Shared),
-        ("returns", RETURNS_KW, Shared),
-        ("revoke", REVOKE_KW, Shared),
-        ("right", RIGHT_KW, Shared),
-        ("rlike", RLIKE_KW, SnowflakeOnly),
-        ("rollback", ROLLBACK_KW, Shared),
-        ("row", ROW_KW, Shared),
-        ("rows", ROWS_KW, Shared),
-        ("runtime_version", RUNTIME_VERSION_KW, SnowflakeOnly),
+        (
+            "qualify",
+            QUALIFY_KW,
+            DialectSet::of(&[
+                Dialect::Snowflake,
+                Dialect::Databricks,
+                Dialect::Spark,
+                Dialect::BigQuery,
+                Dialect::DuckDb,
+                Dialect::Trino,
+            ]),
+        ),
+        ("range", RANGE_KW, DialectSet::ALL),
+        ("recursive", RECURSIVE_KW, DialectSet::ALL),
+        (
+            "regexp",
+            REGEXP_KW,
+            DialectSet::of(&[
+                Dialect::Snowflake,
+                Dialect::MySql,
+                Dialect::MariaDb,
+                Dialect::TiDb,
+                Dialect::SingleStoreDb,
+            ]),
+        ),
+        ("repeat", REPEAT_KW, DialectSet::ALL),
+        ("replace", REPLACE_KW, DialectSet::ALL),
+        ("resultset", RESULTSET_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("return", RETURN_KW, DialectSet::ALL),
+        ("returns", RETURNS_KW, DialectSet::ALL),
+        ("revoke", REVOKE_KW, DialectSet::ALL),
+        ("right", RIGHT_KW, DialectSet::ALL),
+        (
+            "rlike",
+            RLIKE_KW,
+            DialectSet::of(&[
+                Dialect::Snowflake,
+                Dialect::Databricks,
+                Dialect::Spark,
+                Dialect::Hive,
+            ]),
+        ),
+        ("rollback", ROLLBACK_KW, DialectSet::ALL),
+        ("row", ROW_KW, DialectSet::ALL),
+        ("rows", ROWS_KW, DialectSet::ALL),
+        (
+            "runtime_version",
+            RUNTIME_VERSION_KW,
+            DialectSet::SNOWFLAKE_ONLY,
+        ),
         // SAMPLE: Snowflake spelling; absent from the Spark keyword table (`TABLESAMPLE` is shared).
-        ("sample", SAMPLE_KW, SnowflakeOnly),
-        ("scala", SCALA_KW, SnowflakeOnly),
-        ("schedule", SCHEDULE_KW, SnowflakeOnly),
+        ("sample", SAMPLE_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("scala", SCALA_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("schedule", SCHEDULE_KW, DialectSet::SNOWFLAKE_ONLY),
         // Snowflake table-property words; not Spark keywords.
-        ("secure", SECURE_KW, SnowflakeOnly),
-        ("select", SELECT_KW, Shared),
-        ("set", SET_KW, Shared),
-        ("show", SHOW_KW, Shared),
-        ("sql", SQL_KW, Shared),
-        ("start", START_KW, Shared),
-        ("strict", STRICT_KW, SnowflakeOnly),
-        ("table", TABLE_KW, Shared),
-        ("tablesample", TABLESAMPLE_KW, Shared),
+        ("secure", SECURE_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("select", SELECT_KW, DialectSet::ALL),
+        ("set", SET_KW, DialectSet::ALL),
+        ("show", SHOW_KW, DialectSet::ALL),
+        ("sql", SQL_KW, DialectSet::ALL),
+        ("start", START_KW, DialectSet::ALL),
+        ("strict", STRICT_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("table", TABLE_KW, DialectSet::ALL),
+        ("tablesample", TABLESAMPLE_KW, DialectSet::ALL),
         // Snowflake object DDL / scripting words absent from the Spark keyword table.
-        ("task", TASK_KW, SnowflakeOnly),
-        ("temp", TEMP_KW, Shared),
-        ("temporary", TEMPORARY_KW, Shared),
-        ("then", THEN_KW, Shared),
+        ("task", TASK_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("temp", TEMP_KW, DialectSet::ALL),
+        ("temporary", TEMPORARY_KW, DialectSet::ALL),
+        ("then", THEN_KW, DialectSet::ALL),
         // Snowflake's row-limiting `TOP n`; not a Spark keyword.
-        ("top", TOP_KW, SnowflakeOnly),
-        ("transient", TRANSIENT_KW, SnowflakeOnly),
-        ("true", TRUE_KW, Shared),
-        ("truncate", TRUNCATE_KW, Shared),
+        (
+            "top",
+            TOP_KW,
+            DialectSet::of(&[Dialect::Snowflake, Dialect::TransactSql]),
+        ),
+        ("transient", TRANSIENT_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("true", TRUE_KW, DialectSet::ALL),
+        ("truncate", TRUNCATE_KW, DialectSet::ALL),
         // TRY_CAST is the function `try_cast(...)` in Spark, not a structural keyword.
-        ("try_cast", TRY_CAST_KW, SnowflakeOnly),
-        ("unbounded", UNBOUNDED_KW, Shared),
+        ("try_cast", TRY_CAST_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("unbounded", UNBOUNDED_KW, DialectSet::ALL),
         // Snowflake scripting / object words absent from the Spark keyword table.
-        ("undrop", UNDROP_KW, SnowflakeOnly),
-        ("union", UNION_KW, Shared),
-        ("unpivot", UNPIVOT_KW, Shared),
-        ("until", UNTIL_KW, Shared),
-        ("update", UPDATE_KW, Shared),
-        ("use", USE_KW, Shared),
-        ("using", USING_KW, Shared),
-        ("values", VALUES_KW, Shared),
-        ("view", VIEW_KW, Shared),
-        ("volatile", VOLATILE_KW, SnowflakeOnly),
-        ("warehouse", WAREHOUSE_KW, SnowflakeOnly),
-        ("when", WHEN_KW, Shared),
-        ("where", WHERE_KW, Shared),
-        ("while", WHILE_KW, Shared),
-        ("window", WINDOW_KW, Shared),
-        ("with", WITH_KW, Shared),
-        ("within", WITHIN_KW, Shared),
+        ("undrop", UNDROP_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("union", UNION_KW, DialectSet::ALL),
+        ("unpivot", UNPIVOT_KW, DialectSet::ALL),
+        ("until", UNTIL_KW, DialectSet::ALL),
+        ("update", UPDATE_KW, DialectSet::ALL),
+        ("use", USE_KW, DialectSet::ALL),
+        ("using", USING_KW, DialectSet::ALL),
+        ("values", VALUES_KW, DialectSet::ALL),
+        ("view", VIEW_KW, DialectSet::ALL),
+        ("volatile", VOLATILE_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("warehouse", WAREHOUSE_KW, DialectSet::SNOWFLAKE_ONLY),
+        ("when", WHEN_KW, DialectSet::ALL),
+        ("where", WHERE_KW, DialectSet::ALL),
+        ("while", WHILE_KW, DialectSet::ALL),
+        ("window", WINDOW_KW, DialectSet::ALL),
+        ("with", WITH_KW, DialectSet::ALL),
+        ("within", WITHIN_KW, DialectSet::ALL),
     ]
 };
 
@@ -244,7 +271,7 @@ fn lower_for_lookup(ident: &str, buf: &mut [u8; MAX_KEYWORD_LEN]) -> Option<usiz
 
 /// Look up a keyword and its dialect classification from `ident`, case-insensitively.
 #[inline]
-fn lookup(ident: &str) -> Option<(SyntaxKind, KeywordDialect)> {
+fn lookup(ident: &str) -> Option<(SyntaxKind, DialectSet)> {
     let mut buf = [0u8; MAX_KEYWORD_LEN];
     let len = lower_for_lookup(ident, &mut buf)?;
     let lower = std::str::from_utf8(&buf[..len]).ok()?;
@@ -272,7 +299,7 @@ pub fn keyword_kind(ident: &str) -> Option<SyntaxKind> {
 ///
 /// A Snowflake-only word (e.g. `TASK`, `FLATTEN`) returns its keyword kind under
 /// [`Dialect::Snowflake`] but `None` under [`Dialect::Databricks`], where it is an ordinary
-/// identifier. Shared keywords behave identically in every dialect, so under
+/// identifier. DialectSet::ALL keywords behave identically in every dialect, so under
 /// [`Dialect::Snowflake`] this is byte-for-byte equivalent to [`keyword_kind`].
 #[must_use]
 pub fn keyword_kind_for(ident: &str, dialect: Dialect) -> Option<SyntaxKind> {
@@ -290,7 +317,7 @@ pub fn keyword_texts() -> impl ExactSizeIterator<Item = &'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{keyword_kind, keyword_kind_for, keyword_texts, KeywordDialect, KEYWORDS};
+    use super::{keyword_kind, keyword_kind_for, keyword_texts, KEYWORDS};
     use crate::{Dialect, SyntaxKind};
 
     #[test]
@@ -366,17 +393,12 @@ mod tests {
 
     #[test]
     fn every_keyword_has_a_dialect_classification() {
-        // Completeness, dialect dimension: every keyword in the table carries one of the three
-        // classifications, so the reservation set cannot silently drift as keywords are added.
-        for (text, kind, dialect) in KEYWORDS {
+        // Completeness, dialect dimension: every keyword in the table is reserved in at least one
+        // dialect, so the reservation set cannot silently drift as keywords are added.
+        for (text, kind, dialects) in KEYWORDS {
             assert!(
-                matches!(
-                    dialect,
-                    KeywordDialect::Shared
-                        | KeywordDialect::SnowflakeOnly
-                        | KeywordDialect::DatabricksOnly
-                ),
-                "{text:?} ({kind:?}) has no dialect classification"
+                !dialects.is_empty(),
+                "{text:?} ({kind:?}) is reserved in no dialect"
             );
         }
     }
@@ -444,5 +466,41 @@ mod tests {
                 "{word} must be a plain identifier under Databricks"
             );
         }
+    }
+
+    #[test]
+    fn dialect_memberships_are_honored() {
+        // TOP: Snowflake and Transact-SQL, not MySQL.
+        assert_eq!(
+            keyword_kind_for("top", Dialect::Snowflake),
+            Some(SyntaxKind::TOP_KW)
+        );
+        assert_eq!(
+            keyword_kind_for("top", Dialect::TransactSql),
+            Some(SyntaxKind::TOP_KW)
+        );
+        assert_eq!(keyword_kind_for("top", Dialect::MySql), None);
+
+        // QUALIFY: Snowflake/Spark/BigQuery/DuckDB/Trino, not MySQL/PostgreSQL.
+        assert_eq!(
+            keyword_kind_for("qualify", Dialect::BigQuery),
+            Some(SyntaxKind::QUALIFY_KW)
+        );
+        assert_eq!(keyword_kind_for("qualify", Dialect::MySql), None);
+        assert_eq!(keyword_kind_for("qualify", Dialect::PostgreSql), None);
+
+        // ILIKE: PostgreSQL/Spark-family, not MySQL.
+        assert_eq!(
+            keyword_kind_for("ilike", Dialect::PostgreSql),
+            Some(SyntaxKind::ILIKE_KW)
+        );
+        assert_eq!(keyword_kind_for("ilike", Dialect::MySql), None);
+
+        // REGEXP: MySQL family, not PostgreSQL.
+        assert_eq!(
+            keyword_kind_for("regexp", Dialect::MySql),
+            Some(SyntaxKind::REGEXP_KW)
+        );
+        assert_eq!(keyword_kind_for("regexp", Dialect::PostgreSql), None);
     }
 }

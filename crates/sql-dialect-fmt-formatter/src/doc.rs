@@ -294,13 +294,16 @@ pub use crate::doc_write;
 
 // ---- printing ----
 
-/// Knobs for the printer. Opinionated by design: just a target width and an indent step.
+/// Knobs for the printer. Opinionated by design: a target width, an indent step, and whether that
+/// step is written with tabs.
 #[derive(Clone, Copy, Debug)]
 pub struct PrintOptions {
     /// The column the printer tries to keep lines within.
     pub line_width: usize,
-    /// Number of spaces added per indentation level.
+    /// Number of columns added per indentation level (one tab's width when [`Self::use_tabs`]).
     pub indent_width: usize,
+    /// Indent with `\t` characters (one per level) instead of `indent_width` spaces.
+    pub use_tabs: bool,
 }
 
 impl Default for PrintOptions {
@@ -308,6 +311,25 @@ impl Default for PrintOptions {
         PrintOptions {
             line_width: 80,
             indent_width: 2,
+            use_tabs: false,
+        }
+    }
+}
+
+/// Push `indent` columns of indentation, as tabs (one per `indent_width` columns) when `use_tabs`.
+fn push_indent(out: &mut String, indent: usize, opts: &PrintOptions) {
+    if opts.use_tabs && opts.indent_width > 0 {
+        let levels = indent / opts.indent_width;
+        for _ in 0..levels {
+            out.push('\t');
+        }
+        // A partial level (from source-slice continuation) stays as spaces.
+        for _ in 0..(indent % opts.indent_width) {
+            out.push(' ');
+        }
+    } else {
+        for _ in 0..indent {
+            out.push(' ');
         }
     }
 }
@@ -512,9 +534,7 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                 for piece in s.split('\n') {
                     if !first {
                         out.push('\n');
-                        for _ in 0..cmd.indent {
-                            out.push(' ');
-                        }
+                        push_indent(&mut out, cmd.indent, opts);
                     }
                     out.push_str(piece);
                     first = false;
@@ -618,9 +638,7 @@ pub fn print(doc: &Doc, opts: &PrintOptions) -> String {
                         continue;
                     }
                     out.push('\n');
-                    for _ in 0..cmd.indent {
-                        out.push(' ');
-                    }
+                    push_indent(&mut out, cmd.indent, opts);
                     col = cmd.indent;
                 }
             }
@@ -679,6 +697,7 @@ mod tests {
             &PrintOptions {
                 line_width: width,
                 indent_width: 4,
+                use_tabs: false,
             },
         )
     }

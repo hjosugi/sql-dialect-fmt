@@ -21,6 +21,23 @@ fn non_trivia_for(input: &str, dialect: Dialect) -> Vec<LexPair<'_>> {
         .collect()
 }
 
+/// Like [`non_trivia_for`], but keeps comments (only whitespace and newlines are dropped), so
+/// comment handling can be asserted on directly.
+fn significant_for(input: &str, dialect: Dialect) -> Vec<LexPair<'_>> {
+    let lexed = tokenize_for_dialect(input, dialect);
+    let joined: String = lexed.tokens.iter().map(|t| t.text).collect();
+    assert_eq!(
+        joined, input,
+        "lex must round-trip for {input:?} @ {dialect:?}"
+    );
+    lexed
+        .tokens
+        .into_iter()
+        .filter(|t| !matches!(t.kind, WHITESPACE | NEWLINE))
+        .map(|t| (t.kind, t.text))
+        .collect()
+}
+
 #[test]
 fn backtick_identifier_is_quoted_ident_under_databricks() {
     // A plain backtick-quoted identifier lexes to one QUOTED_IDENT token (backticks included).
@@ -141,4 +158,136 @@ fn double_slash_comments_remain_snowflake_only() {
             .all(|(kind, _)| *kind != COMMENT),
         "Databricks must not treat // as a line comment"
     );
+}
+
+#[test]
+fn mysql_double_quotes_are_strings_backticks_are_identifiers() {
+    assert_eq!(
+        non_trivia_for("\"hello\" `col`", Dialect::MySql),
+        vec![(STRING, "\"hello\""), (QUOTED_IDENT, "`col`")]
+    );
+    let lexed = tokenize_for_dialect("\"hello\" `col`", Dialect::MySql);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+}
+
+#[test]
+fn mysql_hash_comment_at_variable_and_prefixed_string() {
+    assert_eq!(
+        significant_for("# note\n@user x'0A'", Dialect::MySql),
+        vec![(COMMENT, "# note"), (VARIABLE, "@user"), (STRING, "x'0A'"),]
+    );
+    let lexed = tokenize_for_dialect("# note\n@user x'0A'", Dialect::MySql);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+}
+
+#[test]
+fn bigquery_backtick_identifier_hash_comment_and_raw_string() {
+    assert_eq!(
+        significant_for(
+            "SELECT `proj.ds.t` # trailing\n, r'raw\\n'",
+            Dialect::BigQuery
+        ),
+        vec![
+            (IDENT, "SELECT"),
+            (QUOTED_IDENT, "`proj.ds.t`"),
+            (COMMENT, "# trailing"),
+            (COMMA, ","),
+            (STRING, "r'raw\\n'"),
+        ]
+    );
+    let lexed = tokenize_for_dialect("SELECT `t` # c", Dialect::BigQuery);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+}
+
+#[test]
+fn transactsql_bracket_ident_hash_ident_at_variable_and_nested_comment() {
+    assert_eq!(
+        non_trivia_for("[my col] #temp @var", Dialect::TransactSql),
+        vec![
+            (QUOTED_IDENT, "[my col]"),
+            (IDENT, "#temp"),
+            (VARIABLE, "@var"),
+        ]
+    );
+    // Nested block comments collapse to a single BLOCK_COMMENT token under T-SQL.
+    let nested = tokenize_for_dialect("/* a /* b */ c */", Dialect::TransactSql);
+    assert!(nested.errors.is_empty(), "{:?}", nested.errors);
+    assert_eq!(
+        significant_for("/* a /* b */ c */", Dialect::TransactSql),
+        vec![(BLOCK_COMMENT, "/* a /* b */ c */")]
+    );
+    // A non-nesting dialect stops the block comment at the first `*/`.
+    let flat = tokenize_for_dialect("/* a /* b */ c */", Dialect::Snowflake);
+    assert_eq!(
+        significant_for("/* a /* b */ c */", Dialect::Snowflake),
+        vec![
+            (BLOCK_COMMENT, "/* a /* b */"),
+            (IDENT, "c"),
+            (STAR, "*"),
+            (SLASH, "/"),
+        ]
+    );
+    assert!(flat.errors.is_empty(), "{:?}", flat.errors);
+}
+
+#[test]
+fn oracle_double_quoted_identifier_and_colon_bind_variable() {
+    assert_eq!(
+        non_trivia_for("\"col\" :name n'x'", Dialect::PlSql),
+        vec![
+            (QUOTED_IDENT, "\"col\""),
+            (VARIABLE, ":name"),
+            (STRING, "n'x'"),
+        ]
+    );
+    let lexed = tokenize_for_dialect("\"col\" :name n'x'", Dialect::PlSql);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    // `::` stays the cast operator, not a bind variable.
+    assert_eq!(
+        non_trivia_for("a::int", Dialect::PlSql),
+        vec![(IDENT, "a"), (COLON2, "::"), (IDENT, "int")]
+    );
+}
+
+#[test]
+fn postgres_dollar_quoting_dollar_params_and_nested_comments() {
+    assert_eq!(
+        non_trivia_for("$$body$$ $1 e'a\\n'", Dialect::PostgreSql),
+        vec![
+            (DOLLAR_STRING, "$$body$$"),
+            (VARIABLE, "$1"),
+            (STRING, "e'a\\n'"),
+        ]
+    );
+    let lexed = tokenize_for_dialect("$$body$$ $1", Dialect::PostgreSql);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    assert_eq!(
+        significant_for("/* a /* b */ c */", Dialect::PostgreSql),
+        vec![(BLOCK_COMMENT, "/* a /* b */ c */")]
+    );
+}
+
+#[test]
+fn sqlite_bracket_and_backtick_identifiers() {
+    assert_eq!(
+        non_trivia_for("[a b] `c d` x'0A'", Dialect::Sqlite),
+        vec![
+            (QUOTED_IDENT, "[a b]"),
+            (QUOTED_IDENT, "`c d`"),
+            (STRING, "x'0A'"),
+        ]
+    );
+    let lexed = tokenize_for_dialect("[a b] `c d` x'0A'", Dialect::Sqlite);
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+}
+
+#[test]
+fn every_dialect_lexes_a_mixed_sample_losslessly() {
+    let sample =
+        "SELECT \"a\", `b`, [c], 's', x'0A', @v, :n, $1, $$d$$, 1.5e3 /* c /* n */ */ # h\n-- l --";
+    for dialect in Dialect::ALL {
+        let lexed = tokenize_for_dialect(sample, *dialect);
+        let joined: String = lexed.tokens.iter().map(|t| t.text).collect();
+        assert_eq!(joined, sample, "lossless round-trip failed for {dialect:?}");
+    }
 }

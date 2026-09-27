@@ -126,6 +126,14 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     continue;
                 }
             }
+            // Prefixed string literal (`e'…'`, `n'…'`, `x'…'`, `b'…'`, `r'…'`) when the dialect
+            // supports it and the prefix letter is immediately followed by a single quote.
+            if let Some(backslash_escapes) = self.prefixed_string_at() {
+                self.pos += 1; // prefix letter
+                self.string_body(start, b'\'', backslash_escapes);
+                self.push(SyntaxKind::STRING, start);
+                continue;
+            }
             match self.peek() {
                 b' ' | b'\t' => {
                     self.eat_while(|c| c == b' ' || c == b'\t');
@@ -159,32 +167,46 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.push(SyntaxKind::BLOCK_COMMENT, start);
                 }
                 b'\'' => {
-                    self.string_body(start, true);
+                    self.string_body(start, b'\'', true);
                     self.push(SyntaxKind::STRING, start);
                 }
-                b'r' | b'R'
-                    if self.options.dialect.supports_prefixed_strings()
-                        && self.peek_at(1) == b'\'' =>
-                {
-                    self.pos += 1; // raw-string prefix
-                    self.string_body(start, false);
-                    self.push(SyntaxKind::STRING, start);
-                }
-                b'x' | b'X'
-                    if self.options.dialect.supports_prefixed_strings()
-                        && self.peek_at(1) == b'\'' =>
-                {
-                    self.pos += 1; // hex-string prefix
-                    self.string_body(start, false);
-                    self.push(SyntaxKind::STRING, start);
-                }
-                b'"' => {
+                b'"' if self.options.dialect.supports_double_quoted_identifiers() => {
                     self.quoted_ident_body(start);
                     self.push(SyntaxKind::QUOTED_IDENT, start);
+                }
+                b'"' => {
+                    // MySQL family / BigQuery / Hive / Spark / N1QL: `"..."` is a string literal.
+                    self.string_body(start, b'"', true);
+                    self.push(SyntaxKind::STRING, start);
                 }
                 b'`' if self.options.dialect.supports_backtick_identifiers() => {
                     self.backtick_ident_body(start);
                     self.push(SyntaxKind::QUOTED_IDENT, start);
+                }
+                b'[' if self.options.dialect.supports_bracket_identifiers() => {
+                    self.bracket_ident_body(start);
+                    self.push(SyntaxKind::QUOTED_IDENT, start);
+                }
+                b'#' if self.options.dialect.supports_hash_line_comments() => {
+                    self.line_comment_from(1);
+                    self.push(SyntaxKind::COMMENT, start);
+                }
+                b'#' if self.options.dialect.supports_hash_identifiers() => {
+                    self.hash_ident();
+                    self.push(SyntaxKind::IDENT, start);
+                }
+                b'@' if self.options.dialect.supports_at_variables()
+                    && (is_ident_start(self.peek_at(1)) || self.peek_at(1) == b'@') =>
+                {
+                    self.at_variable();
+                    self.push(SyntaxKind::VARIABLE, start);
+                }
+                b':' if self.options.dialect.supports_colon_variables()
+                    && is_ident_start(self.peek_at(1)) =>
+                {
+                    self.pos += 1; // :
+                    self.eat_while(is_ident_continue);
+                    self.push(SyntaxKind::VARIABLE, start);
                 }
                 // `${ ... }` template-substitution placeholder. A `$` immediately followed by `{`
                 // opens a placeholder whose body is a balanced brace run: JS template-literal
@@ -246,7 +268,13 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
 
     /// Consume `--`/`//` and the rest of the physical line (not the newline itself).
     fn line_comment(&mut self) {
-        self.pos += 2;
+        self.line_comment_from(2);
+    }
+
+    /// Consume a line comment whose marker is `marker_len` bytes (`--`/`//` = 2, `#` = 1) and the
+    /// rest of the physical line (not the newline itself).
+    fn line_comment_from(&mut self, marker_len: usize) {
+        self.pos += marker_len;
         while !self.at_end() {
             let c = self.peek();
             if c == b'\n' || c == b'\r' {
@@ -256,26 +284,35 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
         }
     }
 
-    /// Consume `/* ... */`. Records an error if unterminated. Non-nesting (Snowflake semantics).
+    /// Consume `/* ... */`. Records an error if unterminated. Nests only when the dialect says so
+    /// (PostgreSQL, Transact-SQL); every other dialect stops at the first `*/`, as Snowflake does.
     fn block_comment(&mut self, start: usize) {
         self.pos += 2; // /*
-        loop {
+        let nested = self.options.dialect.supports_nested_block_comments();
+        let mut depth = 1usize;
+        while depth > 0 {
             if self.at_end() {
                 self.error("unterminated block comment", start);
-                break;
+                return;
+            }
+            if nested && self.peek() == b'/' && self.peek_at(1) == b'*' {
+                self.pos += 2;
+                depth += 1;
+                continue;
             }
             if self.peek() == b'*' && self.peek_at(1) == b'/' {
                 self.pos += 2;
-                break;
+                depth -= 1;
+                continue;
             }
             self.pos += 1;
         }
     }
 
-    /// Consume a single-quoted string. Handles `''` (doubled quote) and `\` escapes
-    /// (Snowflake interprets backslash escape sequences in string literals by default).
-    fn string_body(&mut self, start: usize, backslash_escapes: bool) {
-        self.pos += 1; // opening '
+    /// Consume a single-quoted (`quote == b'\''`) or, for the MySQL family, double-quoted string.
+    /// Handles `''` / `""` (doubled quote) and, when `backslash_escapes`, `\` escapes.
+    fn string_body(&mut self, start: usize, quote: u8, backslash_escapes: bool) {
+        self.pos += 1; // opening quote
         loop {
             if self.at_end() {
                 self.error("unterminated string literal", start);
@@ -288,8 +325,8 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                         self.pos += 1;
                     }
                 }
-                b'\'' => {
-                    if self.peek() == b'\'' {
+                c if c == quote => {
+                    if self.peek() == quote {
                         self.pos += 1; // doubled quote → escaped quote, keep going
                     } else {
                         break; // closing quote
@@ -298,6 +335,56 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 _ => {}
             }
         }
+    }
+
+    /// Consume a `[bracketed identifier]` (Transact-SQL, SQLite). Handles `]]` escaping.
+    fn bracket_ident_body(&mut self, start: usize) {
+        self.pos += 1; // opening [
+        loop {
+            if self.at_end() {
+                self.error("unterminated bracketed identifier", start);
+                break;
+            }
+            if self.bump() == b']' {
+                if self.peek() == b']' {
+                    self.pos += 1; // doubled ] → escaped, keep going
+                } else {
+                    break; // closing ]
+                }
+            }
+        }
+    }
+
+    /// Consume a Transact-SQL `#local` / `##global` temporary-object identifier.
+    fn hash_ident(&mut self) {
+        while self.peek() == b'#' {
+            self.pos += 1;
+        }
+        self.eat_while(is_ident_continue);
+    }
+
+    /// Consume a Transact-SQL / MySQL `@name` or `@@name` variable.
+    fn at_variable(&mut self) {
+        self.pos += 1; // @
+        if self.peek() == b'@' {
+            self.pos += 1;
+        }
+        self.eat_while(is_ident_continue);
+    }
+
+    /// When the cursor is on a dialect-specific string prefix letter (`e`, `n`, `x`, `b`, `r`)
+    /// immediately followed by `'`, return `Some(backslash_escapes)` for that prefix.
+    fn prefixed_string_at(&self) -> Option<bool> {
+        let c = self.peek();
+        if !c.is_ascii_alphabetic() || self.peek_at(1) != b'\'' {
+            return None;
+        }
+        let dialect = self.options.dialect;
+        dialect
+            .prefixed_string_letters()
+            .iter()
+            .any(|letter| letter.eq_ignore_ascii_case(&c))
+            .then(|| dialect.prefixed_string_uses_backslash_escapes(c))
     }
 
     /// Consume a `"quoted identifier"`. Handles `""` (doubled quote). No backslash escapes.

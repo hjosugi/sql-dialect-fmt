@@ -47,8 +47,8 @@ use sql_dialect_fmt_lsp::{
     apply_change_with_encoding, completion_items, diagnostic_lint_code,
     diagnostics_with_lint_options, document_symbols_with_encoding, folding_ranges,
     format_edits_with_encoding, format_range_edits_with_encoding, hover_with_encoding,
-    on_type_formatting_edits_with_encoding, semantic_tokens_range_with_encoding,
-    semantic_tokens_with_encoding, token_modifiers, token_types, LintOptions,
+    on_type_formatting_edits_with_encoding, semantic_tokens_range_with_dialect,
+    semantic_tokens_with_dialect, token_modifiers, token_types, LintOptions,
     PositionEncoding as NegotiatedPositionEncoding,
 };
 use sql_dialect_fmt_parser::Dialect;
@@ -633,10 +633,11 @@ fn semantic_tokens_full(
     state: &mut ServerState,
 ) -> Option<lsp_types::SemanticTokensResult> {
     let text = &docs.get(&params.text_document.uri)?.text;
+    let dialect = state.effective_options(&params.text_document.uri).dialect;
     Some(
         SemanticTokens {
             result_id: Some(state.next_semantic_result_id()),
-            data: semantic_tokens_with_encoding(text, state.position_encoding),
+            data: semantic_tokens_with_dialect(text, dialect, state.position_encoding),
         }
         .into(),
     )
@@ -648,10 +649,11 @@ fn semantic_tokens_full_delta(
     state: &mut ServerState,
 ) -> Option<SemanticTokensFullDeltaResult> {
     let text = &docs.get(&params.text_document.uri)?.text;
+    let dialect = state.effective_options(&params.text_document.uri).dialect;
     Some(
         SemanticTokens {
             result_id: Some(state.next_semantic_result_id()),
-            data: semantic_tokens_with_encoding(text, state.position_encoding),
+            data: semantic_tokens_with_dialect(text, dialect, state.position_encoding),
         }
         .into(),
     )
@@ -663,10 +665,16 @@ fn semantic_tokens_range(
     state: &ServerState,
 ) -> Option<SemanticTokensRangeResult> {
     let text = &docs.get(&params.text_document.uri)?.text;
+    let dialect = state.effective_options(&params.text_document.uri).dialect;
     Some(
         SemanticTokens {
             result_id: None,
-            data: semantic_tokens_range_with_encoding(text, params.range, state.position_encoding),
+            data: semantic_tokens_range_with_dialect(
+                text,
+                dialect,
+                params.range,
+                state.position_encoding,
+            ),
         }
         .into(),
     )

@@ -11,6 +11,34 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Multi-dialect foundation: the `Dialect` selector now covers the full
+  [`sql-formatter`](https://github.com/sql-formatter-org/sql-formatter) vocabulary — Snowflake
+  (default), Databricks, Spark, BigQuery, ClickHouse, Db2, Db2i, DuckDB, Hive, MariaDB, MySQL,
+  TiDB, N1QL, Oracle PL/SQL, PostgreSQL, Redshift, SingleStoreDB, SQLite, standard `sql`,
+  Transact-SQL, and Trino. `Dialect::from_name` resolves canonical names plus aliases
+  (`oracle`/`plsql`, `tsql`/`transactsql`, `postgres`, `presto`, …), and `Dialect::ALL` lists them
+  in ABI order.
+- Data-driven keyword reservation: the per-keyword dialect classification is now a
+  `DialectSet` bitmask over `Dialect` (replacing the two-dialect `KeywordDialect` enum), and several
+  keywords carry accurate per-dialect memberships (`top`, `qualify`, `ilike`, `rlike`, `regexp`).
+  Snowflake and Databricks reservation is unchanged.
+- Dialect-aware lexing: identifier quoting (`"…"`, `` `…` ``, `[…]`), line comments (`--`, `//`,
+  `#`), nested block comments, dictionary-string prefixes (`E''`, `N''`, `X''`, `B''`, `R''`),
+  `@var`/`@@var`, `:bind`, `#temp` identifiers, `$1`/`$$…$$`, and null-safe `<=>` now diverge per
+  dialect. Snowflake and Databricks output is byte-identical to before.
+- Dialect-aware syntax highlighting: `sql-dialect-fmt-highlight` exposes
+  `highlight_for_dialect`/`classify_for`, so identifier quotes, comments, variables, and keyword
+  reservation follow the active dialect. The LSP's `textDocument/semanticTokens` requests now use
+  the document's configured dialect too.
+- Configuration parity with `sql-formatter`: `data_type_case`, `function_case`, and
+  `identifier_case` (independent casing for type words, function names, and unquoted identifiers),
+  `logical_operator_newline` (`before`/`after`), `dense_operators`, `newline_before_semicolon`,
+  `lines_between_queries`, and `expression_width`. `use_tabs` indents with tabs, and `tab_width`
+  is accepted as a `sql-dialect-fmt.toml` alias for `indent_width`. Every option is available on
+  the CLI (`--data-type-case`, `--function-case`, `--identifier-case`,
+  `--logical-operator-newline`, `--dense-operators`, `--newline-before-semicolon`,
+  `--lines-between-queries`, `--expression-width`, `--use-tabs`) and in config files; the formatter
+  defaults are unchanged.
 - The external grammar oracle report now has a Generator Hazards table for the grammars-v4
   Snowflake and Apache Spark grammars: semantic predicates, inline and named actions, lexer modes,
   trivia routed off the parse tree, and keyword fallback rules with their alternative counts.

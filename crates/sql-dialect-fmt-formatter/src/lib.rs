@@ -78,6 +78,16 @@ pub enum CommaStyle {
     Leading,
 }
 
+/// Where a logical operator (`AND`/`OR`) sits when a boolean expression wraps across lines.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LogicalOperatorNewline {
+    /// The operator starts the continuation line (the default; matches Prettier-style SQL).
+    Before,
+    /// The operator ends the previous line.
+    After,
+}
+
 /// Options controlling formatting. Opinionated and intentionally small.
 ///
 /// This type is `#[non_exhaustive]`: future releases may add knobs without it being a breaking
@@ -115,6 +125,26 @@ pub struct FormatOptions {
     pub select_item_layout: SelectItemLayout,
     /// Placement of commas in wrapped comma-separated lists.
     pub comma_style: CommaStyle,
+    /// Casing for recognized built-in data-type words (`NUMBER`, `VARCHAR`, …) in type positions.
+    pub data_type_case: KeywordCase,
+    /// Casing for recognized function names (`count`, `sum`, …).
+    pub function_case: KeywordCase,
+    /// Casing for unquoted identifiers that are not keywords, types, or function names.
+    pub identifier_case: KeywordCase,
+    /// Where `AND`/`OR` sit when a boolean expression wraps.
+    pub logical_operator_newline: LogicalOperatorNewline,
+    /// Pack binary operators without surrounding spaces (`price+(price*tax)`).
+    pub dense_operators: bool,
+    /// Indent with tab characters (one per level) instead of spaces.
+    pub use_tabs: bool,
+    /// Place the statement-terminating `;` on its own line.
+    pub newline_before_semicolon: bool,
+    /// Force exactly this many blank lines between top-level statements. `None` preserves the
+    /// author's grouping (at most one blank line).
+    pub lines_between_queries: Option<usize>,
+    /// Maximum flat length a parenthesized expression may occupy before it must wrap. `None` uses
+    /// [`FormatOptions::line_width`].
+    pub expression_width: Option<usize>,
     /// The SQL dialect to parse and format. Defaults to [`Dialect::Snowflake`].
     pub dialect: Dialect,
 }
@@ -129,6 +159,15 @@ impl Default for FormatOptions {
             line_ending: LineEnding::Auto,
             select_item_layout: SelectItemLayout::Vertical,
             comma_style: CommaStyle::Trailing,
+            data_type_case: KeywordCase::Preserve,
+            function_case: KeywordCase::Preserve,
+            identifier_case: KeywordCase::Preserve,
+            logical_operator_newline: LogicalOperatorNewline::Before,
+            dense_operators: false,
+            use_tabs: false,
+            newline_before_semicolon: false,
+            lines_between_queries: None,
+            expression_width: None,
             dialect: Dialect::Snowflake,
         }
     }
@@ -193,6 +232,72 @@ impl FormatOptions {
         self
     }
 
+    /// Choose the casing for built-in data-type words in type positions.
+    #[must_use]
+    pub fn with_data_type_case(mut self, data_type_case: KeywordCase) -> Self {
+        self.data_type_case = data_type_case;
+        self
+    }
+
+    /// Choose the casing for function names.
+    #[must_use]
+    pub fn with_function_case(mut self, function_case: KeywordCase) -> Self {
+        self.function_case = function_case;
+        self
+    }
+
+    /// Choose the casing for unquoted identifiers.
+    #[must_use]
+    pub fn with_identifier_case(mut self, identifier_case: KeywordCase) -> Self {
+        self.identifier_case = identifier_case;
+        self
+    }
+
+    /// Choose where logical operators sit when a boolean expression wraps.
+    #[must_use]
+    pub fn with_logical_operator_newline(
+        mut self,
+        logical_operator_newline: LogicalOperatorNewline,
+    ) -> Self {
+        self.logical_operator_newline = logical_operator_newline;
+        self
+    }
+
+    /// Choose whether binary operators are packed without surrounding spaces.
+    #[must_use]
+    pub fn with_dense_operators(mut self, dense_operators: bool) -> Self {
+        self.dense_operators = dense_operators;
+        self
+    }
+
+    /// Choose whether the statement-terminating `;` goes on its own line.
+    #[must_use]
+    pub fn with_newline_before_semicolon(mut self, newline_before_semicolon: bool) -> Self {
+        self.newline_before_semicolon = newline_before_semicolon;
+        self
+    }
+
+    /// Force a fixed number of blank lines between top-level statements.
+    #[must_use]
+    pub fn with_lines_between_queries(mut self, lines_between_queries: Option<usize>) -> Self {
+        self.lines_between_queries = lines_between_queries;
+        self
+    }
+
+    /// Bound the flat width of parenthesized expressions before they wrap.
+    #[must_use]
+    pub fn with_expression_width(mut self, expression_width: Option<usize>) -> Self {
+        self.expression_width = expression_width;
+        self
+    }
+
+    /// Choose whether indentation uses tab characters.
+    #[must_use]
+    pub fn with_use_tabs(mut self, use_tabs: bool) -> Self {
+        self.use_tabs = use_tabs;
+        self
+    }
+
     /// Set the SQL dialect to parse and format, returning the updated options so calls can be
     /// chained.
     #[must_use]
@@ -205,16 +310,26 @@ impl FormatOptions {
         PrintOptions {
             line_width: self.line_width,
             indent_width: self.indent_width,
+            use_tabs: self.use_tabs,
         }
     }
 
     fn ctx(&self) -> Ctx {
         Ctx {
             keyword_case: self.effective_keyword_case(),
+            data_type_case: self.data_type_case,
+            function_case: self.function_case,
+            identifier_case: self.identifier_case,
+            logical_operator_newline: self.logical_operator_newline,
+            dense_operators: self.dense_operators,
             line_width: self.line_width,
             indent_width: self.indent_width,
             select_item_layout: self.select_item_layout,
             comma_style: self.comma_style,
+            use_tabs: self.use_tabs,
+            newline_before_semicolon: self.newline_before_semicolon,
+            lines_between_queries: self.lines_between_queries,
+            expression_width: self.expression_width,
             dialect: self.dialect,
         }
     }

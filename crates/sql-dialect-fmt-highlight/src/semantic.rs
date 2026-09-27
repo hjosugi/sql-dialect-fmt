@@ -13,7 +13,8 @@
 //! or SQL (per a `LANGUAGE` clause). Tokens that fall inside an injection region are tagged so an
 //! editor can either re-highlight them with the embedded grammar or shade the whole body.
 
-use crate::{highlight, HighlightKind, HighlightToken};
+use crate::{highlight, highlight_for_dialect, HighlightKind, HighlightToken, Highlighted};
+use sql_dialect_fmt_syntax::Dialect;
 use sql_dialect_fmt_text::{utf16_len, LineIndex};
 
 /// The standard LSP semantic token types this highlighter emits.
@@ -226,7 +227,15 @@ pub struct LineToken {
 /// `AS $$...$$` with no `LANGUAGE` clause default to [`InjectedLanguage::Sql`]. Runs off the lexical
 /// highlighter, so it never parses or panics.
 pub fn detect_injections(input: &str) -> Vec<Injection> {
-    let highlighted = highlight(input);
+    detect_injections_for_dialect(input, Dialect::Snowflake)
+}
+
+/// Like [`detect_injections`], but tokenizing and classifying for `dialect`.
+pub fn detect_injections_for_dialect(input: &str, dialect: Dialect) -> Vec<Injection> {
+    detect_injections_from(&highlight_for_dialect(input, dialect))
+}
+
+fn detect_injections_from(highlighted: &Highlighted<'_>) -> Vec<Injection> {
     let mut injections = Vec::new();
     let mut language: Option<InjectedLanguage> = None;
     let mut expect_language_name = false;
@@ -316,7 +325,15 @@ pub fn detect_injections(input: &str) -> Vec<Injection> {
 /// but they are returned alongside by [`semantic_tokens`] so an editor can layer an embedded
 /// grammar over the body's range.
 pub fn resolve_tokens(input: &str) -> Vec<ResolvedToken> {
-    let highlighted = highlight(input);
+    resolve_tokens_from(&highlight(input))
+}
+
+/// Like [`resolve_tokens`], but tokenizing and classifying for `dialect`.
+pub fn resolve_tokens_for_dialect(input: &str, dialect: Dialect) -> Vec<ResolvedToken> {
+    resolve_tokens_from(&highlight_for_dialect(input, dialect))
+}
+
+fn resolve_tokens_from(highlighted: &Highlighted<'_>) -> Vec<ResolvedToken> {
     highlighted
         .tokens
         .iter()
@@ -420,9 +437,14 @@ pub struct SemanticTokens {
 
 /// Resolve `input` to semantic tokens *and* its embedded-language injection regions in one pass.
 pub fn semantic_tokens(input: &str) -> SemanticTokens {
+    semantic_tokens_for_dialect(input, Dialect::Snowflake)
+}
+
+/// Like [`semantic_tokens`], but for `dialect`.
+pub fn semantic_tokens_for_dialect(input: &str, dialect: Dialect) -> SemanticTokens {
     SemanticTokens {
-        tokens: resolve_tokens(input),
-        injections: detect_injections(input),
+        tokens: resolve_tokens_for_dialect(input, dialect),
+        injections: detect_injections_for_dialect(input, dialect),
     }
 }
 
@@ -430,11 +452,19 @@ pub fn semantic_tokens(input: &str) -> SemanticTokens {
 /// dollar-quoted bodies) into one token per line — the LSP encoding forbids a token spanning a
 /// newline — and compute UTF-16 positions and lengths. Output is sorted by `(line, start_char)`.
 pub fn line_tokens(input: &str) -> Vec<LineToken> {
-    let resolved = resolve_tokens(input);
+    line_tokens_from(&resolve_tokens(input), input)
+}
+
+/// Like [`line_tokens`], but for `dialect`.
+pub fn line_tokens_for_dialect(input: &str, dialect: Dialect) -> Vec<LineToken> {
+    line_tokens_from(&resolve_tokens_for_dialect(input, dialect), input)
+}
+
+fn line_tokens_from(resolved: &[ResolvedToken], input: &str) -> Vec<LineToken> {
     let index = LineIndex::new(input);
     let mut out = Vec::new();
 
-    for token in &resolved {
+    for token in resolved {
         let mut piece_start = token.range.start;
         for piece in input[token.range.clone()].split('\n') {
             let length = utf16_len(piece);
@@ -456,11 +486,19 @@ pub fn line_tokens(input: &str) -> Vec<LineToken> {
 
 /// Like [`line_tokens`], but columns and token lengths are measured in UTF-8 bytes.
 pub fn line_tokens_utf8(input: &str) -> Vec<LineToken> {
-    let resolved = resolve_tokens(input);
+    line_tokens_utf8_from(&resolve_tokens(input), input)
+}
+
+/// Like [`line_tokens_utf8`], but for `dialect`.
+pub fn line_tokens_utf8_for_dialect(input: &str, dialect: Dialect) -> Vec<LineToken> {
+    line_tokens_utf8_from(&resolve_tokens_for_dialect(input, dialect), input)
+}
+
+fn line_tokens_utf8_from(resolved: &[ResolvedToken], input: &str) -> Vec<LineToken> {
     let index = LineIndex::new(input);
     let mut out = Vec::new();
 
-    for token in &resolved {
+    for token in resolved {
         let mut piece_start = token.range.start;
         for piece in input[token.range.clone()].split('\n') {
             let length = piece.len() as u32;
@@ -512,9 +550,19 @@ pub fn semantic_tokens_lsp(input: &str) -> Vec<[u32; 5]> {
     delta_encode(&line_tokens(input))
 }
 
+/// One-shot semantic tokens for `dialect`.
+pub fn semantic_tokens_lsp_for_dialect(input: &str, dialect: Dialect) -> Vec<[u32; 5]> {
+    delta_encode(&line_tokens_for_dialect(input, dialect))
+}
+
 /// One-shot semantic tokens using UTF-8 columns/lengths.
 pub fn semantic_tokens_lsp_utf8(input: &str) -> Vec<[u32; 5]> {
     delta_encode(&line_tokens_utf8(input))
+}
+
+/// One-shot UTF-8 semantic tokens for `dialect`.
+pub fn semantic_tokens_lsp_utf8_for_dialect(input: &str, dialect: Dialect) -> Vec<[u32; 5]> {
+    delta_encode(&line_tokens_utf8_for_dialect(input, dialect))
 }
 
 #[cfg(test)]
@@ -768,5 +816,37 @@ mod tests {
             let _ = semantic_tokens(sql);
             let _ = semantic_tokens_lsp(sql);
         }
+    }
+
+    #[test]
+    fn dialect_aware_tokens_diverge_by_quote_and_keyword() {
+        use crate::SemanticTokenType as T;
+        // MySQL: `"x"` is a string literal.
+        let mysql = resolve_tokens_for_dialect("SELECT \"x\"", Dialect::MySql);
+        assert_eq!(
+            mysql.iter().map(|t| t.token_type).collect::<Vec<_>>(),
+            vec![T::Keyword, T::String]
+        );
+        // Snowflake: `"x"` is a quoted identifier (mapped to `Variable`).
+        let snowflake = resolve_tokens_for_dialect("SELECT \"x\"", Dialect::Snowflake);
+        assert_eq!(
+            snowflake.iter().map(|t| t.token_type).collect::<Vec<_>>(),
+            vec![T::Keyword, T::Variable]
+        );
+        // `TASK` is reserved in Snowflake, an ordinary identifier under MySQL.
+        assert_eq!(
+            resolve_tokens_for_dialect("SELECT task", Dialect::Snowflake)
+                .last()
+                .expect("token")
+                .token_type,
+            T::Keyword
+        );
+        assert_eq!(
+            resolve_tokens_for_dialect("SELECT task", Dialect::MySql)
+                .last()
+                .expect("token")
+                .token_type,
+            T::Variable
+        );
     }
 }

@@ -63,9 +63,10 @@ pub unsafe extern "C" fn sql_dialect_fmt_format(
 
 /// Format the UTF-8 SQL source stored at `ptr..ptr + len` using an explicit dialect.
 ///
-/// `dialect` values:
-/// - `0`: Snowflake
-/// - `1`: Databricks
+/// `dialect` values follow [`Dialect::ALL`]: `0` Snowflake, `1` Databricks, `2` Spark,
+/// `3` BigQuery, `4` ClickHouse, `5` Db2, `6` Db2i, `7` DuckDb, `8` Hive, `9` MariaDb, `10` MySql,
+/// `11` TiDb, `12` N1ql, `13` PlSql (Oracle), `14` PostgreSql, `15` Redshift, `16` SingleStoreDb,
+/// `17` Sqlite, `18` Sql, `19` TransactSql, `20` Trino.
 ///
 /// Unknown values fall back to Snowflake for forwards-compatible callers.
 ///
@@ -89,7 +90,8 @@ pub unsafe extern "C" fn sql_dialect_fmt_format_with_dialect(
 ///
 /// Enum values are keyword case `0 = upper`, `1 = lower`, `2 = preserve`; SELECT layout
 /// `0 = auto`, `1 = vertical`; comma style `0 = trailing`, `1 = leading`; line ending `0 = auto`,
-/// `1 = LF`, `2 = CRLF`; and dialect `0 = Snowflake`, `1 = Databricks`. Unknown values fall back
+/// `1 = LF`, `2 = CRLF`; and dialect values follow [`Dialect::ALL`] (see
+/// [`sql_dialect_fmt_format_with_dialect`]). Unknown values fall back
 /// to the product default for that option, keeping extension hosts forwards-compatible with newer
 /// Wasm builds.
 ///
@@ -204,10 +206,14 @@ fn line_ending_from_u32(value: u32) -> LineEnding {
 }
 
 fn dialect_from_u32(dialect: u32) -> Dialect {
-    match dialect {
-        1 => Dialect::Databricks,
-        _ => Dialect::Snowflake,
-    }
+    // `Dialect::ALL` order is the ABI: 0 = Snowflake, 1 = Databricks, 2 = Spark, 3 = BigQuery,
+    // 4 = ClickHouse, 5 = Db2, 6 = Db2i, 7 = DuckDb, 8 = Hive, 9 = MariaDb, 10 = MySql, 11 = TiDb,
+    // 12 = N1ql, 13 = PlSql, 14 = PostgreSql, 15 = Redshift, 16 = SingleStoreDb, 17 = Sqlite,
+    // 18 = Sql, 19 = TransactSql, 20 = Trino. Unknown values fall back to Snowflake.
+    Dialect::ALL
+        .get(dialect as usize)
+        .copied()
+        .unwrap_or(Dialect::Snowflake)
 }
 
 /// Pointer to the most recent formatted result.

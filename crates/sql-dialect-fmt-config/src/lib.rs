@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Deserializer};
 use sql_dialect_fmt_formatter::{
-    CommaStyle, FormatOptions, KeywordCase, LineEnding, SelectItemLayout,
+    CommaStyle, FormatOptions, KeywordCase, LineEnding, LogicalOperatorNewline, SelectItemLayout,
 };
 use sql_dialect_fmt_parser::Dialect;
 
@@ -26,13 +26,36 @@ pub const CONFIG_FILE_NAME: &str = "sql-dialect-fmt.toml";
 pub struct Config {
     /// Target line width the printer keeps within where it can.
     pub line_width: Option<usize>,
-    /// Spaces per indentation level.
+    /// Spaces per indentation level. `tab_width` is accepted as an alias (sql-formatter spelling).
+    #[serde(alias = "tab_width")]
     pub indent_width: Option<usize>,
     /// Upper-case SQL keywords.
     pub uppercase_keywords: Option<bool>,
     /// Keyword casing policy.
     #[serde(default, deserialize_with = "deserialize_keyword_case")]
     pub keyword_case: Option<KeywordCase>,
+    /// Casing for built-in data-type words in type positions.
+    #[serde(default, deserialize_with = "deserialize_data_type_case")]
+    pub data_type_case: Option<KeywordCase>,
+    /// Casing for function names.
+    #[serde(default, deserialize_with = "deserialize_function_case")]
+    pub function_case: Option<KeywordCase>,
+    /// Casing for unquoted identifiers.
+    #[serde(default, deserialize_with = "deserialize_identifier_case")]
+    pub identifier_case: Option<KeywordCase>,
+    /// Where `AND`/`OR` sit when a boolean expression wraps: `before` or `after`.
+    #[serde(default, deserialize_with = "deserialize_logical_operator_newline")]
+    pub logical_operator_newline: Option<LogicalOperatorNewline>,
+    /// Pack binary operators without surrounding spaces.
+    pub dense_operators: Option<bool>,
+    /// Indent with tab characters instead of spaces.
+    pub use_tabs: Option<bool>,
+    /// Place the statement-terminating `;` on its own line.
+    pub newline_before_semicolon: Option<bool>,
+    /// Number of blank lines to force between top-level statements.
+    pub lines_between_queries: Option<usize>,
+    /// Flat width cap for parenthesized lists before they wrap.
+    pub expression_width: Option<usize>,
     /// Output line-ending policy.
     #[serde(default, deserialize_with = "deserialize_line_ending")]
     pub line_ending: Option<LineEnding>,
@@ -50,23 +73,53 @@ pub struct Config {
     pub exclude: Vec<String>,
 }
 
+/// Parse a dialect name (canonical or alias) into a [`Dialect`].
+///
+/// Accepts every dialect [`Dialect::ALL`] exposes plus common aliases (`oracle`, `tsql`,
+/// `postgres`, `presto`, …). See [`Dialect::from_name`].
 pub fn parse_dialect(value: &str) -> Result<Dialect, String> {
-    match value.to_ascii_lowercase().as_str() {
-        "snowflake" => Ok(Dialect::Snowflake),
-        "databricks" => Ok(Dialect::Databricks),
-        _ => Err(format!(
-            "dialect expects one of: snowflake, databricks; got {value:?}"
-        )),
-    }
+    Dialect::from_name(value).ok_or_else(|| {
+        let names: Vec<&str> = Dialect::ALL.iter().map(|d| d.canonical_name()).collect();
+        format!(
+            "dialect expects one of: {}; got {value:?}",
+            names.join(", ")
+        )
+    })
 }
 
-pub fn parse_keyword_case(value: &str) -> Result<KeywordCase, String> {
+pub fn keyword_case_from_str(value: &str, field: &str) -> Result<KeywordCase, String> {
     match value.to_ascii_lowercase().as_str() {
         "upper" => Ok(KeywordCase::Upper),
         "lower" => Ok(KeywordCase::Lower),
         "preserve" => Ok(KeywordCase::Preserve),
         _ => Err(format!(
-            "keyword_case expects one of: upper, lower, preserve; got {value:?}"
+            "{field} expects one of: upper, lower, preserve; got {value:?}"
+        )),
+    }
+}
+
+pub fn parse_keyword_case(value: &str) -> Result<KeywordCase, String> {
+    keyword_case_from_str(value, "keyword_case")
+}
+
+pub fn parse_data_type_case(value: &str) -> Result<KeywordCase, String> {
+    keyword_case_from_str(value, "data_type_case")
+}
+
+pub fn parse_function_case(value: &str) -> Result<KeywordCase, String> {
+    keyword_case_from_str(value, "function_case")
+}
+
+pub fn parse_identifier_case(value: &str) -> Result<KeywordCase, String> {
+    keyword_case_from_str(value, "identifier_case")
+}
+
+pub fn parse_logical_operator_newline(value: &str) -> Result<LogicalOperatorNewline, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "before" => Ok(LogicalOperatorNewline::Before),
+        "after" => Ok(LogicalOperatorNewline::After),
+        _ => Err(format!(
+            "logical_operator_newline expects one of: before, after; got {value:?}"
         )),
     }
 }
@@ -119,6 +172,48 @@ where
     let value = Option::<String>::deserialize(deserializer)?;
     value
         .map(|value| parse_keyword_case(&value).map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+fn deserialize_data_type_case<'de, D>(deserializer: D) -> Result<Option<KeywordCase>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .map(|value| parse_data_type_case(&value).map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+fn deserialize_function_case<'de, D>(deserializer: D) -> Result<Option<KeywordCase>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .map(|value| parse_function_case(&value).map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+fn deserialize_identifier_case<'de, D>(deserializer: D) -> Result<Option<KeywordCase>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .map(|value| parse_identifier_case(&value).map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+fn deserialize_logical_operator_newline<'de, D>(
+    deserializer: D,
+) -> Result<Option<LogicalOperatorNewline>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .map(|value| parse_logical_operator_newline(&value).map_err(serde::de::Error::custom))
         .transpose()
 }
 
@@ -183,6 +278,33 @@ impl Config {
         }
         if let Some(keyword_case) = self.keyword_case {
             *options = (*options).with_keyword_case(keyword_case);
+        }
+        if let Some(data_type_case) = self.data_type_case {
+            *options = (*options).with_data_type_case(data_type_case);
+        }
+        if let Some(function_case) = self.function_case {
+            *options = (*options).with_function_case(function_case);
+        }
+        if let Some(identifier_case) = self.identifier_case {
+            *options = (*options).with_identifier_case(identifier_case);
+        }
+        if let Some(logical_operator_newline) = self.logical_operator_newline {
+            *options = (*options).with_logical_operator_newline(logical_operator_newline);
+        }
+        if let Some(dense_operators) = self.dense_operators {
+            *options = (*options).with_dense_operators(dense_operators);
+        }
+        if let Some(use_tabs) = self.use_tabs {
+            *options = (*options).with_use_tabs(use_tabs);
+        }
+        if let Some(newline_before_semicolon) = self.newline_before_semicolon {
+            *options = (*options).with_newline_before_semicolon(newline_before_semicolon);
+        }
+        if let Some(lines_between_queries) = self.lines_between_queries {
+            *options = (*options).with_lines_between_queries(Some(lines_between_queries));
+        }
+        if let Some(expression_width) = self.expression_width {
+            *options = (*options).with_expression_width(Some(expression_width));
         }
         if let Some(line_ending) = self.line_ending {
             options.line_ending = line_ending;
@@ -260,18 +382,36 @@ mod tests {
     #[test]
     fn parses_all_keys() {
         let cfg = Config::parse(
-            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\nkeyword_case = \"lower\"\nline_ending = \"crlf\"\nselect_item_layout = \"vertical\"\ncomma_style = \"leading\"\ndialect = \"databricks\"\nexclude = [\"target/**\"]\n",
+            "line_width = 80\nindent_width = 2\nuppercase_keywords = false\nkeyword_case = \"lower\"\ndata_type_case = \"upper\"\nfunction_case = \"lower\"\nidentifier_case = \"lower\"\nlogical_operator_newline = \"after\"\ndense_operators = true\nuse_tabs = true\nnewline_before_semicolon = true\nlines_between_queries = 2\nexpression_width = 40\nline_ending = \"crlf\"\nselect_item_layout = \"vertical\"\ncomma_style = \"leading\"\ndialect = \"databricks\"\nexclude = [\"target/**\"]\n",
         )
         .expect("valid");
         assert_eq!(cfg.line_width, Some(80));
         assert_eq!(cfg.indent_width, Some(2));
         assert_eq!(cfg.uppercase_keywords, Some(false));
         assert_eq!(cfg.keyword_case, Some(KeywordCase::Lower));
+        assert_eq!(cfg.data_type_case, Some(KeywordCase::Upper));
+        assert_eq!(cfg.function_case, Some(KeywordCase::Lower));
+        assert_eq!(cfg.identifier_case, Some(KeywordCase::Lower));
+        assert_eq!(
+            cfg.logical_operator_newline,
+            Some(LogicalOperatorNewline::After)
+        );
+        assert_eq!(cfg.dense_operators, Some(true));
+        assert_eq!(cfg.use_tabs, Some(true));
+        assert_eq!(cfg.newline_before_semicolon, Some(true));
+        assert_eq!(cfg.lines_between_queries, Some(2));
+        assert_eq!(cfg.expression_width, Some(40));
         assert_eq!(cfg.line_ending, Some(LineEnding::Crlf));
         assert_eq!(cfg.select_item_layout, Some(SelectItemLayout::Vertical));
         assert_eq!(cfg.comma_style, Some(CommaStyle::Leading));
         assert_eq!(cfg.dialect, Some(Dialect::Databricks));
         assert_eq!(cfg.exclude, vec!["target/**"]);
+    }
+
+    #[test]
+    fn tab_width_is_an_alias_for_indent_width() {
+        let cfg = Config::parse("tab_width = 4\n").expect("valid");
+        assert_eq!(cfg.indent_width, Some(4));
     }
 
     #[test]
@@ -286,6 +426,15 @@ mod tests {
         assert_eq!(cfg.line_width, None);
         assert_eq!(cfg.uppercase_keywords, None);
         assert_eq!(cfg.keyword_case, None);
+        assert_eq!(cfg.data_type_case, None);
+        assert_eq!(cfg.function_case, None);
+        assert_eq!(cfg.identifier_case, None);
+        assert_eq!(cfg.logical_operator_newline, None);
+        assert_eq!(cfg.dense_operators, None);
+        assert_eq!(cfg.use_tabs, None);
+        assert_eq!(cfg.newline_before_semicolon, None);
+        assert_eq!(cfg.lines_between_queries, None);
+        assert_eq!(cfg.expression_width, None);
         assert_eq!(cfg.line_ending, None);
         assert_eq!(cfg.select_item_layout, None);
         assert_eq!(cfg.comma_style, None);
@@ -295,7 +444,7 @@ mod tests {
 
     #[test]
     fn unknown_keys_are_rejected() {
-        assert!(Config::parse("tab_width = 4\n").is_err());
+        assert!(Config::parse("nonsense_key = 4\n").is_err());
     }
 
     #[test]
@@ -320,9 +469,24 @@ mod tests {
     }
 
     #[test]
+    fn every_dialect_name_parses() {
+        for dialect in Dialect::ALL {
+            assert_eq!(
+                parse_dialect(dialect.canonical_name()).as_ref(),
+                Ok(dialect),
+                "{}",
+                dialect.canonical_name()
+            );
+        }
+        // Aliases people actually type.
+        assert_eq!(parse_dialect("oracle").as_ref(), Ok(&Dialect::PlSql));
+        assert_eq!(parse_dialect("tsql").as_ref(), Ok(&Dialect::TransactSql));
+    }
+
+    #[test]
     fn invalid_dialect_is_rejected() {
-        assert!(Config::parse("dialect = \"oracle\"\n").is_err());
-        assert!(parse_dialect("oracle").is_err());
+        assert!(Config::parse("dialect = \"nonsense\"\n").is_err());
+        assert!(parse_dialect("nonsense").is_err());
     }
 
     #[test]
@@ -331,5 +495,7 @@ mod tests {
         assert!(Config::parse("line_ending = \"native\"\n").is_err());
         assert!(parse_keyword_case("title").is_err());
         assert!(parse_line_ending("native").is_err());
+        assert!(Config::parse("logical_operator_newline = \"middle\"\n").is_err());
+        assert!(parse_logical_operator_newline("middle").is_err());
     }
 }

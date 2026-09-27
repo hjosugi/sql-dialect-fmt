@@ -19,7 +19,7 @@ use SyntaxKind::*;
 use crate::doc::{
     break_parent, concat, empty, hard_line, line_suffix, source_code_slice, space, text, Doc,
 };
-use crate::{CommaStyle, KeywordCase, SelectItemLayout};
+use crate::{CommaStyle, KeywordCase, LogicalOperatorNewline, SelectItemLayout};
 
 mod comments;
 mod ddl;
@@ -52,10 +52,29 @@ fn rendered_source(text_value: String) -> Doc {
 pub(crate) struct Ctx {
     /// Keyword casing policy.
     pub keyword_case: KeywordCase,
+    /// Casing for built-in data-type words in type positions.
+    pub data_type_case: KeywordCase,
+    /// Casing for recognized function names.
+    pub function_case: KeywordCase,
+    /// Casing for unquoted identifiers.
+    pub identifier_case: KeywordCase,
+    /// Where logical operators sit when a boolean expression wraps.
+    pub logical_operator_newline: LogicalOperatorNewline,
+    /// Pack binary operators without surrounding spaces.
+    pub dense_operators: bool,
     pub line_width: usize,
     pub indent_width: usize,
     pub select_item_layout: SelectItemLayout,
     pub comma_style: CommaStyle,
+    /// Indent embedded routine bodies with tabs (matches the printer's `use_tabs`).
+    pub use_tabs: bool,
+    /// Place the statement-terminating `;` on its own line.
+    pub newline_before_semicolon: bool,
+    /// Force exactly this many blank lines between top-level statements (`None` preserves the
+    /// author's grouping).
+    pub lines_between_queries: Option<usize>,
+    /// Bound on the flat width of a parenthesized expression (`None` uses `line_width`).
+    pub expression_width: Option<usize>,
     /// The SQL dialect being formatted. Used to parse the source with matching grammar/lexing
     /// rules; dialect-specific lowering will gate on this in later phases.
     pub dialect: Dialect,
@@ -89,9 +108,19 @@ fn lower_source_impl(
     let mut last_stmt_end: Option<usize> = None;
     for stmt in root.children() {
         if emitted {
-            parts.push(hard_line());
-            if statement_has_leading_blank_line(&stmt) {
-                parts.push(hard_line());
+            match ctx.lines_between_queries {
+                Some(blank_lines) => {
+                    // `lines_between_queries = n` means `n` empty lines (n + 1 newlines).
+                    for _ in 0..=blank_lines {
+                        parts.push(hard_line());
+                    }
+                }
+                None => {
+                    parts.push(hard_line());
+                    if statement_has_leading_blank_line(&stmt) {
+                        parts.push(hard_line());
+                    }
+                }
             }
         }
         let statement_bodies = prepared_routine_bodies
@@ -99,6 +128,9 @@ fn lower_source_impl(
             .map(|prepared| prepared.take_for_node(&stmt));
         let lowered = lower_stmt(&stmt, ctx, statement_bodies);
         parts.push(lowered.body);
+        if ctx.newline_before_semicolon {
+            parts.push(hard_line());
+        }
         parts.push(text(";"));
         for comment in lowered.end_comments {
             if comment.is_line && comment.is_directive {
@@ -218,6 +250,18 @@ impl Lowerer {
 
     /// The separator (a space or nothing) that belongs before a token of kind `cur`.
     fn sep_before(&self, cur: SyntaxKind) -> Doc {
+        if self.ctx.dense_operators {
+            if let Some(prev) = self.prev {
+                if !self.prev_unary
+                    && !must_separate_to_preserve_tokens(prev, cur)
+                    && ((is_dense_operator(prev)
+                        && (is_value_end(cur) || matches!(cur, L_PAREN | L_BRACKET)))
+                        || (is_dense_operator(cur) && is_value_end(prev)))
+                {
+                    return empty();
+                }
+            }
+        }
         match self.prev {
             Some(prev) if must_separate_to_preserve_tokens(prev, cur) => space(),
             Some(prev) if !self.prev_unary && needs_space(prev, cur) => space(),
@@ -442,14 +486,85 @@ fn keyword_text_forced(token: &SyntaxToken, ctx: Ctx, force_keyword: bool) -> Do
     let is_keyword =
         force_keyword || token.kind().is_keyword() || token.kind() == CONTEXTUAL_KEYWORD;
     if is_keyword {
-        match ctx.keyword_case {
-            KeywordCase::Upper => text(token.text().to_ascii_uppercase()),
-            KeywordCase::Lower => text(token.text().to_ascii_lowercase()),
-            KeywordCase::Preserve => text(token.text().to_string()),
-        }
-    } else {
-        text(token.text().to_string())
+        return cased(token.text(), ctx.keyword_case);
     }
+    if token.kind() == IDENT {
+        // A built-in type word in a type position (`::NUMBER`, `CAST(x AS VARCHAR)`) is cased by
+        // `data_type_case`, independently of keywords.
+        if token
+            .parent()
+            .is_some_and(|parent| parent.kind() == TYPE_NAME)
+        {
+            return cased(token.text(), ctx.data_type_case);
+        }
+        if is_function_name(token) {
+            return cased(token.text(), ctx.function_case);
+        }
+        return cased(token.text(), ctx.identifier_case);
+    }
+    text(token.text().to_string())
+}
+
+/// Case `value` per a [`KeywordCase`] policy (the type is shared by keyword, type, function, and
+/// identifier casing).
+fn cased(value: &str, case: KeywordCase) -> Doc {
+    match case {
+        KeywordCase::Upper => text(value.to_ascii_uppercase()),
+        KeywordCase::Lower => text(value.to_ascii_lowercase()),
+        KeywordCase::Preserve => text(value.to_string()),
+    }
+}
+
+/// Whether `token` is the callee of a call expression: its next significant token is `(` and an
+/// ancestor is a `CALL_EXPR` (so a table name in `CREATE TABLE t (…)` is not mistaken for one).
+fn is_function_name(token: &SyntaxToken) -> bool {
+    if token.kind() != IDENT {
+        return false;
+    }
+    let mut next = token.next_token();
+    while let Some(candidate) = &next {
+        if candidate.kind().is_trivia() {
+            next = candidate.next_token();
+        } else {
+            break;
+        }
+    }
+    if next.as_ref().map(SyntaxToken::kind) != Some(L_PAREN) {
+        return false;
+    }
+    let mut ancestor = token.parent();
+    while let Some(node) = ancestor {
+        match node.kind() {
+            CALL_EXPR => return true,
+            ARG_LIST => return false,
+            _ => ancestor = node.parent(),
+        }
+    }
+    false
+}
+
+/// Binary operators whose surrounding spaces `dense_operators` removes. Logical operators
+/// (`AND`/`OR`) are keywords and so are never in this set.
+fn is_dense_operator(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        PLUS | MINUS
+            | STAR
+            | SLASH
+            | PERCENT
+            | EQ
+            | NEQ
+            | LT
+            | LTE
+            | GT
+            | GTE
+            | CONCAT
+            | AMP
+            | CARET
+            | TILDE
+            | PIPE
+            | ARROW
+    )
 }
 
 /// A node's source text with surrounding whitespace removed, materialized in a single allocation.

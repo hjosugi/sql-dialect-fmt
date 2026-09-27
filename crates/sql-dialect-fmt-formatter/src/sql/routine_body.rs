@@ -560,6 +560,7 @@ fn format_embedded_sql_body_token(text: &str, ctx: Ctx) -> Option<String> {
         &PrintOptions {
             line_width: ctx.line_width,
             indent_width: ctx.indent_width,
+            use_tabs: ctx.use_tabs,
         },
     );
     if formatted.is_empty() {

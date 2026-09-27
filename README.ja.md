@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/hjosugi/sql-dialect-fmt/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/sql-dialect-fmt/actions/workflows/ci.yml)
 
-Snowflake SQL と Databricks SQL のフォーマッタ＋シンタックスハイライタ（Rust 製）。`gofmt` / Prettier / Biome 流の opinionated・ほぼ設定なしの整形を目指します。
+Snowflake SQL と Databricks SQL を中核とする、Rust 製のフォーマッタ＋シンタックスハイライタ。`gofmt` / Prettier / Biome 流の opinionated な整形を目指します。字句解析とハイライトは [`sql-formatter`](https://github.com/sql-formatter-org/sql-formatter) の言語一覧を手本に、BigQuery / ClickHouse / DB2 / DB2 for i / DuckDB / Hive / MariaDB / MySQL / TiDB / N1QL / Oracle PL/SQL / PostgreSQL / Redshift / SingleStoreDB / Spark / SQLite / Transact-SQL / Trino / 標準 SQL を含む 21 方言に方言別ルールで対応します（深い整形品質は Snowflake/Databricks を先行）。
 
 整形は **無破壊・べき等** を機械的に保証します（パースできない入力は無変更で素通し、整形しても有意トークンとコメントは保存、`format(format(x)) == format(x)`）。
 
@@ -116,7 +116,7 @@ cargo test -p sql-dialect-fmt-formatter --features external-formatters
 
 ## 状態
 
-Snowflake は SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL（Snowpipe の CREATE PIPE ... AS COPY INTO を含む）・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。非 SQL body の整形は opt-in で、通常は verbatim 保持します。Databricks は LATERAL VIEW、Delta DDL option、VERSION/TIMESTAMP AS OF、higher-order function lambda、SQL scripting block、backtick identifier を dialect mode でサポート。LSP/semantic tokens/hover、CLI、VS Code/WASM 拡張を active scope とし、Tree-sitter はソースを残したまま workspace/CI 外で保留します。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
+Snowflake は SELECT 一式・DML（INSERT/UPDATE/DELETE/MERGE）・COPY・主要 DDL/object DDL（Snowpipe の CREATE PIPE ... AS COPY INTO を含む）・Semantic View・CREATE PROCEDURE/FUNCTION（SQL/JavaScript/Python/Java/Scala body）までパース＋整形。非 SQL body の整形は opt-in で、通常は verbatim 保持します。Databricks は LATERAL VIEW、Delta DDL option、VERSION/TIMESTAMP AS OF、higher-order function lambda、SQL scripting block、backtick identifier を dialect mode でサポート。加えて 21 方言の dialect registry と方言別の字句解析・ハイライト基盤（識別子引用・コメント・文字列プレフィクス・変数・`$$`/`$tag$`・`<=>`）を持ち、方言名は config / CLI / Wasm ABI で共通に解決します。設定は `keyword_case`・`data_type_case`・`function_case`・`identifier_case`・`indent_width`/`tab_width`・`use_tabs`・`line_ending`・`select_item_layout`・`comma_style`・`logical_operator_newline`・`dense_operators`・`newline_before_semicolon`・`lines_between_queries`・`expression_width`・`dialect` を提供します。LSP/semantic tokens/hover、CLI、VS Code/WASM 拡張を active scope とし、Tree-sitter はソースを残したまま workspace/CI 外で保留します。詳細と計画は [ROADMAP.md](ROADMAP.md) を参照。
 
 ## クレート構成
 

@@ -7,9 +7,14 @@
 
 English | [日本語](README.ja.md)
 
-`sql-dialect-fmt` is an opinionated Rust formatter and editor toolchain for Snowflake SQL and
-Databricks SQL. It follows the `gofmt` / Prettier / Biome style: few options, stable output, and
-formatting that is safe to run in CI.
+`sql-dialect-fmt` is an opinionated Rust formatter and editor toolchain centered on Snowflake SQL
+and Databricks SQL. It follows the `gofmt` / Prettier / Biome style: stable output, and
+formatting that is safe to run in CI. Lexing and syntax highlighting follow the
+[`sql-formatter`](https://github.com/sql-formatter-org/sql-formatter) vocabulary across 21
+dialects — including BigQuery, ClickHouse, DB2, DB2 for i, DuckDB, Hive, MariaDB, MySQL, TiDB,
+N1QL, Oracle PL/SQL, PostgreSQL, Redshift, SingleStoreDB, Spark, SQLite, Transact-SQL, Trino, and
+standard SQL — with per-dialect lexical rules (deep formatting quality leads with
+Snowflake/Databricks).
 
 Formatting is mechanically **lossless and idempotent**. Inputs that cannot be parsed pass through
 unchanged, significant tokens and comments are preserved, and `format(format(x)) == format(x)`.
@@ -137,6 +142,16 @@ Python, Java, and Scala. Non-SQL embedded body formatting is opt-in and otherwis
 Databricks mode covers LATERAL VIEW, Delta DDL options,
 `VERSION`/`TIMESTAMP AS OF`, higher-order-function lambdas, SQL scripting blocks, and backtick
 identifiers.
+
+Beyond those two, a 21-dialect registry drives per-dialect lexical rules and highlighting:
+identifier quoting (`"…"`, `` `…` ``, `[…]`), line comments (`--`, `//`, `#`), nested block
+comments, string prefixes (`E''`, `N''`, `X''`, `B''`, `R''`), `@var`/`@@var`, `:bind`, `#temp`
+identifiers, `$$…$$`, and `<=>`. Dialect names resolve the same way in `sql-dialect-fmt.toml`, the
+CLI (`--dialect`), and the Wasm ABI, with aliases such as `oracle`, `tsql`, `postgres`, and
+`presto`. Configuration covers `keyword_case`, `data_type_case`, `function_case`, `identifier_case`,
+`indent_width`/`tab_width`, `use_tabs`, `line_ending`, `select_item_layout`, `comma_style`,
+`logical_operator_newline`, `dense_operators`, `newline_before_semicolon`, `lines_between_queries`,
+`expression_width`, and `dialect`.
 
 SQL lifted out of a host language keeps formatting and highlighting: a `${ ... }` template
 placeholder — a JavaScript template literal (`` `SELECT ${cfg.col} FROM ${cfg.t}` ``) or a

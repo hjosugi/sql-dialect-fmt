@@ -142,6 +142,35 @@
 - ✅ 公式仕様由来の conformance generator（Future Tech Blog の `uroborosql-fmt` / `postgresql-cst-parser` 型の発想を Snowflake 向けに翻訳）: local path / archive から `.sql` と SQL fenced block を抽出し、外部 corpus harness に流して parser/formatter conformance report を生成。将来、機械可読な公式 grammar が得られるなら Pure Rust CST parser 生成の候補にする … [scripts/conformance-report.py](scripts/conformance-report.py)
 - ✅ 外部 grammar oracle の継続監視: grammars-v4 Snowflake examples、Apache Spark SQL tests / `SqlBaseParser.g4` rule、sqlfluff Snowflake/Databricks keyword・segment inventory を出典/revision/license付き report に変換。Snowflake/Databricks別 corpus gateと週次artifactを運用し、name matchはsemantic coverageではないheuristic checklistとして扱う。ANTLR grammar の predicate / action / lexer mode / tree 外 trivia / keyword fallback rule を Generator Hazards 表として数える … [scripts/grammar-oracle-report.py](scripts/grammar-oracle-report.py) / [docs/CORPUS.ja.md](docs/CORPUS.ja.md)
 
+## Phase 11 — マルチ方言基盤（全 SQL 対応 + 方言別ハイライト + 柔軟な設定）🚧
+*目的: [`sql-formatter`](https://github.com/sql-formatter-org/sql-formatter)（MIT・**参照のみ。他 repo への PR/commit はしない**）の言語一覧と設定モデルを手本に、Snowflake/Databricks 以外の SQL 方言とシンタックスハイライト、設定の柔軟さを段階的に広げる。*
+
+**到達目標の方言（20 + Databricks = 21）**: `snowflake`（既定）/ `databricks` / `spark` / `bigquery` / `clickhouse` / `db2` / `db2i` / `duckdb` / `hive` / `mariadb` / `mysql` / `tidb` / `n1ql` / `plsql`（Oracle） / `postgresql` / `redshift` / `singlestoredb` / `sqlite` / `sql`（標準）/ `transactsql`（T-SQL） / `trino`。
+
+### Phase 11a — 方言レジストリとロスレス字句 ✅
+- ✅ `Dialect` を 21 方言へ拡張（`#[non_exhaustive]`, `Dialect::ALL`, `canonical_name`, `from_name` と別名 `oracle`/`tsql`/`postgres`/`presto` 等）。Snowflake は既定のまま、Snowflake/Databricks の述語・出力は不変 … [dialect.rs](crates/sql-dialect-fmt-syntax/src/dialect.rs)
+- ✅ 方言別 lexical profile を述語化: 識別子引用（`"…"` / `` `…` `` / `[…]`）、行コメント（`--` / `//` / `#`）、ネストするブロックコメント、文字列プレフィクス（`E''`/`N''`/`X''`/`B''`/`R''`）、`@var`・`@@var`、`:bind`、`#temp` 識別子、`$1`/`$$…$$`/`$tag$`、`<=>`。ロスレス性は全方言でテスト … [lexer.rs](crates/sql-dialect-fmt-lexer/src/lexer.rs) / [tests/dialect.rs](crates/sql-dialect-fmt-lexer/tests/dialect.rs)
+- ✅ 方言別ハイライト: `highlight_for_dialect` / `classify_for`。引用・コメント・変数・予約語が方言に追随 … [highlight/lib.rs](crates/sql-dialect-fmt-highlight/src/lib.rs)
+- ✅ 設定第一弾: `data_type_case`（型位置の組み込み型語の大小）、`use_tabs`（タブインデント）、`tab_width`（`indent_width` の別名）。TOML / CLI に配線 … [config/lib.rs](crates/sql-dialect-fmt-config/src/lib.rs) / [cli/main.rs](crates/sql-dialect-fmt-cli/src/main.rs)
+- ✅ 全方言名を config / CLI / Wasm ABI（`Dialect::ALL` 順）で受理。設定/CLI の既知値テスト更新
+
+### Phase 11b — 方言別キーワード予約 🚧
+- ✅ 予約モデルを `DialectSet`（`Dialect` ビットマスク。`Dialect::bit()` / `DialectSet::of|contains|reserved_in|union`）へデータ駆動化し、`KeywordDialect`（Shared/SnowflakeOnly/DatabricksOnly）を置換。Snowflake/Databricks の予約の意味は不変（回帰テストで機械保証）
+- ✅ 既存キーワードの方言メンバーシップを精緻化: `top`→{Snowflake, Transact-SQL}、`qualify`→{Snowflake, Databricks, Spark, BigQuery, DuckDb, Trino}、`ilike`→{Snowflake, Spark系, PostgreSQL系, Redshift, ClickHouse, Trino, Hive}、`rlike`→{Snowflake, Spark系, Hive}、`regexp`→{Snowflake, MySQL系}
+- ⏳ 方言固有予約語の追加（例: BigQuery `STRUCT`/`UNNEST`、ClickHouse `PREWHERE`/`FINAL`/`SETTINGS`、T-SQL `GO`）は新 `SyntaxKind` と parser 対応が必要なため、`sql-formatter` の keyword 表やベンダ公式 reserve word 一覧を出典付きで生成する lane（`scripts/generate-dialect-tables.py` 想定）で追う
+
+### Phase 11c — 方言別パーサ/フォーマッタ規則 ⏳
+- ⏳ 方言固有の文・句の構造化: `LIMIT`/`TOP`/`FETCH FIRST`、MySQL `INSERT … ON DUPLICATE KEY UPDATE`、PostgreSQL `RETURNING`/`ON CONFLICT`、T-SQL `GO` バッチ、BigQuery `STRUCT`/`UNNEST`、ClickHouse `PREWHERE`/`FORMAT`、Oracle PL/SQL ブロックなど。パーサは現状もロスレスに受理し unknown は verbatim に倒れるため、優先度は「頻度 × 価値」で個別 issue 化する
+
+### Phase 11d — ハイライトの全面対応 🚧
+- ✅ LSP semantic token を `options.dialect` に追随（`highlight_for_dialect` ベースの `semantic_tokens_lsp_for_dialect` を追加し、`textDocument/semanticTokens/full|range` が文書の方言設定を使う） … [semantic.rs](crates/sql-dialect-fmt-highlight/src/semantic.rs) / [lsp/lib.rs](crates/sql-dialect-fmt-lsp/src/lib.rs) / [lsp/main.rs](crates/sql-dialect-fmt-lsp/src/main.rs)
+- ⏳ TextMate 文法を方言レジストリから生成（現状は Snowflake 1 本 `editors/snowflake.tmLanguage.json`）。VS Code / Neovim / Zed / Helix に方言別 or 統合文法を配布し、`classify` との一致をテストで機械保証
+
+### Phase 11e — sql-formatter 互換の設定 🚧
+- ✅ `data_type_case` / `function_case` / `identifier_case` / `logical_operator_newline`（before/after）/ `dense_operators` / `newline_before_semicolon` / `lines_between_queries` / `expression_width` / `use_tabs` / `tab_width`（core + config + CLI、既定値は後方互換）
+- ⏳ `params` / `param_types`（positional/numbered/named/quoted/custom）のプレースホルダ置換、LSP エディタ設定 / Wasm ABI（新オプション用の v2 export）/ VS Code 設定への配線、`sql-formatter.toml` 相当の JSON schema 提供
+- 📝 `expression_width` は現状、括弧付きリスト（関数引数 ARG_LIST・`IN (...)`・`VALUES`・列リスト等）の flat 幅上限として適用する。`(expr)` グルーピングの構造的折返しは今後の formatter 改修で対応
+
 ---
 
 ### 現状サマリ（2026-07-27）

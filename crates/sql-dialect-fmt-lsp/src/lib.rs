@@ -15,7 +15,7 @@ use lsp_types::{
 };
 use sql_dialect_fmt_formatter::{format, FormatOptions};
 use sql_dialect_fmt_highlight::semantic;
-use sql_dialect_fmt_parser::{SyntaxKind, SyntaxNode};
+use sql_dialect_fmt_parser::{Dialect, SyntaxKind, SyntaxNode};
 use sql_dialect_fmt_syntax::{keyword_texts, BUILTIN_TYPE_WORDS};
 use sql_dialect_fmt_text::{LineIndex, Utf16Position, Utf8Position};
 
@@ -781,9 +781,25 @@ pub fn semantic_tokens(text: &str) -> Vec<SemanticToken> {
 
 /// Encoding-aware variant of [`semantic_tokens`].
 pub fn semantic_tokens_with_encoding(text: &str, encoding: PositionEncoding) -> Vec<SemanticToken> {
+    semantic_tokens_with_dialect(text, Dialect::Snowflake, encoding)
+}
+
+/// Dialect-aware, encoding-aware semantic tokens.
+///
+/// Uses the highlighter's dialect profile (identifier quotes, comments, keywords) so the semantic
+/// colouring matches the dialect the document is formatted as.
+pub fn semantic_tokens_with_dialect(
+    text: &str,
+    dialect: Dialect,
+    encoding: PositionEncoding,
+) -> Vec<SemanticToken> {
     let raw = match encoding {
-        PositionEncoding::Utf16 => semantic::semantic_tokens_lsp(text),
-        PositionEncoding::Utf8 => sql_dialect_fmt_highlight::semantic_tokens_lsp_utf8(text),
+        PositionEncoding::Utf16 => {
+            sql_dialect_fmt_highlight::semantic_tokens_lsp_for_dialect(text, dialect)
+        }
+        PositionEncoding::Utf8 => {
+            sql_dialect_fmt_highlight::semantic_tokens_lsp_utf8_for_dialect(text, dialect)
+        }
     };
     raw.into_iter()
         .map(
@@ -804,7 +820,17 @@ pub fn semantic_tokens_range_with_encoding(
     range: Range,
     encoding: PositionEncoding,
 ) -> Vec<SemanticToken> {
-    let full = semantic_tokens_with_encoding(text, encoding);
+    semantic_tokens_range_with_dialect(text, Dialect::Snowflake, range, encoding)
+}
+
+/// Dialect-aware variant of [`semantic_tokens_range_with_encoding`].
+pub fn semantic_tokens_range_with_dialect(
+    text: &str,
+    dialect: Dialect,
+    range: Range,
+    encoding: PositionEncoding,
+) -> Vec<SemanticToken> {
+    let full = semantic_tokens_with_dialect(text, dialect, encoding);
     let mut absolute = Vec::with_capacity(full.len());
     let mut line = 0u32;
     let mut start = 0u32;
