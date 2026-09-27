@@ -9,6 +9,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- Refactor: unified the three argument-boundary scanners in the expression parser, folded the
+  nine config enum deserializers into one macro, pinned the dialect Wasm-ABI order with a test,
+  and added an editor test that keeps the extension and playground dialect lists in sync. No
+  behavior change.
+
 ## [1.25.0] - 2026-09-27
 
 ### Added
