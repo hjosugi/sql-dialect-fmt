@@ -11,6 +11,11 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- More dialect syntax: PostgreSQL/DuckDB `DISTINCT ON`, `FOR UPDATE`/`FOR SHARE` locking,
+  `->`/`->>` JSON operators (also MySQL family) and aggregate `ORDER BY` inside arguments
+  (`array_agg(x ORDER BY y)`); MySQL-family `INSERT ... SET` and `REPLACE INTO`; Transact-SQL
+  `SELECT ... INTO`, `WITH (NOLOCK)` table hints and `FETCH NEXT`; BigQuery
+  `STRUCT(expr AS name)` argument aliases. All dialect-gated; Snowflake/Databricks unchanged.
 - Dialect-specific DML and query clauses now parse and format instead of splitting into spurious
   statements: PostgreSQL/SQLite/DuckDB/MariaDB `RETURNING`, `ON CONFLICT … DO NOTHING|UPDATE`
   (including `ON CONSTRAINT` and partial-index `WHERE`), MySQL-family `ON DUPLICATE KEY UPDATE`,
