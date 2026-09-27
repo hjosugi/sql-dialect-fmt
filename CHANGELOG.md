@@ -11,6 +11,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- Oracle PL/SQL named routines: `CREATE [OR REPLACE] PROCEDURE p IS …` and
+  `FUNCTION f RETURN <type> IS …` use the PL/SQL body/return markers, and DML supports
+  `RETURNING <expr> INTO <bind> [, …]`.
 - `param_types`: `sql-dialect-fmt.toml` can override which placeholder spellings the lexer
   recognizes (`positional`, `named_colon`/`named_at`/`named_dollar`,
   `numbered_question`/`numbered_colon`/`numbered_dollar`,

@@ -1835,3 +1835,36 @@ fn oracle_plsql_anonymous_block() {
         "BEGIN\n  IF :x > 1 THEN\n    :y := 2;\n  ELSE\n    :y := 3;\n  END IF;\nEND;\n"
     );
 }
+
+#[test]
+fn oracle_plsql_named_routines_and_returning_into() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let plsql = FormatOptions::default().with_dialect(Dialect::PlSql);
+
+    let procedure = format("create or replace procedure p is begin null; end;", &plsql);
+    assert_eq!(
+        procedure,
+        "CREATE OR REPLACE PROCEDURE p IS\nBEGIN\n  NULL;\nEND;\n"
+    );
+
+    let function = format(
+        "create or replace function f return number is begin return 1; end;",
+        &plsql,
+    );
+    assert_eq!(
+        function,
+        "CREATE OR REPLACE FUNCTION f RETURN number IS\nBEGIN\n  RETURN 1;\nEND;\n"
+    );
+
+    assert_eq!(
+        format("insert into t (a) values (1) returning a into :x", &plsql),
+        "INSERT INTO t (a)\nVALUES (1)\nRETURNING a INTO :x;\n"
+    );
+    assert_eq!(
+        format(
+            "delete from t where a = 1 returning a, b into :x, :y",
+            &plsql
+        ),
+        "DELETE FROM t\nWHERE a = 1\nRETURNING a, b INTO :x, :y;\n"
+    );
+}

@@ -150,7 +150,25 @@ fn returning_clause(p: &mut Parser) {
     while p.eat(COMMA) {
         star_or_expr_item(p);
     }
+    // PL/SQL `RETURNING <expr> INTO <var> [, ...]`.
+    if p.dialect().supports_returning_into() && p.eat(INTO_KW) {
+        returning_into_target(p);
+        while p.eat(COMMA) {
+            returning_into_target(p);
+        }
+    }
     m.complete(p, RETURNING_CLAUSE);
+}
+
+/// A `RETURNING ... INTO` target: a name or a bind variable.
+fn returning_into_target(p: &mut Parser) {
+    if p.at(VARIABLE) {
+        let r = p.start();
+        p.bump(VARIABLE);
+        r.complete(p, NAME_REF);
+    } else {
+        super::name_ref(p);
+    }
 }
 
 /// Transact-SQL `OUTPUT <item> [, ...] [INTO <table> [(cols)]]`.

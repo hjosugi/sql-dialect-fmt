@@ -590,7 +590,9 @@ fn create_routine(p: &mut Parser) {
     // `RETURNS NULL ON NULL INPUT` behavior phrase in the lenient option run.
     let mut seen_returns = false;
     while !at_routine_body(p) && !at_stmt_terminator(p) {
-        if !seen_returns && p.at(RETURNS_KW) {
+        if !seen_returns
+            && (p.at(RETURNS_KW) || (p.dialect().supports_routine_is_body() && p.at(RETURN_KW)))
+        {
             routine_returns_clause(p);
             seen_returns = true;
         } else if p.at(LANGUAGE_KW) {
@@ -600,7 +602,11 @@ fn create_routine(p: &mut Parser) {
         }
     }
     if at_routine_body(p) {
-        p.bump(AS_KW);
+        if p.at(AS_KW) {
+            p.bump(AS_KW);
+        } else {
+            p.bump(IS_KW); // PL/SQL `IS`
+        }
         if p.at(DOLLAR_STRING) || p.at(STRING) {
             p.bump_any(); // the delimited body token
         } else if at_block_start(p) {
@@ -613,7 +619,11 @@ fn create_routine(p: &mut Parser) {
 
 fn routine_returns_clause(p: &mut Parser) {
     let m = p.start();
-    p.bump(RETURNS_KW);
+    if p.at(RETURN_KW) {
+        p.bump(RETURN_KW); // PL/SQL `RETURN <type>`
+    } else {
+        p.bump(RETURNS_KW);
+    }
     if p.at(TABLE_KW) {
         p.bump(TABLE_KW);
         if p.at(L_PAREN) {
@@ -641,9 +651,10 @@ fn routine_language_clause(p: &mut Parser) {
     m.complete(p, ROUTINE_LANGUAGE_CLAUSE);
 }
 
-/// At `AS` immediately followed by a routine body (so we don't stop on `EXECUTE AS`).
+/// At `AS` (or PL/SQL `IS`) immediately followed by a routine body (so we don't stop on
+/// `EXECUTE AS`).
 fn at_routine_body(p: &Parser) -> bool {
-    p.at(AS_KW)
+    (p.at(AS_KW) || (p.dialect().supports_routine_is_body() && p.at(IS_KW)))
         && (p.nth_at(1, DOLLAR_STRING)
             || p.nth_at(1, STRING)
             || p.nth_at(1, DECLARE_KW)

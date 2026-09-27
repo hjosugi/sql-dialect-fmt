@@ -220,6 +220,7 @@ const KEYWORDS: &[(&str, SyntaxKind, DialectSet)] = {
                 Dialect::DuckDb,
                 Dialect::MariaDb,
                 Dialect::N1ql,
+                Dialect::PlSql,
             ]),
         ),
         ("returns", RETURNS_KW, DialectSet::ALL),

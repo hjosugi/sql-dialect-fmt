@@ -451,6 +451,7 @@ impl Dialect {
                 | Dialect::DuckDb
                 | Dialect::MariaDb
                 | Dialect::N1ql
+                | Dialect::PlSql
         )
     }
 
@@ -624,6 +625,18 @@ impl Dialect {
             self,
             Dialect::MySql | Dialect::MariaDb | Dialect::TiDb | Dialect::SingleStoreDb
         )
+    }
+
+    /// PL/SQL routine header: `PROCEDURE p IS …` / `FUNCTION f RETURN t IS …` (instead of `AS`).
+    #[must_use]
+    pub fn supports_routine_is_body(self) -> bool {
+        matches!(self, Dialect::PlSql)
+    }
+
+    /// PL/SQL `... RETURNING <expr> INTO <var> [...]` on DML.
+    #[must_use]
+    pub fn supports_returning_into(self) -> bool {
+        matches!(self, Dialect::PlSql)
     }
 
     /// BigQuery `SELECT * EXCEPT (...)` / `SELECT * REPLACE (...)` star modifiers.
