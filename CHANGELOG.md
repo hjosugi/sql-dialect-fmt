@@ -9,6 +9,11 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Jinja/dbt control tags `{% ... %}` are their own statement boundaries: they stay on their own
+  line without an invented `;`, so templated files with `{% if %}`/`{% for %}` blocks format.
+
 ## [1.27.0] - 2026-09-27
 
 ### Added
