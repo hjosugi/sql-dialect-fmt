@@ -21,7 +21,35 @@ const path = require("path");
 const { readFormatterOptions } = require("./src/config");
 const { formatText, resetWasm } = require("./src/wasm-formatter");
 
-const LANGUAGE_ID = "snowflake-sql";
+/** Canonical dialect -> VS Code language id. `.sql` stays `snowflake-sql` (the default). */
+const DIALECT_LANGUAGES = Object.freeze({
+  snowflake: "snowflake-sql",
+  databricks: "sql-databricks",
+  spark: "sql-spark",
+  bigquery: "sql-bigquery",
+  clickhouse: "sql-clickhouse",
+  db2: "sql-db2",
+  db2i: "sql-db2i",
+  duckdb: "sql-duckdb",
+  hive: "sql-hive",
+  mariadb: "sql-mariadb",
+  mysql: "sql-mysql",
+  tidb: "sql-tidb",
+  n1ql: "sql-n1ql",
+  plsql: "sql-plsql",
+  postgresql: "sql-postgresql",
+  redshift: "sql-redshift",
+  singlestoredb: "sql-singlestoredb",
+  sqlite: "sql-sqlite",
+  sql: "sql-standard",
+  transactsql: "sql-transactsql",
+  trino: "sql-trino",
+});
+const LANGUAGE_ID = DIALECT_LANGUAGES.snowflake;
+const FORMATTER_LANGUAGES = Object.freeze(Object.values(DIALECT_LANGUAGES));
+const DIALECT_BY_LANGUAGE = Object.freeze(
+  Object.fromEntries(Object.entries(DIALECT_LANGUAGES).map(([dialect, id]) => [id, dialect])),
+);
 const CONFIG_SECTION = "sqlDialectFmt";
 const SERVER_BINARY_NAME = "sql-dialect-fmt-lsp";
 
@@ -133,7 +161,7 @@ async function startLspClient(context, command) {
   const serverOptions = { command, args: [] };
   const health = { initialized: false };
   const clientOptions = {
-    documentSelector: [{ language: LANGUAGE_ID }],
+    documentSelector: FORMATTER_LANGUAGES.map((language) => ({ language })),
     outputChannel,
     revealOutputChannelOn: languageclient.RevealOutputChannelOn.Never,
     initializationOptions: () => ({ [CONFIG_SECTION]: serverSettingsSnapshot() }),
@@ -238,7 +266,7 @@ function ensureWasmProviders(context) {
   if (wasmProviderRegistrations.length > 0) {
     return;
   }
-  const selector = { language: LANGUAGE_ID };
+  const selector = FORMATTER_LANGUAGES.map((language) => ({ language }));
   wasmProviderRegistrations = [
     vscode.languages.registerDocumentFormattingEditProvider(selector, {
       provideDocumentFormattingEdits(document, options) {
@@ -313,7 +341,11 @@ function log(message) {
 async function formatDocument(context, document, editorOptions) {
   try {
     const original = document.getText();
-    const formatted = await formatText(context, original, readOptions(editorOptions));
+    const formatted = await formatText(
+      context,
+      original,
+      readOptions(editorOptions, document.languageId),
+    );
     if (formatted === original) {
       return [];
     }
@@ -332,7 +364,11 @@ async function formatDocument(context, document, editorOptions) {
 async function formatRange(context, document, range, editorOptions) {
   try {
     const original = document.getText(range);
-    let formatted = await formatText(context, original, readOptions(editorOptions));
+    let formatted = await formatText(
+      context,
+      original,
+      readOptions(editorOptions, document.languageId),
+    );
     // The formatter always emits a trailing newline. When the selection is an inline fragment that
     // did not end with one, dropping it keeps a "Format Selection" from splicing a stray newline in.
     if (!original.endsWith("\n") && formatted.endsWith("\n")) {
@@ -348,10 +384,20 @@ async function formatRange(context, document, range, editorOptions) {
   }
 }
 
-/** Resolve formatter options from the `sqlDialectFmt.*` workspace settings. */
-function readOptions(editorOptions) {
+/** Resolve formatter options from the `sqlDialectFmt.*` workspace settings.
+ *
+ * When `dialect` is not explicitly set, a dialect-specific document language id wins (for example
+ * `sql-postgresql` formats as PostgreSQL). */
+function readOptions(editorOptions, languageId) {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-  return readFormatterOptions(config, editorOptions);
+  const options = readFormatterOptions(config, editorOptions);
+  if (config.get("dialect") === undefined && languageId) {
+    const dialect = DIALECT_BY_LANGUAGE[languageId];
+    if (dialect) {
+      options.dialect = dialect;
+    }
+  }
+  return options;
 }
 
 function reportError(error) {

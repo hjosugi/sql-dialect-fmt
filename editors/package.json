@@ -31,7 +31,27 @@
   "activationEvents": [
     "onLanguage:snowflake-sql",
     "onCommand:sqlDialectFmt.openSettings",
-    "onCommand:sqlDialectFmt.restartLanguageServer"
+    "onCommand:sqlDialectFmt.restartLanguageServer",
+    "onLanguage:sql-postgresql",
+    "onLanguage:sql-mysql",
+    "onLanguage:sql-mariadb",
+    "onLanguage:sql-sqlite",
+    "onLanguage:sql-transactsql",
+    "onLanguage:sql-bigquery",
+    "onLanguage:sql-clickhouse",
+    "onLanguage:sql-duckdb",
+    "onLanguage:sql-spark",
+    "onLanguage:sql-databricks",
+    "onLanguage:sql-redshift",
+    "onLanguage:sql-trino",
+    "onLanguage:sql-hive",
+    "onLanguage:sql-db2",
+    "onLanguage:sql-db2i",
+    "onLanguage:sql-n1ql",
+    "onLanguage:sql-plsql",
+    "onLanguage:sql-singlestoredb",
+    "onLanguage:sql-tidb",
+    "onLanguage:sql-standard"
   ],
   "keywords": [
     "snowflake",
@@ -56,6 +76,7 @@
     "language-configuration.json",
     "package.json",
     "snowflake.tmLanguage.json",
+    "sql.tmLanguage.json",
     "vendor/sql_dialect_fmt_wasm.wasm"
   ],
   "scripts": {
@@ -272,6 +293,204 @@
           ".sfsql"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-postgresql",
+        "aliases": [
+          "PostgreSQL",
+          "Postgres"
+        ],
+        "extensions": [
+          ".pgsql",
+          ".psql"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-mysql",
+        "aliases": [
+          "MySQL"
+        ],
+        "extensions": [
+          ".mysql"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-mariadb",
+        "aliases": [
+          "MariaDB"
+        ],
+        "extensions": [
+          ".mariadb"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-sqlite",
+        "aliases": [
+          "SQLite"
+        ],
+        "extensions": [
+          ".sqlite",
+          ".sqlite3"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-transactsql",
+        "aliases": [
+          "SQL Server (T-SQL)",
+          "T-SQL",
+          "Transact-SQL"
+        ],
+        "extensions": [
+          ".tsql"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-bigquery",
+        "aliases": [
+          "BigQuery"
+        ],
+        "extensions": [
+          ".bq"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-clickhouse",
+        "aliases": [
+          "ClickHouse"
+        ],
+        "extensions": [
+          ".clickhouse"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-duckdb",
+        "aliases": [
+          "DuckDB"
+        ],
+        "extensions": [
+          ".duckdb"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-spark",
+        "aliases": [
+          "Spark SQL",
+          "Spark"
+        ],
+        "extensions": [
+          ".sparksql"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-databricks",
+        "aliases": [
+          "Databricks SQL",
+          "Databricks"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-redshift",
+        "aliases": [
+          "Amazon Redshift",
+          "Redshift"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-trino",
+        "aliases": [
+          "Trino",
+          "Presto"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-hive",
+        "aliases": [
+          "Apache Hive",
+          "Hive"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-db2",
+        "aliases": [
+          "IBM DB2",
+          "DB2"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-db2i",
+        "aliases": [
+          "DB2 for i",
+          "DB2i"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-n1ql",
+        "aliases": [
+          "Couchbase N1QL",
+          "N1QL"
+        ],
+        "extensions": [
+          ".n1ql"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-plsql",
+        "aliases": [
+          "Oracle PL/SQL",
+          "Oracle"
+        ],
+        "extensions": [
+          ".plsql"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-singlestoredb",
+        "aliases": [
+          "SingleStoreDB",
+          "SingleStore"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-tidb",
+        "aliases": [
+          "TiDB"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "sql-standard",
+        "aliases": [
+          "SQL (standard)",
+          "Standard SQL"
+        ],
+        "extensions": [],
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
@@ -286,6 +505,106 @@
           "meta.embedded.block.scala.snowflake": "scala",
           "meta.embedded.block.sql.snowflake": "snowflake-sql"
         }
+      },
+      {
+        "language": "sql-postgresql",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-mysql",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-mariadb",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-sqlite",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-transactsql",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-bigquery",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-clickhouse",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-duckdb",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-spark",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-databricks",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-redshift",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-trino",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-hive",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-db2",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-db2i",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-n1ql",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-plsql",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-singlestoredb",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-tidb",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
+      },
+      {
+        "language": "sql-standard",
+        "scopeName": "source.sql.dialect-fmt",
+        "path": "./sql.tmLanguage.json"
       }
     ]
   }

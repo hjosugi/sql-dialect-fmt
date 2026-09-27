@@ -172,7 +172,7 @@
 - ✅ LSP semantic token を `options.dialect` に追随（`highlight_for_dialect` ベースの `semantic_tokens_lsp_for_dialect` を追加し、`textDocument/semanticTokens/full|range` が文書の方言設定を使う） … [semantic.rs](crates/sql-dialect-fmt-highlight/src/semantic.rs) / [lsp/lib.rs](crates/sql-dialect-fmt-lsp/src/lib.rs) / [lsp/main.rs](crates/sql-dialect-fmt-lsp/src/main.rs)
 - ✅ TextMate 文法に方言固有の節キーワード（`RETURNING`/`ON CONFLICT`/`DUPLICATE`/`NOTHING`/`PREWHERE`）を反映
 - ✅ グラマーのキーワード列を方言レジストリ（全 156 語）から `scripts/generate-textmate-keywords.py` で生成（`--check`付き、テストで同期を検証）
-- ⏳ 残り: 方言別 VS Code 言語 ID と方言別 TextMate 文法（現状は `.sql` を `snowflake-sql` が担当し全キーワードをカバー）
+- ✅ 方言別 VS Code 言語 ID（20）と共通の方言ニュートラル TextMate 文法（`editors/sql.tmLanguage.json`、`scripts/generate-textmate-keywords.py` で生成）。拡張は全言語で formatter/LSP を登録し、`dialect` 未設定時は言語 ID から方言を推定
 
 ### Phase 11e — sql-formatter 互換の設定 🚧
 - ✅ `data_type_case` / `function_case` / `identifier_case` / `logical_operator_newline`（before/after）/ `dense_operators` / `newline_before_semicolon` / `lines_between_queries` / `expression_width` / `use_tabs` / `tab_width`（core + config + CLI、既定値は後方互換）

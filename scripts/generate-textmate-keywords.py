@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Regenerate the keyword alternation in the committed TextMate grammar.
+"""Regenerate the committed TextMate grammar keyword alternation.
 
 The editor grammar (`editors/snowflake.tmLanguage.json`) is what colours `.sql`
 files, which this extension claims as `snowflake-sql`. To keep other dialects
 readable there, the keyword rule lists every reserved word from the Rust keyword
 table (all dialects), not just Snowflake's. This script is the single writer of
 that rule so the grammar and the parser cannot drift.
+
+It also derives `editors/sql.tmLanguage.json`, the dialect-neutral grammar the
+per-dialect language ids share (name/scope differ; the rules are identical).
 
 Usage:
     python3 scripts/generate-textmate-keywords.py          # rewrite in place
@@ -15,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import pathlib
 import re
 import sys
@@ -22,6 +26,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 KEYWORD_RS = ROOT / "crates" / "sql-dialect-fmt-syntax" / "src" / "keyword.rs"
 GRAMMAR_JSON = ROOT / "editors" / "snowflake.tmLanguage.json"
+NEUTRAL_GRAMMAR_JSON = ROOT / "editors" / "sql.tmLanguage.json"
 
 # `("select", SELECT_KW, ...)` / multi-line `(\n  "ilike",\n  ILIKE_KW,` — the lowercase
 # spelling is followed by the `_KW` enum variant (possibly on the next line).
@@ -60,6 +65,13 @@ def current_match(text: str) -> tuple[int, int, str]:
     return start, end, text[start:end]
 
 
+def neutral_grammar(snowflake_text: str) -> str:
+    grammar = json.loads(snowflake_text)
+    grammar["name"] = "SQL (sql-dialect-fmt)"
+    grammar["scopeName"] = "source.sql.dialect-fmt"
+    return json.dumps(grammar, indent=2, ensure_ascii=False) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -74,19 +86,39 @@ def main() -> int:
     start, end, existing = current_match(text)
     desired = desired_match(words)
 
-    if existing == desired:
-        print(f"grammar keyword list is current ({len(words)} words)")
-        return 0
+    stale = existing != desired
+    updated = text[:start] + desired + text[end:]
+    neutral = neutral_grammar(updated)
 
     if args.check:
-        print(
-            "grammar keyword list is stale; run scripts/generate-textmate-keywords.py",
-            file=sys.stderr,
-        )
-        return 1
+        if stale:
+            print(
+                "grammar keyword list is stale; run scripts/generate-textmate-keywords.py",
+                file=sys.stderr,
+            )
+            return 1
+        if not NEUTRAL_GRAMMAR_JSON.exists() or NEUTRAL_GRAMMAR_JSON.read_text(
+            encoding="utf-8"
+        ) != neutral:
+            print(
+                "editors/sql.tmLanguage.json is stale; run scripts/generate-textmate-keywords.py",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"grammar keyword lists are current ({len(words)} words)")
+        return 0
 
-    GRAMMAR_JSON.write_text(text[:start] + desired + text[end:], encoding="utf-8")
-    print(f"updated grammar keyword list ({len(words)} words)")
+    if stale:
+        GRAMMAR_JSON.write_text(updated, encoding="utf-8")
+        print(f"updated grammar keyword list ({len(words)} words)")
+    else:
+        print(f"grammar keyword list is current ({len(words)} words)")
+
+    if not NEUTRAL_GRAMMAR_JSON.exists() or NEUTRAL_GRAMMAR_JSON.read_text(
+        encoding="utf-8"
+    ) != neutral:
+        NEUTRAL_GRAMMAR_JSON.write_text(neutral, encoding="utf-8")
+        print("updated editors/sql.tmLanguage.json")
     return 0
 
 

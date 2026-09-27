@@ -11,6 +11,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- VS Code: 20 dialect-specific language ids (`sql-postgresql`, `sql-mysql`, `sql-bigquery`, …)
+  with a shared dialect-neutral grammar (`editors/sql.tmLanguage.json`, generated alongside the
+  Snowflake grammar). The extension registers its formatter and language server for every
+  dialect language and infers the dialect from the document language when `dialect` is unset.
 - Jinja/dbt control tags `{% ... %}` are their own statement boundaries: they stay on their own
   line without an invented `;`, so templated files with `{% if %}`/`{% for %}` blocks format.
 

@@ -12,6 +12,7 @@ use sql_dialect_fmt_syntax::{
 };
 
 const GRAMMAR_SRC: &str = include_str!("../../../editors/snowflake.tmLanguage.json");
+const NEUTRAL_GRAMMAR_SRC: &str = include_str!("../../../editors/sql.tmLanguage.json");
 
 fn grammar() -> serde_json::Value {
     serde_json::from_str(GRAMMAR_SRC).expect("grammar JSON parses")
@@ -469,4 +470,15 @@ fn comment_rule_covers_line_and_block_forms() {
         .expect("block comment rule");
     assert_eq!(block["begin"], "/\\*");
     assert_eq!(block["end"], "\\*/");
+}
+
+#[test]
+fn neutral_grammar_matches_the_snowflake_grammar_rules() {
+    let snowflake: serde_json::Value = serde_json::from_str(GRAMMAR_SRC).expect("parses");
+    let neutral: serde_json::Value = serde_json::from_str(NEUTRAL_GRAMMAR_SRC).expect("parses");
+    assert_eq!(neutral["scopeName"], "source.sql.dialect-fmt");
+    // The dialect-neutral grammar shares the whole rule set with the Snowflake grammar (only its
+    // name/scope differ), so keyword coverage and scopes stay identical.
+    assert_eq!(neutral["repository"], snowflake["repository"]);
+    assert_eq!(neutral["patterns"], snowflake["patterns"]);
 }
