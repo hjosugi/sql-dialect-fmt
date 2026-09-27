@@ -11,6 +11,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- ClickHouse `SETTINGS k = v` and `FORMAT <name>` query tails, Transact-SQL `EXEC <proc>`
+  statements, and the SQLite `GLOB` comparison operator no longer split into spurious
+  statements.
 - More dialect syntax: PostgreSQL/DuckDB `DISTINCT ON`, `FOR UPDATE`/`FOR SHARE` locking,
   `->`/`->>` JSON operators (also MySQL family) and aggregate `ORDER BY` inside arguments
   (`array_agg(x ORDER BY y)`); MySQL-family `INSERT ... SET` and `REPLACE INTO`; Transact-SQL

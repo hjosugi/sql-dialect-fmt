@@ -162,6 +162,12 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.dialect().supports_select_for_clause() && p.at(FOR_KW) {
         select_for_clause(p);
     }
+    if p.dialect().supports_settings_clause() && p.nth_contextual(0, ContextualKeyword::Settings) {
+        settings_clause(p);
+    }
+    if p.dialect().supports_format_clause() && p.nth_contextual(0, ContextualKeyword::Format) {
+        format_clause(p);
+    }
     m.complete(p, SELECT_STMT)
 }
 
@@ -571,6 +577,9 @@ fn at_alias_blocker(p: &Parser) -> bool {
         || (p.dialect().supports_lateral_view() && at_lateral_view(p))
         || (p.dialect().supports_databricks_query_clauses()
             && at_databricks_query_distribution_clause(p))
+        || (p.dialect().supports_format_clause() && p.nth_contextual(0, ContextualKeyword::Format))
+        || (p.dialect().supports_settings_clause()
+            && p.nth_contextual(0, ContextualKeyword::Settings))
 }
 
 fn at_join_start(p: &Parser) -> bool {
@@ -853,6 +862,28 @@ fn select_for_clause(p: &mut Parser) {
         }
     }
     m.complete(p, FOR_CLAUSE);
+}
+
+/// ClickHouse `SETTINGS k = v [, ...]` query tail (kept as a lenient token run).
+fn settings_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // SETTINGS
+    while !p.at(SEMICOLON) && !p.at_eof() {
+        p.bump_any();
+    }
+    m.complete(p, SETTINGS_CLAUSE);
+}
+
+/// ClickHouse `FORMAT <name>` query tail.
+fn format_clause(p: &mut Parser) {
+    let m = p.start();
+    p.bump_as(CONTEXTUAL_KEYWORD); // FORMAT
+    if p.at_name() {
+        p.bump_any();
+    } else {
+        p.error("expected a FORMAT name");
+    }
+    m.complete(p, FORMAT_CLAUSE);
 }
 
 fn fetch_clause(p: &mut Parser) {

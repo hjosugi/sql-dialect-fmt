@@ -4,7 +4,7 @@
 use sql_dialect_fmt_syntax::SyntaxKind;
 use sql_dialect_fmt_syntax::SyntaxKind::*;
 
-use crate::parser::Parser;
+use crate::parser::{ContextualKeyword, Parser};
 
 /// Parse a statement, then — if it is followed by the flow operator `->>` — the rest of the chain,
 /// wrapping the whole pipeline in a [`FLOW_STMT`]. A lone statement abandons the wrapper. Flow
@@ -60,6 +60,7 @@ pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
         || p.at(CALL_KW)
         || p.at(SET_KW)
         || p.at(EXECUTE_KW)
+        || (p.dialect().supports_exec_statement() && p.nth_contextual(0, ContextualKeyword::Exec))
         || (p.dialect().supports_copy_into() && p.at(COPY_KW))
         || super::stage::at_stage_file_stmt(p)
         || (p.dialect().supports_delta_commands() && super::delta::at_delta_stmt_start(p))
@@ -110,6 +111,14 @@ pub(super) fn statement(p: &mut Parser) {
         call_stmt(p);
     } else if p.at(SET_KW) {
         set_stmt(p);
+    } else if p.dialect().supports_exec_statement() && p.nth_contextual(0, ContextualKeyword::Exec)
+    {
+        let m = p.start();
+        p.bump_as(CONTEXTUAL_KEYWORD); // EXEC
+        while !p.at(SEMICOLON) && !p.at_eof() {
+            p.bump_any();
+        }
+        m.complete(p, EXECUTE_STMT);
     } else if p.at(EXECUTE_KW) {
         execute_stmt(p);
     } else if p.dialect().supports_copy_into() && p.at(COPY_KW) {

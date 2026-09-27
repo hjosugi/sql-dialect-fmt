@@ -1767,3 +1767,30 @@ fn snowflake_flow_operator_is_unchanged_by_json_arrows() {
     assert!(out.contains("->>"), "{out}");
     assert_eq!(fmt(&out), out);
 }
+
+#[test]
+fn clickhouse_settings_and_format_tails() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let ch = FormatOptions::default().with_dialect(Dialect::ClickHouse);
+    assert_eq!(
+        format("select a from t settings max_threads = 4", &ch),
+        "SELECT\n  a\nFROM t\nSETTINGS max_threads = 4;\n"
+    );
+    assert_eq!(
+        format("select a from t format json", &ch),
+        "SELECT\n  a\nFROM t\nFORMAT json;\n"
+    );
+}
+
+#[test]
+fn tsql_exec_and_sqlite_glob() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let tsql = FormatOptions::default().with_dialect(Dialect::TransactSql);
+    assert_eq!(format("exec sp_help", &tsql), "EXEC sp_help;\n");
+
+    let sqlite = FormatOptions::default().with_dialect(Dialect::Sqlite);
+    assert_eq!(
+        format("select a from t where b glob 'x*'", &sqlite),
+        "SELECT\n  a\nFROM t\nWHERE b GLOB 'x*';\n"
+    );
+}

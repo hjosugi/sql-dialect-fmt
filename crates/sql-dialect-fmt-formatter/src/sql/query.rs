@@ -332,5 +332,7 @@ fn is_select_clause(kind: SyntaxKind) -> bool {
             | CONNECT_BY_CLAUSE
             | FOR_CLAUSE
             | INTO_CLAUSE
+            | SETTINGS_CLAUSE
+            | FORMAT_CLAUSE
     )
 }

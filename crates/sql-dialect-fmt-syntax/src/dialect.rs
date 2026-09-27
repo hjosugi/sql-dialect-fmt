@@ -581,6 +581,30 @@ impl Dialect {
         )
     }
 
+    /// SQLite `GLOB` comparison operator.
+    #[must_use]
+    pub fn supports_glob(self) -> bool {
+        matches!(self, Dialect::Sqlite)
+    }
+
+    /// Transact-SQL `EXEC <proc> ...` statement.
+    #[must_use]
+    pub fn supports_exec_statement(self) -> bool {
+        matches!(self, Dialect::TransactSql)
+    }
+
+    /// ClickHouse `... SETTINGS k = v [, ...]` query tail.
+    #[must_use]
+    pub fn supports_settings_clause(self) -> bool {
+        matches!(self, Dialect::ClickHouse)
+    }
+
+    /// ClickHouse `... FORMAT <name>` query tail.
+    #[must_use]
+    pub fn supports_format_clause(self) -> bool {
+        matches!(self, Dialect::ClickHouse)
+    }
+
     /// BigQuery `SELECT * EXCEPT (...)` / `SELECT * REPLACE (...)` star modifiers.
     #[must_use]
     pub fn supports_select_star_modifier(self) -> bool {

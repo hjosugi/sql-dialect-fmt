@@ -431,6 +431,8 @@ pub enum SyntaxKind {
     PREWHERE_CLAUSE,    // `PREWHERE <expr>` (ClickHouse)
     OUTPUT_CLAUSE,      // Transact-SQL `OUTPUT ... [INTO ...]`
     FOR_CLAUSE,         // Transact-SQL `FOR JSON|XML ...`
+    SETTINGS_CLAUSE,    // ClickHouse `SETTINGS k = v`
+    FORMAT_CLAUSE,      // ClickHouse `FORMAT <name>`
     STAR_MODIFIER,      // BigQuery `* EXCEPT (…)` / `* REPLACE (…)` select-star modifier
 
     #[doc(hidden)]

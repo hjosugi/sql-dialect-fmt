@@ -353,4 +353,10 @@ contextual_keywords! {
     Path => "path",
     /// `FOR JSON ... , ROOT(...)` / `RAW` — option word.
     Raw => "raw",
+    /// SQLite `x GLOB 'pattern'` comparison operator.
+    Glob => "glob",
+    /// Transact-SQL `EXEC <proc> ...` (alias of `EXECUTE`).
+    Exec => "exec",
+    /// ClickHouse `... SETTINGS k = v` query tail.
+    Settings => "settings",
 }

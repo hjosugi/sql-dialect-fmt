@@ -191,7 +191,11 @@ pub(super) fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
             }
             let m = lhs.precede(p);
             p.eat(NOT_KW);
-            p.bump_any(); // LIKE / ILIKE / RLIKE / REGEXP
+            if p.nth_contextual(0, ContextualKeyword::Glob) {
+                p.bump_as(CONTEXTUAL_KEYWORD); // SQLite GLOB
+            } else {
+                p.bump_any(); // LIKE / ILIKE / RLIKE / REGEXP
+            }
             like_rhs(p);
             lhs = m.complete(p, BIN_EXPR);
             continue;
@@ -221,11 +225,19 @@ pub(super) fn expr_bp(p: &mut Parser, min_bp: u8) -> Option<CompletedMarker> {
 }
 
 fn at_like_predicate(p: &Parser) -> bool {
-    p.at(LIKE_KW) || p.at(ILIKE_KW) || p.at(RLIKE_KW) || p.at(REGEXP_KW)
+    p.at(LIKE_KW)
+        || p.at(ILIKE_KW)
+        || p.at(RLIKE_KW)
+        || p.at(REGEXP_KW)
+        || (p.dialect().supports_glob() && p.nth_contextual(0, ContextualKeyword::Glob))
 }
 
 fn at_like_predicate_after_not(p: &Parser) -> bool {
-    p.nth_at(1, LIKE_KW) || p.nth_at(1, ILIKE_KW) || p.nth_at(1, RLIKE_KW) || p.nth_at(1, REGEXP_KW)
+    p.nth_at(1, LIKE_KW)
+        || p.nth_at(1, ILIKE_KW)
+        || p.nth_at(1, RLIKE_KW)
+        || p.nth_at(1, REGEXP_KW)
+        || (p.dialect().supports_glob() && p.nth_contextual(1, ContextualKeyword::Glob))
 }
 
 fn like_rhs(p: &mut Parser) {
