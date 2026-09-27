@@ -88,6 +88,63 @@ impl Lowerer {
         out.push(self.lower_node(node));
     }
 
+    /// A type name. Ordinary types render exactly like [`Self::lower_children`]; Oracle anchored
+    /// types (`emp%TYPE`) are tightened so `%` hugs the identifier, matching Oracle convention.
+    pub(super) fn lower_type_name(&mut self, node: &SyntaxNode) -> Doc {
+        let tokens: Vec<_> = node
+            .children_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| !token.kind().is_trivia())
+            .collect();
+        let mut parts = Vec::new();
+        let mut index = 0;
+        while index < tokens.len() {
+            let token = &tokens[index];
+            if token.kind() == PERCENT && index + 1 < tokens.len() {
+                parts.push(text(format!("%{}", tokens[index + 1].text())));
+                index += 2;
+                continue;
+            }
+            parts.push(self.token(token));
+            index += 1;
+        }
+        concat(parts)
+    }
+
+    /// A parenthesized expression `( expr )`. By default it stays inline (as before); when
+    /// `expression_width` is set and the source exceeds it, the body is placed on its own lines,
+    /// matching `sql-formatter`'s `expressionWidth`.
+    pub(super) fn lower_paren_expr(&mut self, node: &SyntaxNode) -> Doc {
+        let Some(limit) = self.ctx.expression_width else {
+            return self.lower_children(node);
+        };
+        if node.text().to_string().trim().len() <= limit {
+            return self.lower_children(node);
+        }
+        let open_sep = self.sep_before(L_PAREN);
+        let mut inner = Vec::new();
+        for child in node.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() || matches!(token.kind(), L_PAREN | R_PAREN) {
+                    continue;
+                }
+                inner.push(self.token(token));
+            } else if let Some(inner_node) = child.into_node() {
+                inner.push(self.lower_node(&inner_node));
+            }
+        }
+        self.resume_after(R_PAREN);
+        concat(vec![
+            open_sep,
+            group_expanded(concat(vec![
+                text("("),
+                indent(concat(vec![soft_line(), concat(inner)])),
+                soft_line(),
+                text(")"),
+            ])),
+        ])
+    }
+
     /// `( item, item )` with width-driven wrapping and magic-trailing-comma explosion. The items
     /// are the node's child *nodes*; parentheses and commas are its tokens. An aggregate quantifier
     /// (`DISTINCT`/`ALL`) is a leading token of the list and is emitted just inside the `(`.

@@ -349,3 +349,11 @@ fn param_types_override_placeholder_recognition() {
         vec![(VARIABLE, ":\"a b\"")]
     );
 }
+
+#[test]
+fn jinja_expression_tag_is_one_placeholder() {
+    assert_eq!(
+        non_trivia_for("{{ col }}", Dialect::BigQuery),
+        vec![(PLACEHOLDER, "{{ col }}")]
+    );
+}

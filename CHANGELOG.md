@@ -9,6 +9,14 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- ClickHouse `FROM t FINAL` is treated as a table modifier (not an alias); Oracle anchored
+  types `name%TYPE` / `name%ROWTYPE` parse; and Jinja/dbt `{{ ... }}` expression tags are
+  lexed as atomic placeholders so templated SQL still formats.
+- `expression_width` now also breaks parenthesized expressions `( expr )` that exceed the cap
+  (previously only parenthesized lists).
+
 ### Changed
 
 - Refactor: unified the three argument-boundary scanners in the expression parser, folded the

@@ -1886,3 +1886,49 @@ fn duckdb_from_first_query_keeps_source_order() {
     assert_eq!(once, "FROM t\nSELECT a, b\nWHERE c = 1\nORDER BY a;\n");
     assert_eq!(format(&once, &duckdb), once);
 }
+
+#[test]
+fn clickhouse_final_is_a_modifier_not_an_alias() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let ch = FormatOptions::default().with_dialect(Dialect::ClickHouse);
+    let once = format("select a from t final where b = 1", &ch);
+    assert_eq!(once, "SELECT\n  a\nFROM t FINAL\nWHERE b = 1;\n");
+    assert_eq!(format(&once, &ch), once);
+}
+
+#[test]
+fn expression_width_splits_parenthesized_expressions() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let options = FormatOptions::default().with_expression_width(Some(10));
+    let once = format("select (aaaaaaaaaa + bbbbbbbbbb) from t", &options);
+    assert_eq!(
+        once,
+        "SELECT\n  (\n    aaaaaaaaaa + bbbbbbbbbb\n  )\nFROM t;\n"
+    );
+    assert_eq!(format(&once, &options), once);
+    // The default keeps the expression inline.
+    let inline = sql_dialect_fmt_formatter::FormatOptions::default();
+    assert_eq!(
+        format("select (aaaaaaaaaa + bbbbbbbbbb) from t", &inline),
+        "SELECT\n  (aaaaaaaaaa + bbbbbbbbbb)\nFROM t;\n"
+    );
+}
+
+#[test]
+fn oracle_percent_type_parses_without_errors() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let plsql = FormatOptions::default().with_dialect(Dialect::PlSql);
+    let once = format("create table t (c emp%type)", &plsql);
+    assert_eq!(once, "CREATE TABLE t (c emp % type);\n");
+    assert_eq!(format(&once, &plsql), once);
+}
+
+#[test]
+fn jinja_expression_placeholders_format_as_atoms() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let bq = FormatOptions::default().with_dialect(Dialect::BigQuery);
+    assert_eq!(
+        format("select {{ col }} from {{ ref('t') }}", &bq),
+        "SELECT\n  {{ col }}\nFROM {{ ref('t') }};\n"
+    );
+}

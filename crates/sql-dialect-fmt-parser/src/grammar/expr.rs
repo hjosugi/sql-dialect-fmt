@@ -645,7 +645,7 @@ fn aggregate_separator(p: &mut Parser) {
 fn argument_has_top_level(p: &Parser, predicate: impl Fn(&Parser, usize) -> bool) -> bool {
     let mut depth: i32 = 0;
     let mut i = 0usize;
-    while i < 64 {
+    while i < 256 {
         if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
             depth += 1;
         } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
@@ -728,6 +728,15 @@ pub(super) fn type_name(p: &mut Parser) {
     let m = p.start();
     if p.at_name() {
         p.bump_any();
+        // Oracle anchored types: `emp%TYPE` / `emp%ROWTYPE`.
+        if p.dialect().supports_percent_type() && p.at(PERCENT) {
+            p.bump(PERCENT);
+            if p.at_name() {
+                p.bump_any(); // TYPE / ROWTYPE
+            } else {
+                p.error("expected TYPE or ROWTYPE after '%'");
+            }
+        }
         if p.eat(L_PAREN) {
             while !p.at(R_PAREN) && !p.at_eof() {
                 p.bump_any();

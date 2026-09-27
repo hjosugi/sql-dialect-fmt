@@ -451,6 +451,10 @@ pub(super) fn table_ref(p: &mut Parser) {
     while p.at(PIVOT_KW) || p.at(UNPIVOT_KW) {
         pivot_clause(p);
     }
+    // ClickHouse `FINAL` is a modifier before the alias, not an alias.
+    if p.dialect().supports_final_modifier() && p.nth_contextual(0, ContextualKeyword::Final) {
+        p.bump_as(CONTEXTUAL_KEYWORD);
+    }
     table_alias(p);
     // Transact-SQL table hints: `<table> [AS alias] WITH (NOLOCK, ...)`.
     if p.dialect().supports_table_hints() && p.at(WITH_KW) && p.nth_at(1, L_PAREN) {

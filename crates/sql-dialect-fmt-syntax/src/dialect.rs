@@ -651,6 +651,18 @@ impl Dialect {
         matches!(self, Dialect::DuckDb)
     }
 
+    /// ClickHouse `<table> FINAL` (deduplicate rows before the query).
+    #[must_use]
+    pub fn supports_final_modifier(self) -> bool {
+        matches!(self, Dialect::ClickHouse)
+    }
+
+    /// Oracle anchored types `name%TYPE` / `name%ROWTYPE`.
+    #[must_use]
+    pub fn supports_percent_type(self) -> bool {
+        matches!(self, Dialect::PlSql)
+    }
+
     /// BigQuery `SELECT * EXCEPT (...)` / `SELECT * REPLACE (...)` star modifiers.
     #[must_use]
     pub fn supports_select_star_modifier(self) -> bool {

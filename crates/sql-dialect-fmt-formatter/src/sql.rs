@@ -397,6 +397,8 @@ impl Lowerer {
         let body = match node.kind() {
             // Parenthesized comma lists, lowered structurally (wrap + magic trailing comma).
             ARG_LIST | VALUES_ROW | COLUMN_LIST | LAMBDA_PARAMS => self.lower_paren_list(node),
+            PAREN_EXPR => self.lower_paren_expr(node),
+            TYPE_NAME => self.lower_type_name(node),
             ARRAY_LITERAL => self.lower_delimited_list(node, L_BRACKET, R_BRACKET, "[", "]"),
             OBJECT_LITERAL => self.lower_delimited_list(node, L_BRACE, R_BRACE, "{", "}"),
             OBJECT_FIELD => self.lower_object_field(node),

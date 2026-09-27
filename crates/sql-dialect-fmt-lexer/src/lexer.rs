@@ -187,6 +187,15 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     self.bracket_ident_body(start);
                     self.push(SyntaxKind::QUOTED_IDENT, start);
                 }
+                // Jinja / dbt `{{ ... }}` expression tags are lexed as one atomic placeholder so
+                // templated SQL still parses, formats, and highlights. (`${ ... }` is handled above.)
+                // Control blocks (`{% ... %}`) are intentionally not special-cased: they cannot be
+                // formatted as SQL, so they stay a parse error and the statement passes through
+                // verbatim rather than having a `;` invented inside the block.
+                b'{' if self.peek_at(1) == b'{' => {
+                    self.template_placeholder(start, b"{{", b"}}");
+                    self.push(SyntaxKind::PLACEHOLDER, start);
+                }
                 b'#' if self.options.dialect.supports_hash_line_comments() => {
                     self.line_comment_from(1);
                     self.push(SyntaxKind::COMMENT, start);
@@ -574,6 +583,20 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                 },
             }
         }
+    }
+
+    /// Consume a `{{ … }}` / `{% … %}` template tag as one atomic token. Lossless: an unterminated
+    /// tag records an error and consumes to the end of input.
+    fn template_placeholder(&mut self, start: usize, opener: &[u8], closer: &[u8]) {
+        self.pos += opener.len();
+        while !self.at_end() {
+            if self.bytes[self.pos..].starts_with(closer) {
+                self.pos += closer.len();
+                return;
+            }
+            self.pos += 1;
+        }
+        self.error("unterminated template placeholder", start);
     }
 
     /// Skip a `'...'` / `"..."` string inside a placeholder body so a `}` within it does not close
