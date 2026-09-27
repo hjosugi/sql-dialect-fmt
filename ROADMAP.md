@@ -167,6 +167,7 @@
 
 ### Phase 11d — ハイライトの全面対応 🚧
 - ✅ LSP semantic token を `options.dialect` に追随（`highlight_for_dialect` ベースの `semantic_tokens_lsp_for_dialect` を追加し、`textDocument/semanticTokens/full|range` が文書の方言設定を使う） … [semantic.rs](crates/sql-dialect-fmt-highlight/src/semantic.rs) / [lsp/lib.rs](crates/sql-dialect-fmt-lsp/src/lib.rs) / [lsp/main.rs](crates/sql-dialect-fmt-lsp/src/main.rs)
+- ✅ TextMate 文法に方言固有の節キーワード（`RETURNING`/`ON CONFLICT`/`DUPLICATE`/`NOTHING`/`PREWHERE`）を反映
 - ⏳ TextMate 文法を方言レジストリから生成（現状は Snowflake 1 本 `editors/snowflake.tmLanguage.json`）。VS Code / Neovim / Zed / Helix に方言別 or 統合文法を配布し、`classify` との一致をテストで機械保証
 
 ### Phase 11e — sql-formatter 互換の設定 🚧

@@ -11,6 +11,9 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ### Added
 
+- The committed TextMate grammar now also colours the dialect-specific clause keywords
+  (`RETURNING`, `ON CONFLICT`, `DUPLICATE`, `NOTHING`, `PREWHERE`), so dialect SQL pasted into
+  the editor language still highlights its keywords.
 - Non-core dialects now require an explicit `;` between statements: an unrecognized trailing
   clause is diagnosed (so the formatter falls back to verbatim) instead of being silently
   re-parsed as a new statement with an invented separator. Snowflake and Databricks keep their
