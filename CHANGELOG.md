@@ -9,6 +9,8 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-09-27
+
 ### Added
 
 - Oracle PL/SQL anonymous blocks (`DECLARE ... BEGIN ... EXCEPTION ... END;`) parse and
@@ -763,7 +765,8 @@ preserved, and `format(format(x)) == format(x)`.
 - `sql-dialect-fmt-tree-sitter`, `sql-dialect-fmt-test-fixtures`, and `sql-dialect-fmt-test-support` are
   internal crates and are **not published** to crates.io.
 
-[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.23.0...HEAD
+[Unreleased]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.24.0...HEAD
+[1.24.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.23.0...v1.24.0
 [1.23.0]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.3...v1.23.0
 [1.22.3]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.2...v1.22.3
 [1.22.2]: https://github.com/hjosugi/sql-dialect-fmt/compare/v1.22.1...v1.22.2
