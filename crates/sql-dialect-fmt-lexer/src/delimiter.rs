@@ -8,7 +8,7 @@
 
 use sql_dialect_fmt_syntax::Dialect;
 
-use crate::ParamTypes;
+use crate::{ParamTypes, PlaceholderMatcher};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BodyDelimiter {
@@ -48,6 +48,8 @@ pub struct LexOptions<'cfg> {
     /// Overrides which placeholder spellings are recognized. `None` uses
     /// [`ParamTypes::for_dialect`] for [`LexOptions::dialect`].
     pub param_types: Option<ParamTypes>,
+    /// Custom placeholder matchers tried at each token start (see [`PlaceholderMatcher`]).
+    pub custom_placeholders: &'cfg [&'cfg dyn PlaceholderMatcher],
 }
 
 impl Default for LexOptions<'static> {
@@ -56,6 +58,7 @@ impl Default for LexOptions<'static> {
             body_delimiters: DEFAULT_BODY_DELIMITERS,
             dialect: Dialect::default(),
             param_types: None,
+            custom_placeholders: &[],
         }
     }
 }
@@ -72,6 +75,16 @@ impl<'cfg> LexOptions<'cfg> {
     #[must_use]
     pub fn with_param_types(mut self, param_types: Option<ParamTypes>) -> Self {
         self.param_types = param_types;
+        self
+    }
+
+    /// Set custom placeholder matchers, returning the updated options.
+    #[must_use]
+    pub fn with_custom_placeholders(
+        mut self,
+        custom_placeholders: &'cfg [&'cfg dyn PlaceholderMatcher],
+    ) -> Self {
+        self.custom_placeholders = custom_placeholders;
         self
     }
 

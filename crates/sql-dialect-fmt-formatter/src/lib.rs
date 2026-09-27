@@ -30,7 +30,10 @@ mod sql;
 pub use doc::{print, Doc, PrintOptions};
 pub use params::{substitute_params, substitute_params_with};
 pub use range::{format_range, RangeEdit};
-pub use sql_dialect_fmt_lexer::ParamTypes;
+pub use sql_dialect_fmt_lexer::{ParamTypes, PlaceholderMatcher};
+
+/// Custom placeholder matchers threaded through one format call (see [`PlaceholderMatcher`]).
+pub type Placeholders<'a> = &'a [&'a dyn PlaceholderMatcher];
 use sql_dialect_fmt_parser::ParseError;
 pub use sql_dialect_fmt_syntax::Dialect;
 
@@ -375,23 +378,52 @@ pub struct FormatResult {
 /// unterminated), the source is returned **unchanged** — trivially lossless and idempotent — rather
 /// than risking a mangled reflow of a fragmented tree.
 pub fn format(source: &str, options: &FormatOptions) -> String {
-    format_with_diagnostics(source, options).formatted
+    format_with_placeholders(source, options, &[])
+}
+
+/// Like [`format()`], but with custom placeholder matchers ([`PlaceholderMatcher`]).
+pub fn format_with_placeholders(
+    source: &str,
+    options: &FormatOptions,
+    placeholders: Placeholders<'_>,
+) -> String {
+    format_with_diagnostics_and_placeholders(source, options, placeholders).formatted
 }
 
 /// Format SQL, then replace recognized parameter placeholders with `params` in order of
 /// appearance (the `params` option). See [`substitute_params`].
 pub fn format_with_params(source: &str, options: &FormatOptions, params: &[String]) -> String {
+    format_with_params_and_placeholders(source, options, &[], params)
+}
+
+/// Like [`format_with_params()`], but with custom placeholder matchers.
+pub fn format_with_params_and_placeholders(
+    source: &str,
+    options: &FormatOptions,
+    placeholders: Placeholders<'_>,
+    params: &[String],
+) -> String {
     substitute_params_with(
-        &format(source, options),
+        &format_with_placeholders(source, options, placeholders),
         options.dialect,
         options.param_types,
+        placeholders,
         params,
     )
 }
 
 /// Format SQL and return parse diagnostics from the same lex/parse pass.
 pub fn format_with_diagnostics(source: &str, options: &FormatOptions) -> FormatResult {
-    if let Some(mut result) = format_directive_regions(source, options) {
+    format_with_diagnostics_and_placeholders(source, options, &[])
+}
+
+/// Like [`format_with_diagnostics()`], but with custom placeholder matchers.
+pub fn format_with_diagnostics_and_placeholders(
+    source: &str,
+    options: &FormatOptions,
+    placeholders: Placeholders<'_>,
+) -> FormatResult {
+    if let Some(mut result) = format_directive_regions(source, options, placeholders) {
         // Region formatting assembles several independently safe documents with verbatim spans.
         // Validate their final concatenation too, because a boundary between regions can still
         // place two punctuation tokens beside each other.
@@ -400,25 +432,28 @@ pub fn format_with_diagnostics(source: &str, options: &FormatOptions) -> FormatR
             &result.formatted,
             options.dialect,
             options.param_types,
+            placeholders,
         ) {
             result.formatted = source.to_string();
         }
         return result;
     }
-    format_plain_with_diagnostics(source, options, 0)
+    format_plain_with_diagnostics(source, options, 0, placeholders)
 }
 
 fn format_plain_with_diagnostics(
     source: &str,
     options: &FormatOptions,
     base_offset: usize,
+    placeholders: Placeholders<'_>,
 ) -> FormatResult {
     let ctx = options.ctx();
     let lexed = sql_dialect_fmt_lexer::tokenize_with_options(
         source,
         sql_dialect_fmt_lexer::LexOptions::default()
             .with_dialect(ctx.dialect)
-            .with_param_types(ctx.param_types),
+            .with_param_types(ctx.param_types)
+            .with_custom_placeholders(placeholders),
     );
     let has_lex_errors = !lexed.errors.is_empty();
     let mut output_guard = OutputGuard::from_lexed(&lexed);
@@ -456,8 +491,9 @@ fn format_plain_with_diagnostics(
         options.line_ending,
         ctx.dialect,
         ctx.param_types,
+        placeholders,
     );
-    if !output_guard.accepts(&formatted, ctx.dialect, ctx.param_types) {
+    if !output_guard.accepts(&formatted, ctx.dialect, ctx.param_types, placeholders) {
         return FormatResult {
             formatted: source.to_string(),
             parse_errors,
@@ -469,14 +505,18 @@ fn format_plain_with_diagnostics(
     }
 }
 
-fn format_directive_regions(source: &str, options: &FormatOptions) -> Option<FormatResult> {
+fn format_directive_regions(
+    source: &str,
+    options: &FormatOptions,
+    placeholders: Placeholders<'_>,
+) -> Option<FormatResult> {
     let regions = directive_regions(source)?;
     let mut formatted = String::new();
     let mut parse_errors = Vec::new();
     for region in regions {
         let text = &source[region.start..region.end];
         if region.enabled {
-            let result = format_plain_with_diagnostics(text, options, region.start);
+            let result = format_plain_with_diagnostics(text, options, region.start, placeholders);
             formatted.push_str(&result.formatted);
             parse_errors.extend(result.parse_errors);
         } else {

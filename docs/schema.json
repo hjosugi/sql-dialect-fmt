@@ -139,7 +139,12 @@
         "named_dollar": { "type": "boolean", "description": "`$name`" },
         "quoted_colon": { "type": "boolean", "description": "`:\"name\"`" },
         "quoted_at": { "type": "boolean", "description": "`@\"name\"`" },
-        "quoted_dollar": { "type": "boolean", "description": "`$\"name\"`" }
+        "quoted_dollar": { "type": "boolean", "description": "`$\"name\"`" },
+        "custom": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Custom regex patterns recognized as placeholders."
+        }
       }
     },
     "exclude": {

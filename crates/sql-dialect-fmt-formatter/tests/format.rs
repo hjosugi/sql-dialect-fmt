@@ -1932,3 +1932,38 @@ fn jinja_expression_placeholders_format_as_atoms() {
         "SELECT\n  {{ col }}\nFROM {{ ref('t') }};\n"
     );
 }
+
+#[derive(Debug)]
+struct AnglePlaceholder;
+
+impl sql_dialect_fmt_formatter::PlaceholderMatcher for AnglePlaceholder {
+    fn match_len(&self, input: &str, at: usize) -> Option<usize> {
+        let rest = &input[at..];
+        let end = rest.strip_prefix("<<")?.find(">>")?;
+        Some(end + 4)
+    }
+}
+
+#[test]
+fn custom_placeholders_format_and_substitute() {
+    use sql_dialect_fmt_formatter::{format_with_params_and_placeholders, FormatOptions};
+    let options = FormatOptions::default();
+    let matchers: [&dyn sql_dialect_fmt_formatter::PlaceholderMatcher; 1] = [&AnglePlaceholder];
+    assert_eq!(
+        sql_dialect_fmt_formatter::format_with_placeholders(
+            "select <<col>> from <<table>>",
+            &options,
+            &matchers
+        ),
+        "SELECT\n  <<col>>\nFROM <<table>>;\n"
+    );
+    assert_eq!(
+        format_with_params_and_placeholders(
+            "select <<col>> from t",
+            &options,
+            &matchers,
+            &["42".to_string()]
+        ),
+        "SELECT\n  42\nFROM t;\n"
+    );
+}

@@ -93,6 +93,9 @@ pub struct ParamTypesSpec {
     pub quoted_colon: Option<bool>,
     pub quoted_at: Option<bool>,
     pub quoted_dollar: Option<bool>,
+    /// Custom regex patterns recognized as placeholders (tried at each token start).
+    #[serde(default)]
+    pub custom: Vec<String>,
 }
 
 impl ParamTypesSpec {
@@ -494,6 +497,13 @@ mod tests {
         // Unset flags keep the dialect default.
         assert!(!param_types.named_dollar);
         assert!(param_types.named_at);
+    }
+
+    #[test]
+    fn param_types_custom_patterns_parse() {
+        let cfg = Config::parse("[param_types]\ncustom = [\"<<[a-z]+>>\"]\n").expect("valid");
+        let spec = cfg.param_types.expect("param_types");
+        assert_eq!(spec.custom, vec!["<<[a-z]+>>"]);
     }
 
     #[test]

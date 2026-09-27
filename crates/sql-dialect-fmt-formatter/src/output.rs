@@ -5,7 +5,9 @@
 //! meaningful token stream. Keeping that pipeline here prevents formatter orchestration from
 //! accumulating lexer-specific postconditions.
 
-use sql_dialect_fmt_lexer::{tokenize_with_options, LexOptions, Lexed, ParamTypes, Token};
+use sql_dialect_fmt_lexer::{
+    tokenize_with_options, LexOptions, Lexed, ParamTypes, PlaceholderMatcher, Token,
+};
 use sql_dialect_fmt_syntax::{Dialect, SyntaxKind, SyntaxNode, SyntaxToken};
 
 use crate::LineEnding;
@@ -55,8 +57,9 @@ impl OutputGuard {
         candidate: &str,
         dialect: Dialect,
         param_types: Option<ParamTypes>,
+        placeholders: &[&dyn PlaceholderMatcher],
     ) -> bool {
-        let lexed = lex(candidate, dialect, param_types);
+        let lexed = lex(candidate, dialect, param_types, placeholders);
         if !lexed.errors.is_empty() || self.source.len() != self.may_rewrite_text.len() {
             return false;
         }
@@ -84,21 +87,29 @@ pub(crate) fn finalize_candidate(
     line_ending: LineEnding,
     dialect: Dialect,
     param_types: Option<ParamTypes>,
+    placeholders: &[&dyn PlaceholderMatcher],
 ) -> String {
     separate_adjacent_comments(
         apply_line_ending(printed, source, line_ending),
         dialect,
         param_types,
+        placeholders,
     )
 }
 
 /// Tokenize with the same placeholder settings the formatter used.
-fn lex(source: &str, dialect: Dialect, param_types: Option<ParamTypes>) -> Lexed<'_> {
+fn lex<'a>(
+    source: &'a str,
+    dialect: Dialect,
+    param_types: Option<ParamTypes>,
+    placeholders: &'a [&'a dyn PlaceholderMatcher],
+) -> Lexed<'a> {
     tokenize_with_options(
         source,
         LexOptions::default()
             .with_dialect(dialect)
-            .with_param_types(param_types),
+            .with_param_types(param_types)
+            .with_custom_placeholders(placeholders),
     )
 }
 
@@ -110,12 +121,13 @@ pub(crate) fn preserves_meaningful_token_kinds(
     candidate: &str,
     dialect: Dialect,
     param_types: Option<ParamTypes>,
+    placeholders: &[&dyn PlaceholderMatcher],
 ) -> bool {
     if source == candidate {
         return true;
     }
-    let source = lex(source, dialect, param_types);
-    let candidate = lex(candidate, dialect, param_types);
+    let source = lex(source, dialect, param_types, placeholders);
+    let candidate = lex(candidate, dialect, param_types, placeholders);
     source.errors.is_empty()
         && candidate.errors.is_empty()
         && meaningful_tokens(&source)
@@ -166,8 +178,9 @@ fn separate_adjacent_comments(
     formatted: String,
     dialect: Dialect,
     param_types: Option<ParamTypes>,
+    placeholders: &[&dyn PlaceholderMatcher],
 ) -> String {
-    let lexed = lex(&formatted, dialect, param_types);
+    let lexed = lex(&formatted, dialect, param_types, placeholders);
     if !lexed.errors.is_empty() {
         return formatted;
     }
@@ -206,18 +219,18 @@ mod tests {
     #[test]
     fn guard_rejects_kind_and_text_changes_but_allows_one_explicit_rewrite() {
         let source = "select 'original'";
-        let lexed = lex(source, Dialect::Snowflake, None);
+        let lexed = lex(source, Dialect::Snowflake, None, &[]);
         let mut guard = OutputGuard::from_lexed(&lexed);
 
-        assert!(guard.accepts("SELECT 'original';\n", Dialect::Snowflake, None));
-        assert!(!guard.accepts("SELECT 'changed';\n", Dialect::Snowflake, None));
-        assert!(!guard.accepts("SELECT 1;\n", Dialect::Snowflake, None));
+        assert!(guard.accepts("SELECT 'original';\n", Dialect::Snowflake, None, &[]));
+        assert!(!guard.accepts("SELECT 'changed';\n", Dialect::Snowflake, None, &[]));
+        assert!(!guard.accepts("SELECT 1;\n", Dialect::Snowflake, None, &[]));
 
         let parse = sql_dialect_fmt_parser::parse(source);
         guard.record_text_rewrite_permissions(&parse.syntax(), |token| {
             token.kind() == SyntaxKind::STRING
         });
-        assert!(guard.accepts("SELECT 'changed';\n", Dialect::Snowflake, None));
+        assert!(guard.accepts("SELECT 'changed';\n", Dialect::Snowflake, None, &[]));
     }
 
     #[test]
@@ -228,7 +241,8 @@ mod tests {
                 "+\n-- note",
                 LineEnding::Auto,
                 Dialect::Databricks,
-                None
+                None,
+                &[]
             ),
             "+ -- note\n"
         );
@@ -240,13 +254,15 @@ mod tests {
             "select a",
             "SELECT a;\n",
             Dialect::Snowflake,
-            None
+            None,
+            &[]
         ));
         assert!(!preserves_meaningful_token_kinds(
             "select a",
             "SELECT b + a;\n",
             Dialect::Snowflake,
-            None
+            None,
+            &[]
         ));
     }
 

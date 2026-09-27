@@ -2272,6 +2272,7 @@ dependencies = [
  "globset",
  "ignore",
  "rayon",
+ "regex",
  "sql-dialect-fmt-config",
  "sql-dialect-fmt-encoding",
  "sql-dialect-fmt-formatter",

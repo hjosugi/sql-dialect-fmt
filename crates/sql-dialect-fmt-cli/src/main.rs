@@ -282,19 +282,54 @@ fn options_for(args: &Args, path: Option<&Path>) -> Result<FormatOptions, String
     options_for_start(args, path.unwrap_or_else(|| Path::new(".")))
 }
 
+/// Config-derived extras for an input: placeholder values (`params`) and custom regex patterns.
+#[derive(Default)]
+struct ConfigExtras {
+    params: Vec<String>,
+    patterns: Vec<String>,
+}
+
 /// Effective placeholder values for an input: config `params` first, then `--param` values.
-fn params_for(args: &Args, path: Option<&Path>) -> Vec<String> {
-    let mut params = Vec::new();
+fn extras_for(args: &Args, path: Option<&Path>) -> ConfigExtras {
+    let mut extras = ConfigExtras::default();
     if !args.no_config {
         let start = path.unwrap_or_else(|| Path::new("."));
         if let Some(config_path) = config::discover(start) {
             if let Ok(config) = Config::load(&config_path) {
-                params.extend(config.params);
+                extras.params.extend(config.params);
+                if let Some(param_types) = config.param_types {
+                    extras.patterns.extend(param_types.custom);
+                }
             }
         }
     }
-    params.extend(args.params.iter().cloned());
-    params
+    extras.params.extend(args.params.iter().cloned());
+    extras
+}
+
+/// A `param_types.custom` regex, adapted to the lexer's `PlaceholderMatcher` seam so the core
+/// lexer stays dependency-free.
+#[derive(Debug)]
+struct RegexPlaceholder {
+    regex: regex::Regex,
+}
+
+impl sql_dialect_fmt_formatter::PlaceholderMatcher for RegexPlaceholder {
+    fn match_len(&self, input: &str, at: usize) -> Option<usize> {
+        let matched = self.regex.find_at(input, at)?;
+        (matched.start() == at).then(|| matched.end() - at)
+    }
+}
+
+fn compile_placeholders(patterns: &[String]) -> Vec<RegexPlaceholder> {
+    patterns
+        .iter()
+        .filter_map(|pattern| {
+            regex::Regex::new(pattern)
+                .ok()
+                .map(|regex| RegexPlaceholder { regex })
+        })
+        .collect()
 }
 
 fn options_for_start(args: &Args, start: &Path) -> Result<FormatOptions, String> {
@@ -363,8 +398,12 @@ fn run_stdin(args: &Args) -> Result<ExitCode, String> {
 
     // Surface parse problems on stderr, but keep going (the formatter passes content through).
     let decoded = DecodedText::decode(&source);
-    let params = params_for(args, args.stdin_filepath.as_deref());
-    let formatted = format_decoded_with_diagnostics(&decoded, &options, &params);
+    let extras = extras_for(args, args.stdin_filepath.as_deref());
+    let matchers = compile_placeholders(&extras.patterns);
+    let placeholders: Vec<&dyn sql_dialect_fmt_formatter::PlaceholderMatcher> =
+        matchers.iter().map(|m| m as _).collect();
+    let formatted =
+        format_decoded_with_diagnostics(&decoded, &options, &extras.params, &placeholders);
     let parse_errors = collect_parse_error_messages(&formatted.parse_errors, stdin_path);
     for error in &parse_errors {
         eprintln!("{error}");
@@ -528,8 +567,12 @@ fn process_file(
     let source =
         fs::read(file).map_err(|err| format!("failed to read {}: {err}", file.display()))?;
     let decoded = DecodedText::decode(&source);
-    let params = params_for(args, Some(file));
-    let formatted = format_decoded_with_diagnostics(&decoded, &options, &params);
+    let extras = extras_for(args, Some(file));
+    let matchers = compile_placeholders(&extras.patterns);
+    let placeholders: Vec<&dyn sql_dialect_fmt_formatter::PlaceholderMatcher> =
+        matchers.iter().map(|m| m as _).collect();
+    let formatted =
+        format_decoded_with_diagnostics(&decoded, &options, &extras.params, &placeholders);
     let parse_errors = collect_parse_error_messages(&formatted.parse_errors, Some(file));
     let changed = formatted.bytes != source;
     let mut written = false;
@@ -721,7 +764,7 @@ fn format_bytes(bytes: &[u8], options: &FormatOptions) -> Vec<u8> {
 
 #[cfg(test)]
 fn format_decoded(decoded: &DecodedText, options: &FormatOptions) -> Vec<u8> {
-    format_decoded_with_diagnostics(decoded, options, &[]).bytes
+    format_decoded_with_diagnostics(decoded, options, &[], &[]).bytes
 }
 
 struct FormattedBytes {
@@ -733,6 +776,7 @@ fn format_decoded_with_diagnostics(
     decoded: &DecodedText,
     options: &FormatOptions,
     params: &[String],
+    placeholders: &[&dyn sql_dialect_fmt_formatter::PlaceholderMatcher],
 ) -> FormattedBytes {
     let Some(text) = decoded.as_str() else {
         return FormattedBytes {
@@ -740,7 +784,11 @@ fn format_decoded_with_diagnostics(
             parse_errors: Vec::new(),
         };
     };
-    let result = sql_dialect_fmt_formatter::format_with_diagnostics(text, options);
+    let result = sql_dialect_fmt_formatter::format_with_diagnostics_and_placeholders(
+        text,
+        options,
+        placeholders,
+    );
     let parse_errors = result.parse_errors;
     let formatted = if params.is_empty() {
         result.formatted
@@ -749,6 +797,7 @@ fn format_decoded_with_diagnostics(
             &result.formatted,
             options.dialect,
             options.param_types,
+            placeholders,
             params,
         )
     };

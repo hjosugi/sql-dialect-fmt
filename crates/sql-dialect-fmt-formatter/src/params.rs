@@ -12,7 +12,9 @@
 //! Values are inserted verbatim, so callers pass already-quoted SQL (for example `"'bar'"`).
 //! Placeholders beyond the supplied values are left untouched.
 
-use sql_dialect_fmt_lexer::{tokenize_with_options, LexOptions, ParamTypes, SyntaxKind};
+use sql_dialect_fmt_lexer::{
+    tokenize_with_options, LexOptions, ParamTypes, PlaceholderMatcher, SyntaxKind,
+};
 use sql_dialect_fmt_syntax::Dialect;
 
 /// Replace recognized placeholders in `formatted` with `params`, in order of appearance.
@@ -20,7 +22,7 @@ use sql_dialect_fmt_syntax::Dialect;
 /// Returns `formatted` unchanged when `params` is empty.
 #[must_use]
 pub fn substitute_params(formatted: &str, dialect: Dialect, params: &[String]) -> String {
-    substitute_params_with(formatted, dialect, None, params)
+    substitute_params_with(formatted, dialect, None, &[], params)
 }
 
 /// Like [`substitute_params`], but with an explicit placeholder-recognition override.
@@ -29,6 +31,7 @@ pub fn substitute_params_with(
     formatted: &str,
     dialect: Dialect,
     param_types: Option<ParamTypes>,
+    placeholders: &[&dyn PlaceholderMatcher],
     params: &[String],
 ) -> String {
     if params.is_empty() {
@@ -39,7 +42,8 @@ pub fn substitute_params_with(
         formatted,
         LexOptions::default()
             .with_dialect(dialect)
-            .with_param_types(param_types),
+            .with_param_types(param_types)
+            .with_custom_placeholders(placeholders),
     );
     let tokens = &lexed.tokens;
 
@@ -55,7 +59,10 @@ pub fn substitute_params_with(
         let end = offset + token.text.len();
         let mut consumed_end = end;
 
-        let is_placeholder = matches!(token.kind, SyntaxKind::QUESTION | SyntaxKind::VARIABLE);
+        let is_placeholder = matches!(
+            token.kind,
+            SyntaxKind::QUESTION | SyntaxKind::VARIABLE | SyntaxKind::PLACEHOLDER
+        );
         if is_placeholder && next_param < params.len() {
             // `?1` lexes as `?` then `1`; swallow the number so the value replaces both.
             if token.kind == SyntaxKind::QUESTION {

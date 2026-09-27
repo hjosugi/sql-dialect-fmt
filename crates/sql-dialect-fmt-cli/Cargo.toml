@@ -20,6 +20,7 @@ external-formatters = ["sql-dialect-fmt-formatter/external-formatters"]
 globset = "0.4"
 ignore = "0.4"
 rayon = "1"
+regex = "1"
 sql-dialect-fmt-config.workspace = true
 sql-dialect-fmt-encoding.workspace = true
 sql-dialect-fmt-formatter.workspace = true

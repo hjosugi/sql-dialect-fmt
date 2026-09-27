@@ -126,6 +126,12 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
                     continue;
                 }
             }
+            // User-supplied placeholder matchers (regex-backed in the CLI) take precedence.
+            if let Some(len) = self.custom_placeholder_len() {
+                self.pos += len;
+                self.push(SyntaxKind::PLACEHOLDER, start);
+                continue;
+            }
             // Prefixed string literal (`e'…'`, `n'…'`, `x'…'`, `b'…'`, `r'…'`) when the dialect
             // supports it and the prefix letter is immediately followed by a single quote.
             if let Some(backslash_escapes) = self.prefixed_string_at() {
@@ -367,6 +373,15 @@ impl<'a, 'cfg> Lexer<'a, 'cfg> {
     /// Effective placeholder spellings for this lex.
     fn param_types(&self) -> crate::ParamTypes {
         self.options.effective_param_types()
+    }
+
+    /// The length of a custom placeholder at the cursor, if any matcher accepts.
+    fn custom_placeholder_len(&self) -> Option<usize> {
+        self.options.custom_placeholders.iter().find_map(|matcher| {
+            matcher
+                .match_len(self.input, self.pos)
+                .filter(|length| *length > 0)
+        })
     }
 
     /// Whether the cursor is on a recognized `@` placeholder (`@name`, `@@global`, `@"name"`).

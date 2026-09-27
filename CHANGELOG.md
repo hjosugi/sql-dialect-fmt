@@ -9,6 +9,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- `param_types.custom` regex patterns: `sql-dialect-fmt.toml` can list regexes (for example
+  `<<name>>`) that the lexer treats as atomic placeholders. The core lexer stays dependency-free
+  via the new `PlaceholderMatcher` trait; the CLI compiles the patterns with the `regex` crate.
+  Custom placeholders are also substituted by `params`.
+
 ### Changed
 
 - `expression_width` now measures the rendered flat width of a group in the Doc printer
