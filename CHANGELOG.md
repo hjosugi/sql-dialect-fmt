@@ -9,6 +9,11 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- `expression_width` now measures the rendered flat width of a group in the Doc printer
+  (a width-bounded group), replacing the earlier source-length heuristic.
+
 ## [1.26.0] - 2026-09-27
 
 ### Added
