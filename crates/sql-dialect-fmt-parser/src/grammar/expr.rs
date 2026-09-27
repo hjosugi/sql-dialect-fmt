@@ -639,81 +639,46 @@ fn aggregate_separator(p: &mut Parser) {
     }
 }
 
+/// Bounded scan of an argument's tokens: does `predicate` match at the top level before the
+/// argument's terminating comma or close paren? Paren/bracket nesting is tracked so a nested
+/// `f(a ORDER BY b)` does not count as the outer argument's clause.
+fn argument_has_top_level(p: &Parser, predicate: impl Fn(&Parser, usize) -> bool) -> bool {
+    let mut depth: i32 = 0;
+    let mut i = 0usize;
+    while i < 64 {
+        if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
+            depth += 1;
+        } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
+            if depth == 0 {
+                return false;
+            }
+            depth -= 1;
+        } else if depth == 0 {
+            if predicate(p, i) {
+                return true;
+            }
+            if p.nth_at(i, COMMA) {
+                return false;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Whether the argument has a top-level `SEPARATOR` before the closing paren/comma.
 fn at_argument_separator(p: &Parser) -> bool {
-    let mut depth: i32 = 0;
-    let mut i = 0usize;
-    while i < 64 {
-        if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
-            depth += 1;
-        } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
-            if depth == 0 {
-                return false;
-            }
-            depth -= 1;
-        } else if depth == 0 {
-            if p.nth_contextual(i, ContextualKeyword::Separator) {
-                return true;
-            }
-            if p.nth_at(i, COMMA) {
-                return false;
-            }
-        }
-        i += 1;
-    }
-    false
+    argument_has_top_level(p, |p, i| p.nth_contextual(i, ContextualKeyword::Separator))
 }
 
-/// Whether the argument starting here has a top-level `AS <name>` alias before the closing
-/// paren/comma (bounded scan; used to decide on the `ALIASED_ARG` wrapper).
+/// Whether the argument has a top-level `AS <name>` alias before the closing paren/comma.
 fn at_argument_alias(p: &Parser) -> bool {
-    let mut depth: i32 = 0;
-    let mut i = 0usize;
-    while i < 64 {
-        if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
-            depth += 1;
-        } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
-            if depth == 0 {
-                return false;
-            }
-            depth -= 1;
-        } else if depth == 0 {
-            if p.nth_at(i, AS_KW) {
-                return true;
-            }
-            if p.nth_at(i, COMMA) {
-                return false;
-            }
-        }
-        i += 1;
-    }
-    false
+    argument_has_top_level(p, |p, i| p.nth_at(i, AS_KW))
 }
 
-/// Whether the argument starting here contains a top-level `ORDER BY` before the closing paren/comma
-/// (bounded scan; used to decide on the `ORDERED_ARG` wrapper).
+/// Whether the argument contains a top-level `ORDER BY` before the closing paren/comma.
 fn at_argument_order_by(p: &Parser) -> bool {
-    let mut depth: i32 = 0;
-    let mut i = 0usize;
-    while i < 64 {
-        if p.nth_at(i, L_PAREN) || p.nth_at(i, L_BRACKET) {
-            depth += 1;
-        } else if p.nth_at(i, R_PAREN) || p.nth_at(i, R_BRACKET) {
-            if depth == 0 {
-                return false;
-            }
-            depth -= 1;
-        } else if depth == 0 {
-            if p.nth_at(i, ORDER_KW) && p.nth_at(i + 1, BY_KW) {
-                return true;
-            }
-            if p.nth_at(i, COMMA) {
-                return false;
-            }
-        }
-        i += 1;
-    }
-    false
+    argument_has_top_level(p, |p, i| p.nth_at(i, ORDER_KW) && p.nth_at(i + 1, BY_KW))
 }
 
 fn arg(p: &mut Parser) {

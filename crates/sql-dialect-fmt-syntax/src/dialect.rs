@@ -830,6 +830,39 @@ mod tests {
     }
 
     #[test]
+    fn canonical_names_follow_the_wasm_abi_order() {
+        // The Wasm/JS ABI indexes dialects by `Dialect::ALL`; pinning the order makes a reorder a
+        // visible, intentional change (and lets the editor test cross-check its copy).
+        let names: Vec<&str> = Dialect::ALL.iter().map(|d| d.canonical_name()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "snowflake",
+                "databricks",
+                "spark",
+                "bigquery",
+                "clickhouse",
+                "db2",
+                "db2i",
+                "duckdb",
+                "hive",
+                "mariadb",
+                "mysql",
+                "tidb",
+                "n1ql",
+                "plsql",
+                "postgresql",
+                "redshift",
+                "singlestoredb",
+                "sqlite",
+                "sql",
+                "transactsql",
+                "trino",
+            ]
+        );
+    }
+
+    #[test]
     fn bit_index_matches_all_order() {
         for (index, dialect) in Dialect::ALL.iter().enumerate() {
             assert_eq!(dialect.bit_index() as usize, index, "{dialect:?}");

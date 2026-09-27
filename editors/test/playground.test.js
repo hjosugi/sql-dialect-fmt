@@ -6,7 +6,10 @@ const path = require("node:path");
 const test = require("node:test");
 
 const playgroundPath = path.join(__dirname, "..", "..", "docs-site", "theme", "playground.js");
-const { callFormatter, enumCode, normalizeInteger, optionalInteger, validateApi } = require(playgroundPath);
+const { callFormatter, enumCode, normalizeInteger, optionalInteger, validateApi } =
+  require(playgroundPath);
+const { DIALECTS: CONFIG_DIALECTS } = require(path.join(__dirname, "..", "src", "config"));
+const { DIALECTS: PLAYGROUND_DIALECTS } = require(playgroundPath);
 
 test("playground falls back to the v1 Wasm ABI when v2 is unavailable", () => {
   let args;
@@ -111,4 +114,12 @@ test("playground rejects incomplete Wasm builds before formatting", () => {
     () => validateApi({ memory: new WebAssembly.Memory({ initial: 1 }) }),
     /missing required export sql_dialect_fmt_alloc/,
   );
+});
+
+test("the extension and playground dialect lists match (Wasm ABI index order)", () => {
+  assert.deepEqual(PLAYGROUND_DIALECTS, CONFIG_DIALECTS);
+  // The list mirrors the Rust `Dialect::ALL` order; keep the count and the first/last entries pinned.
+  assert.equal(PLAYGROUND_DIALECTS[0], "snowflake");
+  assert.equal(PLAYGROUND_DIALECTS[1], "databricks");
+  assert.equal(PLAYGROUND_DIALECTS.length, 21);
 });

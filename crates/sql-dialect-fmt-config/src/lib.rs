@@ -202,99 +202,47 @@ pub fn parse_comma_style(value: &str) -> Result<CommaStyle, String> {
     }
 }
 
-fn deserialize_dialect<'de, D>(deserializer: D) -> Result<Option<Dialect>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_dialect(&value).map_err(serde::de::Error::custom))
-        .transpose()
+/// Define a `serde` deserializer that maps an optional string through a `parse_*` function, turning
+/// a bad value into a `serde` error. One macro keeps the nine enums from drifting.
+macro_rules! string_enum_deserializer {
+    ($name:ident, $ty:ty, $parse:path) => {
+        fn $name<'de, D>(deserializer: D) -> Result<Option<$ty>, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let value = Option::<String>::deserialize(deserializer)?;
+            value
+                .map(|value| $parse(&value).map_err(serde::de::Error::custom))
+                .transpose()
+        }
+    };
 }
 
-fn deserialize_keyword_case<'de, D>(deserializer: D) -> Result<Option<KeywordCase>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_keyword_case(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn deserialize_data_type_case<'de, D>(deserializer: D) -> Result<Option<KeywordCase>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_data_type_case(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn deserialize_function_case<'de, D>(deserializer: D) -> Result<Option<KeywordCase>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_function_case(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn deserialize_identifier_case<'de, D>(deserializer: D) -> Result<Option<KeywordCase>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_identifier_case(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn deserialize_logical_operator_newline<'de, D>(
-    deserializer: D,
-) -> Result<Option<LogicalOperatorNewline>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_logical_operator_newline(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn deserialize_line_ending<'de, D>(deserializer: D) -> Result<Option<LineEnding>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_line_ending(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn deserialize_select_item_layout<'de, D>(
-    deserializer: D,
-) -> Result<Option<SelectItemLayout>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_select_item_layout(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn deserialize_comma_style<'de, D>(deserializer: D) -> Result<Option<CommaStyle>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<String>::deserialize(deserializer)?;
-    value
-        .map(|value| parse_comma_style(&value).map_err(serde::de::Error::custom))
-        .transpose()
-}
+string_enum_deserializer!(deserialize_dialect, Dialect, parse_dialect);
+string_enum_deserializer!(deserialize_keyword_case, KeywordCase, parse_keyword_case);
+string_enum_deserializer!(
+    deserialize_data_type_case,
+    KeywordCase,
+    parse_data_type_case
+);
+string_enum_deserializer!(deserialize_function_case, KeywordCase, parse_function_case);
+string_enum_deserializer!(
+    deserialize_identifier_case,
+    KeywordCase,
+    parse_identifier_case
+);
+string_enum_deserializer!(
+    deserialize_logical_operator_newline,
+    LogicalOperatorNewline,
+    parse_logical_operator_newline
+);
+string_enum_deserializer!(deserialize_line_ending, LineEnding, parse_line_ending);
+string_enum_deserializer!(
+    deserialize_select_item_layout,
+    SelectItemLayout,
+    parse_select_item_layout
+);
+string_enum_deserializer!(deserialize_comma_style, CommaStyle, parse_comma_style);
 
 impl Config {
     /// Parse a config from TOML source text.

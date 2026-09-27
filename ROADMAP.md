@@ -157,19 +157,21 @@
 ### Phase 11b — 方言別キーワード予約 🚧
 - ✅ 予約モデルを `DialectSet`（`Dialect` ビットマスク。`Dialect::bit()` / `DialectSet::of|contains|reserved_in|union`）へデータ駆動化し、`KeywordDialect`（Shared/SnowflakeOnly/DatabricksOnly）を置換。Snowflake/Databricks の予約の意味は不変（回帰テストで機械保証）
 - ✅ 既存キーワードの方言メンバーシップを精緻化: `top`→{Snowflake, Transact-SQL}、`qualify`→{Snowflake, Databricks, Spark, BigQuery, DuckDb, Trino}、`ilike`→{Snowflake, Spark系, PostgreSQL系, Redshift, ClickHouse, Trino, Hive}、`rlike`→{Snowflake, Spark系, Hive}、`regexp`→{Snowflake, MySQL系}
+- ✅ `PREWHERE`/`SETTINGS`/`GO`/`EXCEPT`/`REPLACE` は keyword/contextual として対応済み
 - ⏳ 方言固有予約語の追加（例: BigQuery `STRUCT`/`UNNEST`、ClickHouse `PREWHERE`/`FINAL`/`SETTINGS`、T-SQL `GO`）は新 `SyntaxKind` と parser 対応が必要なため、`sql-formatter` の keyword 表やベンダ公式 reserve word 一覧を出典付きで生成する lane（`scripts/generate-dialect-tables.py` 想定）で追う
 
 ### Phase 11c — 方言別パーサ/フォーマッタ規則 🚧
 - ✅ `RETURNING`（PostgreSQL/SQLite/DuckDB/MariaDB/N1QL）、`ON CONFLICT … DO NOTHING|UPDATE`（`ON CONSTRAINT`・部分インデックス `WHERE` 含む）、`ON DUPLICATE KEY UPDATE`（MySQL 系）、SQLite `INSERT OR …`、ClickHouse `PREWHERE`、BigQuery `SELECT * EXCEPT/REPLACE (…)`、T-SQL `OUTPUT … [INTO …]` と `FOR JSON|XML`、`OFFSET n ROWS` / `FETCH FIRST|NEXT n ROWS ONLY` をパース＋整形。方言ゲートで Snowflake/Databricks は不変
 - ✅ 追加: PostgreSQL/DuckDB `DISTINCT ON`、`FOR UPDATE`/`FOR SHARE`、`->`/`->>` JSON 演算子（MySQL 系含む）、集約内 `ORDER BY`、MySQL 系 `INSERT … SET`/`REPLACE INTO`、T-SQL `SELECT … INTO`/`WITH (NOLOCK)`/`FETCH NEXT`、BigQuery `STRUCT(expr AS name)`、ClickHouse `SETTINGS`/`FORMAT`/`FINAL`、T-SQL `EXEC`、SQLite `GLOB`
 - ✅ 安全網: 非コア方言は `;` なしの文境界を診断（未対応の尾部を新規文として誤分割しない）。Snowflake/Databricks は従来どおり
-- ⏳ 残り: ClickHouse `FORMAT`/`FINAL`/`SETTINGS`、`LATERAL`/`USING` 差分など。頻度 × 価値で個別 issue 化
+- ✅ Oracle PL/SQL 名付きルーチン（`IS`/`RETURN`）と `RETURNING … INTO`、T-SQL `GO` バッチ、DuckDB `FROM … SELECT`
+- ⏳ 残り: ClickHouse `FINAL` の修飾子的扱い、Oracle `%TYPE`/`%ROWTYPE`、`LATERAL`/`USING` の細かい差分など。頻度 × 価値で個別 issue 化
 
 ### Phase 11d — ハイライトの全面対応 🚧
 - ✅ LSP semantic token を `options.dialect` に追随（`highlight_for_dialect` ベースの `semantic_tokens_lsp_for_dialect` を追加し、`textDocument/semanticTokens/full|range` が文書の方言設定を使う） … [semantic.rs](crates/sql-dialect-fmt-highlight/src/semantic.rs) / [lsp/lib.rs](crates/sql-dialect-fmt-lsp/src/lib.rs) / [lsp/main.rs](crates/sql-dialect-fmt-lsp/src/main.rs)
 - ✅ TextMate 文法に方言固有の節キーワード（`RETURNING`/`ON CONFLICT`/`DUPLICATE`/`NOTHING`/`PREWHERE`）を反映
 - ✅ グラマーのキーワード列を方言レジストリ（全 156 語）から `scripts/generate-textmate-keywords.py` で生成（`--check`付き、テストで同期を検証）
-- ⏳ TextMate 文法を方言レジストリから生成（現状は Snowflake 1 本 `editors/snowflake.tmLanguage.json`）。VS Code / Neovim / Zed / Helix に方言別 or 統合文法を配布し、`classify` との一致をテストで機械保証
+- ⏳ 残り: 方言別 VS Code 言語 ID と方言別 TextMate 文法（現状は `.sql` を `snowflake-sql` が担当し全キーワードをカバー）
 
 ### Phase 11e — sql-formatter 互換の設定 🚧
 - ✅ `data_type_case` / `function_case` / `identifier_case` / `logical_operator_newline`（before/after）/ `dense_operators` / `newline_before_semicolon` / `lines_between_queries` / `expression_width` / `use_tabs` / `tab_width`（core + config + CLI、既定値は後方互換）
@@ -182,7 +184,9 @@
 
 ---
 
-### 現状サマリ（2026-07-27）
+### 現状サマリ（2026-09-27）
+**Phase 11 の進捗**: 21 方言の registry・方言別字句/ハイライト・方言別の主要 DML/クエリ構文・sql-formatter 互換の設定（`params`/`param_types`/文法 casing 等）を実装し、v1.25.0 として公開。詳細は Phase 11。
+
 **現在の優先順位は VS Code 拡張と基本 formatter の完成度**。keyword case、SELECT 縦配置、leading/trailing comma、行幅、indent、line ending を core/config/CLI/LSP/Wasm/VS Code 全経路で一致させる。Chrome 拡張は削除済み。Tree-sitter は保留し、複雑な embedded body formatter は opt-in として基本 build から外す。
 
 **継続タスク（個別 issue で追跡）**:
