@@ -361,4 +361,6 @@ contextual_keywords! {
     Settings => "settings",
     /// MySQL-family `GROUP_CONCAT(x ... SEPARATOR ',')`.
     Separator => "separator",
+    /// Transact-SQL `GO` batch separator (a line on its own).
+    Go => "go",
 }

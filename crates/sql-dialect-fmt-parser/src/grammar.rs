@@ -14,7 +14,7 @@
 
 use sql_dialect_fmt_syntax::SyntaxKind::*;
 
-use crate::parser::{CompletedMarker, Parser};
+use crate::parser::{CompletedMarker, ContextualKeyword, Parser};
 
 mod access;
 mod copy;
@@ -55,6 +55,12 @@ pub(crate) fn source_file(p: &mut Parser) {
     while !p.at_eof() {
         if p.at(SEMICOLON) {
             p.bump(SEMICOLON); // statement separator / empty statement
+            need_separator = false;
+        } else if p.dialect().supports_go_batch() && p.nth_contextual(0, ContextualKeyword::Go) {
+            // Transact-SQL batch separator: `GO` alone on a line, no terminator.
+            let m = p.start();
+            p.bump_as(CONTEXTUAL_KEYWORD);
+            m.complete(p, GO_STMT);
             need_separator = false;
         } else if stmt::at_stmt_start(p) {
             // Non-core dialects must separate statements with `;`. Without one, an unrecognized

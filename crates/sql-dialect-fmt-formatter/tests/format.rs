@@ -1868,3 +1868,21 @@ fn oracle_plsql_named_routines_and_returning_into() {
         "DELETE FROM t\nWHERE a = 1\nRETURNING a, b INTO :x, :y;\n"
     );
 }
+
+#[test]
+fn tsql_go_batch_separator() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let tsql = FormatOptions::default().with_dialect(Dialect::TransactSql);
+    let once = format("select 1 as a\ngo\nselect 2 as b\ngo\n", &tsql);
+    assert_eq!(once, "SELECT\n  1 AS a;\nGO\nSELECT\n  2 AS b;\nGO\n");
+    assert_eq!(format(&once, &tsql), once);
+}
+
+#[test]
+fn duckdb_from_first_query_keeps_source_order() {
+    use sql_dialect_fmt_formatter::FormatOptions;
+    let duckdb = FormatOptions::default().with_dialect(Dialect::DuckDb);
+    let once = format("from t select a, b where c = 1 order by a", &duckdb);
+    assert_eq!(once, "FROM t\nSELECT a, b\nWHERE c = 1\nORDER BY a;\n");
+    assert_eq!(format(&once, &duckdb), once);
+}

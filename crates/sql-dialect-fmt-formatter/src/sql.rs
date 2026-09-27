@@ -130,10 +130,13 @@ fn lower_source_impl(
             .map(|prepared| prepared.take_for_node(&stmt));
         let lowered = lower_stmt(&stmt, ctx, statement_bodies);
         parts.push(lowered.body);
-        if ctx.newline_before_semicolon {
-            parts.push(hard_line());
+        // A `GO` batch separator is a bare line, not a semicolon-terminated statement.
+        if stmt.kind() != GO_STMT {
+            if ctx.newline_before_semicolon {
+                parts.push(hard_line());
+            }
+            parts.push(text(";"));
         }
-        parts.push(text(";"));
         for comment in lowered.end_comments {
             if comment.is_line && comment.is_directive {
                 parts.push(space());

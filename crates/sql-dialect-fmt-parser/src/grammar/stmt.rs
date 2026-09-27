@@ -34,6 +34,7 @@ pub(super) fn at_stmt_start(p: &Parser) -> bool {
 
 pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
     p.at(SELECT_KW)
+        || (p.dialect().supports_from_first() && p.at(FROM_KW))
         || p.at(WITH_KW)
         || p.at(VALUES_KW)
         || p.at(INSERT_KW)
@@ -69,6 +70,8 @@ pub(super) fn at_sql_stmt_start(p: &Parser) -> bool {
 pub(super) fn statement(p: &mut Parser) {
     if p.at(WITH_KW) {
         super::with_query(p);
+    } else if p.dialect().supports_from_first() && p.at(FROM_KW) {
+        super::query::from_first_select(p);
     } else if p.at(INSERT_KW) {
         super::dml::insert_stmt(p);
     } else if p.dialect().supports_replace_into() && p.at(REPLACE_KW) {

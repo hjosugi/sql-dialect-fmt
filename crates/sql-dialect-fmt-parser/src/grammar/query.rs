@@ -123,6 +123,13 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.at(FROM_KW) {
         from_clause(p);
     }
+    select_clauses_after_from(p);
+    m.complete(p, SELECT_STMT)
+}
+
+/// The clauses that follow the `FROM` clause (shared by `SELECT … FROM …` and DuckDB
+/// `FROM … SELECT …`).
+fn select_clauses_after_from(p: &mut Parser) {
     if p.dialect().supports_prewhere() && p.at(PREWHERE_KW) {
         prewhere_clause(p);
     }
@@ -175,6 +182,31 @@ fn select_core(p: &mut Parser) -> CompletedMarker {
     if p.dialect().supports_format_clause() && p.nth_contextual(0, ContextualKeyword::Format) {
         format_clause(p);
     }
+}
+
+/// DuckDB `FROM <table> SELECT <list> …`: the `FROM` clause leads and the rest is the usual
+/// `SELECT` pipeline. The formatter normalizes it to `SELECT … FROM …`.
+pub(super) fn from_first_select(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    from_clause(p);
+    if p.at(SELECT_KW) {
+        p.bump(SELECT_KW);
+        if p.at(DISTINCT_KW) {
+            p.bump(DISTINCT_KW);
+            if p.dialect().supports_distinct_on() && p.at(ON_KW) {
+                p.bump(ON_KW);
+                if p.at(L_PAREN) {
+                    balanced_parens(p);
+                }
+            }
+        } else if p.at(ALL_KW) {
+            p.bump(ALL_KW);
+        }
+        select_list(p);
+    } else {
+        p.error("expected SELECT after the FROM clause");
+    }
+    select_clauses_after_from(p);
     m.complete(p, SELECT_STMT)
 }
 

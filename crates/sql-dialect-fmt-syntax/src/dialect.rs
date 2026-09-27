@@ -639,6 +639,18 @@ impl Dialect {
         matches!(self, Dialect::PlSql)
     }
 
+    /// Transact-SQL `GO` batch separator.
+    #[must_use]
+    pub fn supports_go_batch(self) -> bool {
+        matches!(self, Dialect::TransactSql)
+    }
+
+    /// DuckDB `FROM <table> SELECT ... WHERE ...` (FROM-first query syntax).
+    #[must_use]
+    pub fn supports_from_first(self) -> bool {
+        matches!(self, Dialect::DuckDb)
+    }
+
     /// BigQuery `SELECT * EXCEPT (...)` / `SELECT * REPLACE (...)` star modifiers.
     #[must_use]
     pub fn supports_select_star_modifier(self) -> bool {

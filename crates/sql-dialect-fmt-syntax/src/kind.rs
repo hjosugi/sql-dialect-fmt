@@ -316,6 +316,7 @@ pub enum SyntaxKind {
     // Phase 6: DML statements
     INSERT_STMT,
     REPLACE_STMT, // MySQL-family `REPLACE [INTO] t ...`
+    GO_STMT,      // Transact-SQL `GO` batch separator
     UPDATE_STMT,
     DELETE_STMT,
     MERGE_STMT,

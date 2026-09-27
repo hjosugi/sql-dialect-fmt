@@ -16,6 +16,11 @@ use super::{trimmed_text, Lowerer};
 impl Lowerer {
     /// Lower a `SELECT_STMT`: a `SELECT <list>` header group followed by one clause per line.
     pub(super) fn lower_select(&mut self, select: &SyntaxNode) -> Doc {
+        // DuckDB FROM-first (`FROM t SELECT …`): keep the source order — the output guard requires
+        // the same meaningful-token order, so the SELECT list cannot be hoisted above FROM.
+        if starts_with_from(select) {
+            return self.lower_from_first_select(select);
+        }
         // `SELECT` and any `DISTINCT`/`ALL` quantifier are the statement's leading tokens.
         let mut head = Vec::new();
         let mut list = None;
@@ -213,6 +218,38 @@ impl Lowerer {
         }
     }
 
+    /// DuckDB FROM-first query: emit children in source order, each clause on its own line and the
+    /// `SELECT` list inline (see [`Self::lower_select`]).
+    fn lower_from_first_select(&mut self, select: &SyntaxNode) -> Doc {
+        let mut parts = Vec::new();
+        let mut first = true;
+        for child in select.children_with_tokens() {
+            if let Some(token) = child.as_token() {
+                if token.kind().is_trivia() {
+                    continue;
+                }
+                if !first && token.kind() == SELECT_KW {
+                    parts.push(hard_line());
+                    self.reset();
+                }
+                parts.push(self.token(token));
+                first = false;
+            } else if let Some(node) = child.into_node() {
+                if is_select_clause(node.kind()) {
+                    if !first {
+                        parts.push(hard_line());
+                    }
+                    self.reset();
+                    parts.push(self.lower_clause(&node));
+                } else {
+                    parts.push(self.lower_node(&node));
+                }
+                first = false;
+            }
+        }
+        concat(parts)
+    }
+
     /// A parenthesized subquery `( query )`: inline when it fits, otherwise the body is indented on
     /// its own lines. A multi-clause inner `SELECT` carries hard lines, which force the break.
     pub(super) fn lower_subquery(&mut self, node: &SyntaxNode) -> Doc {
@@ -311,6 +348,15 @@ impl Lowerer {
             join(hard_item_sep(self.ctx.comma_style), ctes),
         ])
     }
+}
+
+/// Whether a SELECT statement is written FROM-first (its first significant element is the FROM
+/// clause).
+fn starts_with_from(select: &SyntaxNode) -> bool {
+    select
+        .children_with_tokens()
+        .find(|element| !element.kind().is_trivia())
+        .is_some_and(|element| element.kind() == FROM_CLAUSE)
 }
 
 fn is_select_clause(kind: SyntaxKind) -> bool {
