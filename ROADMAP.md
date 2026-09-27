@@ -168,7 +168,8 @@
 
 ### Phase 11e — sql-formatter 互換の設定 🚧
 - ✅ `data_type_case` / `function_case` / `identifier_case` / `logical_operator_newline`（before/after）/ `dense_operators` / `newline_before_semicolon` / `lines_between_queries` / `expression_width` / `use_tabs` / `tab_width`（core + config + CLI、既定値は後方互換）
-- ⏳ `params` / `param_types`（positional/numbered/named/quoted/custom）のプレースホルダ置換、LSP エディタ設定 / Wasm ABI（新オプション用の v2 export）/ VS Code 設定への配線、`sql-formatter.toml` 相当の JSON schema 提供
+- ✅ LSP エディタ設定に新オプションを配線（camelCase キー + snake_case 別名、`merge_from`/`apply_editor_format`）
+- ⏳ `params` / `param_types`（positional/numbered/named/quoted/custom）のプレースホルダ置換、Wasm ABI（新オプション用の v2 export）/ VS Code 設定・extension.js への配線、`sql-formatter.toml` 相当の JSON schema 提供
 - 📝 `expression_width` は現状、括弧付きリスト（関数引数 ARG_LIST・`IN (...)`・`VALUES`・列リスト等）の flat 幅上限として適用する。`(expr)` グルーピングの構造的折返しは今後の formatter 改修で対応
 
 ---

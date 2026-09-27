@@ -9,6 +9,13 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- The Language Server's editor settings now cover the extended formatter options
+  (`dataTypeCase`, `functionCase`, `identifierCase`, `logicalOperatorNewline`,
+  `denseOperators`, `useTabs`, `newlineBeforeSemicolon`, `linesBetweenQueries`,
+  `expressionWidth`), accepting camelCase keys and snake_case aliases.
+
 ## [1.23.0] - 2026-09-27
 
 ### Added
