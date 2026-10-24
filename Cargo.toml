@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
-exclude = ["fuzz", "crates/sql-dialect-fmt-tree-sitter"]
+exclude = ["fuzz", "crates/sql-dialect-fmt-tree-sitter", "vendor/ruff_db-0.0.19"]
 
 [workspace.package]
 version = "1.29.0"
@@ -35,3 +35,7 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 panic = "abort"
+
+# Keep application builds on the fixed ZIP release until Ruff updates its constraint.
+[patch.crates-io]
+ruff_db = { path = "vendor/ruff_db-0.0.19" }
