@@ -9,6 +9,10 @@ The published crates share a single workspace version (see `RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.29.1] - 2026-10-24
+
+- Update the reviewed dependencies and retain the recorded security compatibility fixes.
+
 ## [1.29.0] - 2026-09-27
 
 ### Added
