@@ -149,6 +149,8 @@ async function startLspClient(context, command) {
   let languageclient;
   try {
     // Lazy so a source checkout without `npm install` still provides the WebAssembly formatter.
+    // The shim goes first: it restores the minimatch method the client still calls.
+    require("./src/minimatch-compat");
     languageclient = require("vscode-languageclient/node");
   } catch (error) {
     log(
