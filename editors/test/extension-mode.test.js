@@ -137,11 +137,15 @@ async function waitFor(predicate, message) {
 test("extension serializes Wasm/LSP transitions and falls back after startup failure", async () => {
   const mock = harness();
   const originalLoad = Module._load;
+  let shimLoadedBeforeClient = false;
   Module._load = function load(request, parent, isMain) {
     if (request === "vscode") {
       return mock.vscode;
     }
     if (request === "vscode-languageclient/node") {
+      // The real client calls Minimatch#makeRe(); on minimatch 11 only the shim provides it.
+      const { Minimatch } = originalLoad.call(this, "minimatch", parent, isMain);
+      shimLoadedBeforeClient = typeof Minimatch.prototype.makeRe === "function";
       return mock.languageclient;
     }
     return originalLoad.call(this, request, parent, isMain);
@@ -171,6 +175,7 @@ test("extension serializes Wasm/LSP transitions and falls back after startup fai
       () => mock.clients.length === 1 && mock.clients[0].started,
       "language client did not start",
     );
+    assert.ok(shimLoadedBeforeClient, "the minimatch shim was not loaded before the client");
     assert.equal(mock.documentProviders.length, 0);
     assert.equal(mock.rangeProviders.length, 0);
 

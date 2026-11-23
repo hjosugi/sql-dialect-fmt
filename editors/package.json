@@ -90,6 +90,9 @@
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
   },
+  "overrides": {
+    "minimatch": "^11.0.9"
+  },
   "contributes": {
     "commands": [
       {
